@@ -185,6 +185,33 @@ async function main() {
   const q11 = await tb.verify({ kind: 'indicative', legs: [{ hash: 'p', order: { ...priv, nonce: BigInt(priv.nonce), expiry: BigInt(priv.expiry), signerAmount: BigInt(priv.signerAmount), senderAmount: BigInt(priv.senderAmount), protocolFee: FEE, signerWallet: getAddress(priv.signerWallet), signerToken: WETH, senderToken: USDC, senderWallet: carol.address, v: priv.v } }], pay: U(25), left: 0n, receive: W(0.01) })
   check('T11: private order for another address is dropped at verify', !q11.ok && q11.dropped[0]?.reason === 'private')
 
+  // ---------------- T12 high-s (malleated) copy of a valid order taken from the book
+  // Documented outcome: SwapERC20 v5.0.0 ACCEPTS high-s signatures, so the taker executes it correctly (verify → check() ok,
+  // eth_call ok, fill). The original low-s copy is then dropped at verify as 'taken': never a failed transaction.
+  const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
+  const [h12] = await post([await sell(W(0.01), U(24))])
+  const entry = (await book()).asks.find((a) => a.hash === h12)
+  const mall = { ...entry, order: { ...entry.order, s: toHex(N - BigInt(entry.order.s), { size: 32 }), v: entry.order.v === 27 ? 28 : 27 } }
+  const n12 = await pub.getTransactionCount({ address: bob.address })
+  const q12 = await tb.verify(plan([mall], U(24)))
+  const r12 = await tb.execute(q12)
+  const q12b = await tb.verify(plan([entry], U(24)))
+  const r12b = await tb.execute(q12b)
+  check('T12: high-s copy from the book executes correctly; the original is then dropped as taken, no failed transaction',
+    BigInt(mall.order.s) > N / 2n && q12.ok && r12.filled.length === 1 && r12.received === W(0.01) && r12.failed.length === 0 &&
+    !q12b.ok && q12b.dropped[0]?.reason === 'taken' && r12b.failed.length === 0 && (await pub.getTransactionCount({ address: bob.address })) - n12 === 1,
+    `high-s: filled ${r12.filled.length}; low-s afterwards: ${q12b.dropped.map((d) => d.reason)}; bob sent ${(await pub.getTransactionCount({ address: bob.address })) - n12} tx`)
+
+  // ---------------- T13 a broken malleation (high s, v NOT flipped) is refused explicitly before sending
+  const [h13] = await post([await sell(W(0.01), U(23))])
+  const e13 = (await book()).asks.find((a) => a.hash === h13)
+  const broken = { ...e13, order: { ...e13.order, s: toHex(N - BigInt(e13.order.s), { size: 32 }) } }
+  const n13 = await pub.getTransactionCount({ address: bob.address })
+  const q13 = await tb.verify(plan([broken], U(23)))
+  const r13 = await tb.execute(q13)
+  check('T13: invalid high-s signature dropped at verify (reason signature), nothing sent', !q13.ok && q13.dropped[0]?.reason === 'signature' && r13.stopped === 'empty' &&
+    (await pub.getTransactionCount({ address: bob.address })) === n13, `dropped: ${q13.dropped.map((d) => d.reason)}, stopped ${r13.stopped}`)
+
   await app.stop()
   const failed = results.filter((x) => !x).length
   console.log(`\n${results.length - failed}/${results.length} checks passed`)
