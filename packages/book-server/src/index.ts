@@ -57,6 +57,7 @@ export async function start(rawConfig: unknown, { log: logOpt }: StartOptions = 
   const tickErrors = metrics.counter('fondaco_tick_errors_total', 'Indexing rounds that failed (the next round retries).')
   const reorgs = metrics.counter('fondaco_reorgs_total', 'Reorgs detected.')
   const rolledBack = metrics.counter('fondaco_reorg_rolled_back_orders_total', 'Order statuses rolled back by reorgs.')
+  const filterFallbacks = metrics.counter('fondaco_log_filter_fallback_total', 'Signer-filtered token-log queries rejected by the provider (the round fell back to the unfiltered query).')
   const httpDuration = metrics.histogram('fondaco_http_request_duration_seconds', 'API latency by route and status code (SSE excluded).', HTTP_BUCKETS)
   const sseClients = metrics.gauge('fondaco_sse_clients', 'Open /stream connections.')
   metrics.gauge('fondaco_orders', 'Orders in the database by chain and status.', (set) => { for (const r of db.countByStatus()) set({ chain: r.chain_id, status: r.status }, r.n) })
@@ -70,6 +71,7 @@ export async function start(rawConfig: unknown, { log: logOpt }: StartOptions = 
         if (e.kind !== 'idle') log.debug('tick', { ...e })
       },
       onReorg: (e) => { reorgs.inc({ chain: e.chainId }); rolledBack.inc({ chain: e.chainId }, e.rolledBack); log.warn('reorg', { ...e }) },
+      onLogFilterFallback: (e) => { filterFallbacks.inc({ chain: e.chainId }); log.warn('log filter rejected by the provider: unfiltered token logs for the next 10 min', { ...e }) },
     },
   })
   metrics.gauge('fondaco_chain_head_block', 'Last head block seen, per chain.', (set) => { for (const c of engine.chains.values()) if (c.head?.number != null) set({ chain: c.cfg.id }, Number(c.head.number)) })

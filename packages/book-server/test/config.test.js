@@ -12,11 +12,11 @@ const errorsOf = (raw) => { try { parseConfig(raw); return [] } catch (e) { retu
 // C1 defaults = the reference engine's defaults
 const c = parseConfig(minimal())
 const ch = c.chains[1]
-const expected = { rpcTimeoutMs: 15000, pollMs: 4000, logChunk: 2000, reorgDepth: 64, signalMaxBlocks: 50, logSignerChunk: 200, fullSweepMs: 60000, expiryBufferSec: 30,
+const expected = { rpcTimeoutMs: 15000, pollMs: 4000, logChunk: 2000, reorgDepth: 64, signalMaxBlocks: 50, logSignerChunk: 1000, /* reference 200; 1000 confirmed (A-07, docs/LOAD.md) */ fullSweepMs: 60000, expiryBufferSec: 30,
   minExpirySec: 60, maxExpirySec: 604800, maxOpenPerSigner: 200, maxLiveOrders: 100000, startBlock: '0', multicall: '0xcA11bde05977b3631167028862bE2a173976CA11' }
 const top = { port: 8080, host: '127.0.0.1', db: 'book.sqlite', corsOrigin: '*', trustProxy: 0, maxConcurrentSubmits: 8, ssePerClient: 4 }
 const diff = [...Object.entries(expected).filter(([k, v]) => ch[k] !== v), ...Object.entries(top).filter(([k, v]) => c[k] !== v)].map(([k]) => k)
-check('C1: defaults filled and equal to the reference server defaults', diff.length === 0 && c.rateLimit.capacity === 60 && c.rateLimit.refillPerSec === 2 &&
+check('C1: defaults filled and equal to the reference server defaults (except logSignerChunk 1000, A-07)', diff.length === 0 && c.rateLimit.capacity === 60 && c.rateLimit.refillPerSec === 2 &&
   c.log.level === 'info' && c.metrics.enabled === false && c.metrics.allow.join() === '127.0.0.1/32,::1/128', diff.join(',') || 'all equal')
 
 // C2 unknown keys are rejected with a readable error and a suggestion

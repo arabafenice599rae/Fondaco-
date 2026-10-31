@@ -136,6 +136,52 @@ const s7 = statuses()
 // allowance 201 USDC covers only the first order (100 USDC + fee): the second (101 + fee) no longer fits
 check('F7: logs delivered out of order → fill indexed, allowance change applied, same result as in order', s7[h7] === 'filled' && s7[hs[0]] === 'open' && s7[hs[1]] === 'unfunded', JSON.stringify(Object.values(s7)))
 
+// F10 the provider rejects the signer-filtered log query → the round falls back to the unfiltered query, logs it, counts it
+const filtered = (req) => req.method === 'eth_getLogs' && Array.isArray(req.params?.[0]?.topics?.[1])
+const moveUsdc = async (amount) => pub.waitForTransactionReceipt({ hash: await aw.writeContract({ address: USDC, abi: ERC20, functionName: 'approve', args: [SWAP, amount] }) })
+let rejected = 0
+proxy.set({ before: (req) => (filtered(req) ? (rejected++, { response: { error: { code: -32005, message: 'query exceeds max topics' } } }) : undefined) })
+const fb0 = engine.chain(1).filterRejectedUntil
+await moveUsdc(0n) // allowance to 0 → every alice order unfunded, seen only through the token logs
+const r10a = await tick()
+const s10a = statuses()
+const rejectedAfterFirst = rejected
+await moveUsdc(2n ** 256n - 1n) // restore → next round must again see it, without retrying the filter
+const r10b = await tick()
+const s10b = statuses()
+const warn10 = logs.find((l) => l.level === 'warn' && l.msg.startsWith('log filter rejected'))
+const metric10 = app.metrics.render().split('\n').find((l) => l.startsWith('fondaco_log_filter_fallback_total{chain="1"}'))
+proxy.clear()
+check('F10: filter rejected (JSON-RPC error) → same round falls back to unfiltered logs and is correct; the next round skips the filter; warn log + metric',
+  fb0 === 0 && r10a.ok && r10b.ok && rejectedAfterFirst >= 1 && rejected === rejectedAfterFirst && Object.values(s10a).every((x) => x === 'unfunded' || x === 'filled') &&
+  s10b[hs[0]] === 'open' && !!warn10 && warn10.error === 'query exceeds max topics' && metric10 === 'fondaco_log_filter_fallback_total{chain="1"} 1',
+  `rejected ${rejected}×; ${JSON.stringify(Object.values(s10a))} → ${JSON.stringify(Object.values(s10b))}; ${metric10}`)
+// HTTP 413 (request too large) counts as a rejection too; a 503 does NOT (the round fails, as for any outage)
+engine.chain(1).filterRejectedUntil = 0
+proxy.set({ before: (req) => (filtered(req) ? { status: 413, body: 'Request Entity Too Large' } : undefined) })
+await moveUsdc(0n)
+const r10c = await tick()
+const s10c = statuses()
+engine.chain(1).filterRejectedUntil = 0
+proxy.set({ before: (req) => (filtered(req) ? { status: 503, body: 'Service Unavailable' } : undefined) })
+await moveUsdc(2n ** 256n - 1n)
+const r10d = await tick()
+proxy.clear()
+const r10e = await tick()
+// a rate limit answered on EVERY query (filtered and not) is an outage, not a refusal: the round fails, no fallback recorded
+engine.chain(1).filterRejectedUntil = 0
+const fb10 = Number(app.metrics.render().split('\n').find((l) => l.startsWith('fondaco_log_filter_fallback_total{chain="1"}'))?.split(' ').pop() ?? 0)
+proxy.set({ before: (req) => (req.method === 'eth_getLogs' && req.params?.[0]?.topics ? { response: { error: { code: -32005, message: 'rate limit exceeded' } } } : undefined) })
+await moveUsdc(0n)
+const r10f = await tick()
+proxy.clear()
+const fb10b = Number(app.metrics.render().split('\n').find((l) => l.startsWith('fondaco_log_filter_fallback_total{chain="1"}'))?.split(' ').pop() ?? 0)
+await moveUsdc(2n ** 256n - 1n)
+await tick()
+check('F10b: HTTP 413 → fallback (round correct); 503 on the filtered query, or a rate limit on every query → outage: the round fails, no fallback recorded, recovery next round',
+  r10c.ok && Object.values(s10c).every((x) => x === 'unfunded' || x === 'filled') && !r10d.ok && r10e.ok && !r10f.ok && fb10b === fb10 && statuses()[hs[0]] === 'open',
+  `413: ${r10c.ok ? 'ok' : r10c.e?.message}; 503: ${r10d.ok ? 'ok' : 'failed'}; rate limit: ${r10f.ok ? 'ok' : 'failed'} (fallbacks ${fb10}→${fb10b}); then ${statuses()[hs[0]]}`)
+
 // F9 long outage: once verification is older than maxStalenessMs, /book refuses (503 stale) instead of serving old offers
 const bookUrl = `${base}/book?chainId=1&base=${WETH}&quote=${USDC}`
 await tick()

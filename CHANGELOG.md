@@ -9,10 +9,21 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguo
   wizard): owner e `protocolFeeWallet` restano il Safe come nella specifica v1.1. Suite verdi dopo la rimozione (137/137).
 
 ### Corretto (bug del codice di riferimento)
-- **Un errore RPC distruggeva il book**: una multicall fallita per intero era letta come "delegato" e tutti gli ordini vivi diventavano
-  `invalid_signer` (terminale). Ora il giro fallisce senza cambiare stati; valori illeggibili in una risposta parziale rendono la coppia
-  `unfunded` per un giro (mai `open` non verificato, mai terminale); in ingresso `chain_unavailable`. Test `faults` F1–F5.
-- `taker.verify()` poteva verificare a un blocco vecchio (cache di viem): ora numero di blocco fresco. Test `taker` T12 (era instabile).
+| Bug | Correzione | Test |
+|---|---|---|
+| Una multicall fallita per intero (timeout, 5xx) veniva letta da viem come "tutte le chiamate fallite": `authorized()` risultava delegato e **tutti gli ordini vivi diventavano `invalid_signer`** (terminale) | il giro fallisce senza cambiare stati e riprende al successivo | `faults` F1 (timeout), F2 (429/503), F6 (blocco mancante), F8 (ciclo di polling) |
+| Un `nonceUsed` illeggibile in una risposta parziale contava come "non usato": ordine `open` senza verifica | la coppia (firmatario, token) va `unfunded` per quel giro | `faults` F3 |
+| Un `authorized()` illeggibile contava come "delegato": `invalid_signer` terminale | come sopra, mai stato terminale da una lettura fallita | `faults` F4 |
+| In ingresso un ordine con stato illeggibile veniva accettato | rifiutato con `chain_unavailable` (riprovabile), nulla salvato | `faults` F5 |
+| `taker.verify()` usava il numero di blocco in cache di viem (fino a 4 s) e poteva verificare prima di un fill appena avvenuto | `getBlockNumber({ cacheTime: 0 })` | `taker` T12 (era instabile) |
+| Snapshot con più di 400 chiamate fissate a un numero di blocco in cache: il giro rileggeva gli ordini giusti su uno stato vecchio | `getBlockNumber({ cacheTime: 0 })` | `pinned-read` P1 (fallisce senza la correzione); trovato dalla tempesta |
+
+### Aggiunto (integrazioni richieste dopo l'approvazione)
+- **Tempesta** nella prova di carico: 500 firmatari ricevono un Transfer nello stesso blocco con 10 000 ordini nel book → ~1,0 s e 21–22 richieste
+  RPC, 5 000/5 000 ordini rifinanziati nello stesso giro, sia filtrato sia non filtrato (limite 2 s). `docs/LOAD.md`.
+- **`logSignerChunk` = 1000** (default confermato, era 200). Se il provider rifiuta il filtro, il giro ricade sulla query non filtrata nello stesso
+  giro, registra `warn` + `fondaco_log_filter_fallback_total` e ritenta dopo 10 minuti; timeout, 408/429/5xx e reti irraggiungibili restano
+  guasti (il giro fallisce). Test `faults` F10, F10b. `docs/CONFIG.md`: quando conviene 200.
 
 ### Aggiunto
 - `maxStalenessMs` (default 120 s): oltre questo tempo senza un giro riuscito, `/book` risponde `503 stale` (fail-closed). Test F9.
@@ -52,14 +63,15 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguo
 | engine | 13/13 |
 | signers | 8/8 |
 | metrics | 7/7 |
-| faults | 10/10 |
+| faults | 12/12 |
 | reorg | 5/5 |
+| pinned-read | 1/1 |
 | differential | 3/3 (120 passi) |
 | event-order | 2/2 (20 permutazioni) |
 | http-security | 11/11 |
 | taker | 13/13 |
 | protect | 5/5 |
-| **Totale** | **173/173** |
+| **Totale** | **176/176** |
 
 ## [Fase 2] — Book server in TypeScript — 2026-10-31
 

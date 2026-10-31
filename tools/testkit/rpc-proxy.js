@@ -18,7 +18,12 @@ export async function startRpcProxy(upstream, { before, after } = {}) {
     if (pre) {
       if (pre.delayMs) await new Promise((r) => setTimeout(r, pre.delayMs))
       if (pre.hang) return // never answer: the client must time out
-      if (pre.status) { res.writeHead(pre.status, { 'content-type': 'application/json' }); res.end(pre.body ?? JSON.stringify({ jsonrpc: '2.0', id: one.id, error: { code: -32005, message: `injected ${pre.status}` } })); return }
+      if (pre.status) {
+        // like real providers: a custom body (e.g. an HTML/text error page) is not labelled as JSON
+        res.writeHead(pre.status, { 'content-type': pre.body != null ? 'text/plain' : 'application/json' })
+        res.end(pre.body ?? JSON.stringify({ jsonrpc: '2.0', id: one.id, error: { code: -32005, message: `injected ${pre.status}` } }))
+        return
+      }
       if (pre.response !== undefined) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ jsonrpc: '2.0', id: one.id, ...pre.response })); return }
     }
     const up = await fetch(upstream, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(msg) })

@@ -25,6 +25,7 @@ export const SUITES = [
   { name: 'metrics', pkg: 'packages/book-server', file: 'test/metrics.test.js' },
   { name: 'faults', pkg: 'packages/book-server', file: 'test/faults.test.js' },
   { name: 'reorg', pkg: 'packages/book-server', file: 'test/reorg.test.js' },
+  { name: 'pinned-read', pkg: 'packages/book-server', file: 'test/pinned-read.test.js' },
   { name: 'differential', pkg: 'packages/book-server', file: 'test/differential.test.js' },
   { name: 'event-order', pkg: 'packages/book-server', file: 'test/event-order.test.js' },
   { name: 'http-security', pkg: 'packages/book-server', file: 'test/http-security.test.js' },

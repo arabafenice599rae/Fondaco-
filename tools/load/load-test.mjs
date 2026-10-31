@@ -132,6 +132,46 @@ try {
   }
   log('incremental', report.incremental)
 
+  // ---- storm: 500 signers (5 000 orders) receive a Transfer in ONE block, with 10 000 orders in the book. They are first
+  // emptied without events (storage write) and marked unfunded by a full sweep, so the incoming transfers are what re-funds them.
+  const STORM = Math.min(500, signers.filter((s) => s.usdc).length)
+  const victims = signers.filter((s) => s.usdc).slice(0, STORM)
+  const whales = Array.from({ length: 25 }, () => privateKeyToAccount(generatePrivateKey()))
+  await test.setBlockGasLimit({ gasLimit: 300_000_000n })
+  for (const w of whales) {
+    await test.setBalance({ address: w.address, value: parseEther('10') })
+    await test.setStorageAt({ address: USDC, index: slot(w.address, 9n), value: toHex(10n ** 15n, { size: 32 }) })
+  }
+  report.storm = []
+  for (const chunk of [1000, 200]) {
+    engine.chain(1).cfg.logSignerChunk = chunk
+    engine.chain(1).filterRejectedUntil = 0
+    await Promise.all(victims.map((v) => test.setStorageAt({ address: USDC, index: slot(v.account.address, 9n), value: toHex(0n, { size: 32 }) })))
+    await test.mine({ blocks: 1 })
+    await engine.revalidate(1)
+    await engine.tick(1)
+    const unfundedBefore = victims.reduce((n, v) => n + engine.db.bySigner(1, v.account.address).filter((r) => r.status === 'unfunded').length, 0)
+    await test.setAutomine(false)
+    const sends = []
+    for (let wi = 0; wi < whales.length; wi++) {
+      const w = createWalletClient({ account: whales[wi], chain, transport: http(fork.url) })
+      let n = await pub.getTransactionCount({ address: whales[wi].address, blockTag: 'pending' })
+      for (const v of victims.filter((_, i) => i % whales.length === wi)) {
+        sends.push(w.writeContract({ address: USDC, abi: ERC20, functionName: 'transfer', args: [v.account.address, 10n ** 12n], gas: 80_000n, nonce: n++ }))
+      }
+    }
+    await Promise.all(sends)
+    await test.mine({ blocks: 1 })
+    await test.setAutomine(true)
+    const blk = await pub.getBlock({ blockTag: 'latest' })
+    const r = await round(() => engine.tick(1))
+    const openAfter = victims.reduce((n, v) => n + engine.db.bySigner(1, v.account.address).filter((x) => x.status === 'open').length, 0)
+    const entry = { logSignerChunk: chunk, mode: 1000 <= chunk ? 'filtered at the node' : 'unfiltered, filtered locally', signersHit: STORM, transfersInBlock: blk.transactions.length,
+      ordersUnfundedBefore: unfundedBefore, ordersOpenAfter: openAfter, ...r, withinLimit2s: r.ms <= 2000 }
+    report.storm.push(entry)
+    log('storm', entry)
+  }
+
   // ---- API latency, load generator in a separate process
   const bench = (path, extra = [], secs = SECS) => new Promise((res, rej) => {
     const p = spawn(process.execPath, [join(HERE, 'bench-http.mjs'), base + path, String(secs), String(CONNS), ...extra], { stdio: ['ignore', 'pipe', 'inherit'] })
@@ -173,3 +213,6 @@ report.mainnetTokenLogs = await new Promise((res) => {
 mkdirSync(resolve(ROOT, 'reports'), { recursive: true })
 writeFileSync(resolve(ROOT, 'reports/load.json'), JSON.stringify(report, null, 2))
 console.log(JSON.stringify(report, null, 2))
+const stormOk = report.storm?.length && report.storm.every((x) => x.withinLimit2s && x.ordersOpenAfter === x.ordersUnfundedBefore && x.ordersUnfundedBefore === x.signersHit * PER)
+console.log(`${stormOk ? 'PASS' : 'FAIL'} | storm: ${report.storm?.map((x) => `${x.logSignerChunk}: ${x.ms} ms, ${x.rpc} RPC, ${x.ordersOpenAfter}/${x.ordersUnfundedBefore} re-funded`).join('; ')} (limit 2 s)`)
+process.exit(stormOk ? 0 : 1)

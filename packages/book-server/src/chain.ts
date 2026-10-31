@@ -63,7 +63,9 @@ export type CallResult = { status: 'success'; result: unknown } | { status: 'fai
  */
 export async function multicall(client: PublicClient, multicallAddress: Address, contracts: Call[], blockNumber?: bigint | null): Promise<{ results: CallResult[]; blockNumber: bigint | null }> {
   if (contracts.length === 0) return { results: [], blockNumber: blockNumber ?? null }
-  if (blockNumber == null && contracts.length > CHUNK) blockNumber = await client.getBlockNumber()
+  // cacheTime 0: viem caches the block number (default 4 s); pinning to a cached number would read state from BEFORE the
+  // events this round is reacting to (found by the storm load test)
+  if (blockNumber == null && contracts.length > CHUNK) blockNumber = await client.getBlockNumber({ cacheTime: 0 })
   const out: CallResult[] = []
   for (let i = 0; i < contracts.length; i += CHUNK) {
     // batchSize 0: viem would otherwise split every 1 KB of calldata into a separate RPC request

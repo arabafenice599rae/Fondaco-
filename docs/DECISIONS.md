@@ -157,6 +157,18 @@ La specifica chiede p50/p95/p99; autocannon non riporta il p95 e k6 non è insta
 viem tiene in cache il numero di blocco (fino a 4 s): `verify()` poteva controllare gli ordini a un blocco precedente a un fill appena
 avvenuto (test T12 instabile). Ora `getBlockNumber({ cacheTime: 0 })`.
 
-### A-07 · Default di `logSignerChunk`
-Proposta: 1000 invece di 200 (vedi `docs/LOAD.md`): su mainnet la query non filtrata costa ~87 KB per blocco a prescindere dal book,
-quella filtrata 66 byte per firmatario nella richiesta. Da confermare; dipende dai limiti del provider sulla lista dei topic.
+### D-26 · `logSignerChunk` = 1000 con ricaduta automatica (ex A-07, confermata)
+Default 1000. Se la query filtrata fallisce con un errore che non è un guasto (timeout, rete irraggiungibile, 408, 429, 5xx), il giro prova
+subito quella non filtrata: se riesce, il filtro è stato rifiutato → si usa la non filtrata per 10 minuti, `warn` nei log e
+`fondaco_log_filter_fallback_total`; se fallisce anche quella, è un guasto e il giro fallisce. Non classifico i codici JSON-RPC
+(-32005 è usato sia per "troppi topic" sia per i rate limit): decide la prova con la query non filtrata. Test F10, F10b.
+
+### D-27 · Numero di blocco senza cache nelle letture fissate — D
+Trovato dalla tempesta: con più di 400 chiamate la multicall è fissata a `getBlockNumber()`, che viem tiene in cache (4 s). Ora
+`cacheTime: 0`, come in `taker.verify()` (D-25). Test `pinned-read` P1.
+
+### Requisiti registrati per la fase 5 (app)
+- Con `503 stale` da `/book`: mostrare "dati non aggiornati" e bloccare il pulsante di scambio finché il book non torna (D-22).
+- `executableOnChain` vero su un'offerta non `open`/`unfunded`: avviso "questa offerta può ancora essere eseguita: annullala" e pulsante di
+  annullamento protetto (A-02, D-14).
+- Modalità demo solo con `DEMO=true`, etichetta "Demo" sempre visibile (A-04).

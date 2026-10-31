@@ -23,10 +23,28 @@ const nowMs = () => Date.now()
 const yieldLoop = () => new Promise<void>((r) => setImmediate(r))
 const minBig = (a: bigint, b: bigint) => (a < b ? a : b)
 
+/** After a provider rejects the signer-filtered log query, use the unfiltered one for this long before trying again. */
+export const FILTER_BACKOFF_MS = 10 * 60_000
+/**
+ * "The provider is unavailable", never "the provider refused this filter": timeouts, network failures (no HTTP status),
+ * 408, 429 and 5xx. Anything else (JSON-RPC error, 400/413/414/431…) may be a refusal of the filter.
+ */
+export function isOutage(e: unknown): boolean {
+  const walk = (x: unknown, depth = 0): boolean => {
+    if (!x || typeof x !== 'object' || depth > 5) return false
+    const err = x as { name?: string; status?: number; cause?: unknown }
+    if (err.name === 'TimeoutError') return true
+    if (err.name === 'HttpRequestError') return err.status == null || err.status === 408 || err.status === 429 || err.status >= 500
+    return walk(err.cause, depth + 1)
+  }
+  return walk(e)
+}
+
 /** Optional observers (structured logs, metrics); the engine never depends on them. */
 export interface EngineHooks {
   onTick?(e: { chainId: number; kind: 'idle' | 'incremental' | 'full'; ms: number; rpc: number; checked: number }): void
   onReorg?(e: { chainId: number; rewoundTo: bigint; rolledBack: number }): void
+  onLogFilterFallback?(e: { chainId: number; signers: number; error: string }): void
 }
 
 export interface ChainState {
@@ -43,6 +61,8 @@ export interface ChainState {
   forceFull: boolean
   /** wall-clock ms of the last fully successful round (or init) */
   lastOk: number
+  /** until this wall-clock ms, token logs are read unfiltered (the provider rejected the signer filter) */
+  filterRejectedUntil: number
 }
 
 export interface BookEntry { hash: Hex; price: number; baseAmount: string; quoteAmount: string; expiry: number; signer: Address; order?: OrderJson['order'] }
@@ -67,7 +87,7 @@ export class Engine extends EventEmitter<EngineEvents> {
     for (const cfg of chains) {
       this.chains.set(cfg.id, {
         cfg, client: makeClient(cfg.id, cfg, counter), fee: 0n, chainTime: 0n, chainTimeAt: 0, head: null, busy: false,
-        version: 0, cache: new Map(), lastFull: 0, forceFull: true, lastOk: 0,
+        version: 0, cache: new Map(), lastFull: 0, forceFull: true, lastOk: 0, filterRejectedUntil: 0,
       })
     }
   }
@@ -375,19 +395,29 @@ export class Engine extends EventEmitter<EngineEvents> {
     const address = Object.keys(c.cfg.tokens) as Address[]
     type RawLog = { address: Address; topics: Hex[] }
     const getLogs = (topics: (Hex[] | null)[]) => c.client.request({ method: 'eth_getLogs', params: [{ address, fromBlock: toHex(from), toBlock: toHex(to), topics }] } as never) as Promise<RawLog[]>
-    let logs: RawLog[]
-    if (live.length <= c.cfg.logSignerChunk) {
+    let logs: RawLog[] | null = null
+    if (live.length <= c.cfg.logSignerChunk && nowMs() >= c.filterRejectedUntil) {
       // filtered at the node: outgoing transfers, approvals, WETH deposits/withdrawals of signers; incoming transfers of unfunded ones
       const unfunded = live.filter((s) => s.unfunded).map((s) => padTopic(s.signer))
-      const [a, b] = await Promise.all([
-        getLogs([SIGNAL_TOPICS, live.map((s) => padTopic(s.signer))]),
-        unfunded.length ? getLogs([[TOPIC.transfer], null, unfunded]) : Promise.resolve([] as RawLog[]),
-      ])
-      logs = a.concat(b)
-    } else {
-      // many signers: one unfiltered query for the (short) range, filtered here
-      logs = await getLogs([SIGNAL_TOPICS])
+      try {
+        const [a, b] = await Promise.all([
+          getLogs([SIGNAL_TOPICS, live.map((s) => padTopic(s.signer))]),
+          unfunded.length ? getLogs([[TOPIC.transfer], null, unfunded]) : Promise.resolve([] as RawLog[]),
+        ])
+        logs = a.concat(b)
+      } catch (e) {
+        // A refusal of the filter (topic list too long, request too large, any JSON-RPC/4xx error) is confirmed by the unfiltered
+        // query succeeding in the same round: then fall back for FILTER_BACKOFF_MS and never stop. If the unfiltered query fails
+        // too, or the error is a timeout / 5xx, the provider is down: the round fails as usual.
+        if (isOutage(e)) throw e
+        logs = await getLogs([SIGNAL_TOPICS])
+        c.filterRejectedUntil = nowMs() + FILTER_BACKOFF_MS
+        const err = e as { details?: string; shortMessage?: string; message: string }
+        this.hooks.onLogFilterFallback?.({ chainId: c.cfg.id, signers: live.length, error: err.details || err.shortMessage || err.message })
+      }
     }
+    // many signers (or filter rejected): one unfiltered query for the (short) range, filtered here
+    if (logs == null) logs = await getLogs([SIGNAL_TOPICS])
     for (const l of logs) {
       const token = getAddress(l.address), t0 = l.topics[0]
       if (!c.cfg.tokens[token] || l.topics.length < 2) continue
