@@ -1,0 +1,9 @@
+{
+  "name": "@fondaco/verify-source",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Rebuilds SwapERC20 v5.0.0 from the tagged AirSwap source and compares it with the fixture",
+  "scripts": { "verify": "node verify-source.mjs" },
+  "license": "MIT"
+}
