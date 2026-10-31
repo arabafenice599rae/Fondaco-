@@ -1,6 +1,7 @@
 // Self-test of the fork helpers: fixed fork block, random code-free wallets, token funding by storage and by deposit.
 import { parseAbi } from 'viem'
 import { forkClients, randomWallet, setTokenBalance, depositWeth, TOKENS } from './index.js'
+import { FORK_CONFIG } from './anvil.js'
 
 const ctx = forkClients()
 const { pub } = ctx
@@ -9,9 +10,9 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
 const ERC20 = parseAbi(['function balanceOf(address) view returns (uint256)'])
 const bal = (t, a) => pub.readContract({ address: t, abi: ERC20, functionName: 'balanceOf', args: [a] })
 
-const expectBlock = BigInt(process.env.FORK_BLOCK ?? 23_700_000)
+const expectBlock = BigInt(FORK_CONFIG.forkBlock)
 const head = await pub.getBlockNumber()
-check('K1: fork pinned to the configured block', head === expectBlock, `head ${head}, FORK_BLOCK ${expectBlock}`)
+check('K1: fork pinned to the configured block', head === expectBlock, `head ${head}, fork.config.json ${expectBlock}`)
 
 // default dev accounts (mnemonic "test test … junk") are public keys on mainnet too: anyone can attach an EIP-7702 delegation
 const DEV0 = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'

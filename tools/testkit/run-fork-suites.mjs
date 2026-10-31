@@ -4,15 +4,18 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { startFork } from './anvil.js'
+import { startFork, foundryBin } from './anvil.js'
 import { ROOT, loadEnv } from './env.js'
 
 export const SUITES = [
   { name: 'testkit', pkg: 'tools/testkit', file: 'testkit.test.js' },
   { name: 'fee', pkg: 'packages/contracts', file: 'test/fee-side.test.js' },
+  { name: 'foundry', pkg: 'packages/contracts', forge: true },
+  { name: 'addresses', pkg: 'packages/contracts', file: 'test/addresses.test.js' },
   { name: 'deploy', pkg: 'packages/contracts', file: 'test/deploy.test.js' },
   { name: 'e2e', pkg: 'packages/book-server', file: 'test/e2e.js' },
   { name: 'engine', pkg: 'packages/book-server', file: 'test/engine.test.js' },
+  { name: 'signers', pkg: 'packages/book-server', file: 'test/signers.test.js' },
   { name: 'taker', pkg: 'packages/client', file: 'test/taker.test.js' },
   { name: 'protect', pkg: 'packages/client', file: 'test/protect.test.js' },
 ]
@@ -37,13 +40,18 @@ for (const s of suites) {
   const t0 = Date.now()
   let r
   try {
-    r = await run(process.execPath, ['--no-warnings=ExperimentalWarning', s.file], { cwd: resolve(ROOT, s.pkg), env: { ...process.env, FORK_URL: fork.url } })
+    const env = { ...process.env, FORK_URL: fork.url }
+    r = s.forge
+      ? await run(foundryBin('forge'), ['test', '--fork-url', fork.url], { cwd: resolve(ROOT, s.pkg), env })
+      : await run(process.execPath, ['--no-warnings=ExperimentalWarning', s.file], { cwd: resolve(ROOT, s.pkg), env })
   } finally {
     await fork.stop()
   }
+  let passed = 0, total = 0
   const m = r.out.match(/(\d+)\/(\d+) checks passed/)
-  const passed = m ? Number(m[1]) : 0, total = m ? Number(m[2]) : 0
-  summary.push({ suite: s.name, passed, total, ok: r.code === 0 && m && passed === total, seconds: Math.round((Date.now() - t0) / 1000), forkBlock: fork.forkBlock.toString() })
+  const f = r.out.match(/(\d+) tests passed, (\d+) failed, (\d+) skipped \((\d+) total tests\)/)
+  if (m) { passed = Number(m[1]); total = Number(m[2]) } else if (f) { passed = Number(f[1]); total = Number(f[4]) }
+  summary.push({ suite: s.name, passed, total, ok: r.code === 0 && total > 0 && passed === total, seconds: Math.round((Date.now() - t0) / 1000), forkBlock: fork.forkBlock.toString() })
 }
 console.log('\nsuite      result   time')
 for (const x of summary) console.log(`${x.suite.padEnd(10)} ${`${x.passed}/${x.total}`.padEnd(8)} ${x.seconds}s ${x.ok ? 'OK' : 'FAIL'}`)

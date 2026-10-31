@@ -12,3 +12,5 @@ out/
 cache/
 dist/
 coverage/
+packages/contracts/foundry/out/
+packages/contracts/foundry/cache/

@@ -1,0 +1,5 @@
+{
+  "$comment": "Fixed mainnet fork used by every fork test, locally and in CI. Changing it changes the test baseline: update CHANGELOG.",
+  "chainId": 1,
+  "forkBlock": 23700000
+}
