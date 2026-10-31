@@ -6,7 +6,8 @@ src = "foundry/test"
 test = "foundry/test"
 out = "foundry/out"
 cache_path = "foundry/cache"
-libs = []
+libs = ["foundry/lib"]
+remappings = ["forge-std/=foundry/lib/forge-std/src/"]
 solc_version = "0.8.23"
 evm_version = "paris"
 optimizer = false
@@ -17,4 +18,10 @@ fs_permissions = [
 
 [fuzz]
 runs = 256
+seed = "0x46"
+
+[invariant]
+runs = 32
+depth = 64
+fail_on_revert = false
 seed = "0x46"
