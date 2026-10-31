@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, createTestClient, http, parseAbi, encodeAbiParameters, keccak256, toHex, getAddress } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { start } from '../src/index.js'
+import { start } from '../dist/index.js'
 
 const FORK_URL = process.env.FORK_URL || 'http://127.0.0.1:8545'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
@@ -63,7 +63,7 @@ async function main() {
     rateLimit: { capacity: 1000, refillPerSec: 100 }, // production default is 60 burst / 2 per s
     chains: {
       1: {
-        rpc: FORK_URL, swap: SWAP, startBlock: deployRc.blockNumber.toString(), confirmations: 0, pollMs: 3_600_000,
+        rpc: FORK_URL, swap: SWAP, startBlock: deployRc.blockNumber.toString(), pollMs: 3_600_000,
         minExpirySec: 60, maxExpirySec: 7 * 86400,
         tokens: { [USDC]: { symbol: 'USDC', decimals: 6 }, [WETH]: { symbol: 'WETH', decimals: 18 } },
       },

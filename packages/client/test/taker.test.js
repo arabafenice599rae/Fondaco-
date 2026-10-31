@@ -53,7 +53,7 @@ async function main() {
 
   const app = await start({
     port: 0, db: ':memory:', rateLimit: { capacity: 1000, refillPerSec: 100 },
-    chains: { 1: { rpc: FORK_URL, swap: SWAP, startBlock: startBlock.toString(), confirmations: 0, pollMs: 3_600_000, minExpirySec: 60, maxExpirySec: 7 * 86400,
+    chains: { 1: { rpc: FORK_URL, swap: SWAP, startBlock: startBlock.toString(), pollMs: 3_600_000, minExpirySec: 60, maxExpirySec: 7 * 86400,
       tokens: { [USDC]: { symbol: 'USDC', decimals: 6 }, [WETH]: { symbol: 'WETH', decimals: 18 }, [USDT]: { symbol: 'USDT', decimals: 6 } } } },
   }, { log: () => {} })
   const base = `http://127.0.0.1:${app.server.address().port}`

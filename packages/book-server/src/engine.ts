@@ -7,75 +7,86 @@
 // `fullSweepMs` (and after a reorg, a fee change or a long gap) as a backstop for anything logs cannot show
 // (token blacklists, pauses, missed logs).
 import { EventEmitter } from 'node:events'
-import { parseAbiItem, getAddress, toHex } from 'viem'
+import { parseAbiItem, getAddress, toHex, type Address, type Block, type Hex, type Log, type PublicClient } from 'viem'
 import { normalizeOrder, validateShape, orderHash, recoverSignatory, requiredSignerFunds, packedSignature, domainFor, ORDER_TYPES, typedMessage, OrderError } from './order.js'
-import { makeClient, snapshot, readFee, EV_AUTHORIZE, EV_REVOKE, TOPIC, padTopic, topicAddr } from './chain.js'
-import { rowToOrder, rowToJson } from './db.js'
+import { makeClient, snapshot, readFee, EV_AUTHORIZE, EV_REVOKE, TOPIC, padTopic, topicAddr, type RequestCounter, type Snapshot } from './chain.js'
+import { rowToOrder, rowToJson, type Db, type OrderJson } from './db.js'
+import type { ChainCfg, EngineEvents, NormalizedOrder, OrderRow, OrderStatus, SubmitResult, TickResult } from './types.js'
 
 const EV_SWAP = parseAbiItem('event SwapERC20(uint256 indexed nonce, address indexed signerWallet)')
 const EV_CANCEL = parseAbiItem('event Cancel(uint256 indexed nonce, address indexed signerWallet)')
 const EV_FEE = parseAbiItem('event SetProtocolFee(uint256 protocolFee)')
-const SIGNAL_TOPICS = [TOPIC.transfer, TOPIC.approval, TOPIC.deposit, TOPIC.withdrawal]
+const SIGNAL_TOPICS: Hex[] = [TOPIC.transfer, TOPIC.approval, TOPIC.deposit, TOPIC.withdrawal]
 
 const nowMs = () => Date.now()
-const yieldLoop = () => new Promise((r) => setImmediate(r))
-const minBig = (a, b) => (a < b ? a : b)
+const yieldLoop = () => new Promise<void>((r) => setImmediate(r))
+const minBig = (a: bigint, b: bigint) => (a < b ? a : b)
 
-export class Engine extends EventEmitter {
-  constructor(config, db, { counter } = {}) {
+/** Optional observers (structured logs, metrics); the engine never depends on them. */
+export interface EngineHooks {
+  onTick?(e: { chainId: number; kind: 'idle' | 'incremental' | 'full'; ms: number; rpc: number; checked: number }): void
+  onReorg?(e: { chainId: number; rewoundTo: bigint; rolledBack: number }): void
+}
+
+export interface ChainState {
+  cfg: ChainCfg
+  client: PublicClient
+  fee: bigint
+  chainTime: bigint
+  chainTimeAt: number
+  head: Block | null
+  busy: boolean
+  version: number
+  cache: Map<string, { version: number; bucket: bigint; value: BookView }>
+  lastFull: number
+  forceFull: boolean
+}
+
+export interface BookEntry { hash: Hex; price: number; baseAmount: string; quoteAmount: string; expiry: number; signer: Address; order?: OrderJson['order'] }
+export interface BookView { base: Address; quote: Address; asks: BookEntry[]; bids: BookEntry[]; etag: string }
+export type OrderView = OrderJson & { executableOnChain: boolean }
+interface Signals { pairs: Set<string>; signers: Set<Address>; full: boolean; idle?: boolean }
+
+type ContractLog = Log & { eventName: string; args: Record<string, unknown> }
+
+export class Engine extends EventEmitter<EngineEvents> {
+  readonly db: Db
+  readonly chains = new Map<number, ChainState>()
+  readonly counter: RequestCounter | undefined
+  private readonly hooks: EngineHooks
+
+  constructor(chains: ChainCfg[], db: Db, { counter, hooks = {} }: { counter?: RequestCounter; hooks?: EngineHooks } = {}) {
     super()
     this.setMaxListeners(0)
     this.db = db
-    this.chains = new Map()
-    for (const [id, raw] of Object.entries(config.chains)) {
-      const tokens = {}
-      for (const [a, t] of Object.entries(raw.tokens)) {
-        tokens[getAddress(a)] = { symbol: t.symbol, decimals: Number(t.decimals), ...(t.min != null ? { min: BigInt(t.min) } : {}) }
-      }
-      const cfg = {
-        id: Number(id),
-        rpc: raw.rpc,
-        rpcTimeoutMs: raw.rpcTimeoutMs,
-        swap: getAddress(raw.swap),
-        multicall: raw.multicall,
-        tokens,
-        startBlock: BigInt(raw.startBlock ?? 0),
-        logChunk: BigInt(raw.logChunk ?? 2000),
-        reorgDepth: BigInt(raw.reorgDepth ?? 64), // blocks re-read after a reorg (64 ≈ two epochs on Ethereum = finality)
-        signalMaxBlocks: BigInt(raw.signalMaxBlocks ?? 50), // longer gaps → full sweep instead of token logs
-        logSignerChunk: Number(raw.logSignerChunk ?? 200), // above this many live signers, token logs are filtered locally
-        fullSweepMs: Number(raw.fullSweepMs ?? 60_000),
-        expiryBufferSec: Number(raw.expiryBufferSec ?? 30),
-        minExpirySec: Number(raw.minExpirySec ?? 60),
-        maxExpirySec: Number(raw.maxExpirySec ?? 7 * 86400),
-        maxOpenPerSigner: Number(raw.maxOpenPerSigner ?? 200),
-        maxLiveOrders: Number(raw.maxLiveOrders ?? 100_000),
-      }
+    this.counter = counter
+    this.hooks = hooks
+    for (const cfg of chains) {
       this.chains.set(cfg.id, {
-        cfg, client: makeClient(cfg.id, cfg, counter), fee: null, chainTime: 0n, chainTimeAt: 0, head: null, busy: false,
+        cfg, client: makeClient(cfg.id, cfg, counter), fee: 0n, chainTime: 0n, chainTimeAt: 0, head: null, busy: false,
         version: 0, cache: new Map(), lastFull: 0, forceFull: true,
       })
     }
   }
 
-  chain(id) {
+  chain(id: number | string): ChainState {
     const c = this.chains.get(Number(id))
     if (!c) throw new OrderError('unknown_chain', `chain ${id} not supported`)
     return c
   }
 
   /** Chain time extrapolated from the last observed block (contract checks expiry against block.timestamp). */
-  chainNow(c) {
+  chainNow(c: ChainState): bigint {
     return c.chainTime + BigInt(Math.floor((nowMs() - c.chainTimeAt) / 1000))
   }
 
-  async init() {
+  async init(): Promise<void> {
     for (const c of this.chains.values()) {
       c.fee = await readFee(c.client, c.cfg.swap)
       const b = await c.client.getBlock()
       this._setHead(c, b)
       if (this.db.getMeta(`last_block:${c.cfg.id}`) == null) {
-        this.db.setMeta(`last_block:${c.cfg.id}`, (c.cfg.startBlock > 0n ? c.cfg.startBlock - 1n : b.number).toString())
+        this.db.setMeta(`last_block:${c.cfg.id}`, (c.cfg.startBlock > 0n ? c.cfg.startBlock - 1n : (b.number as bigint)).toString())
         this.db.setMeta(`last_hash:${c.cfg.id}`, '')
       }
       // fee may have changed while offline
@@ -84,21 +95,21 @@ export class Engine extends EventEmitter {
     }
   }
 
-  _setHead(c, b) {
+  private _setHead(c: ChainState, b: Block): void {
     c.head = b
     c.chainTime = b.timestamp
     c.chainTimeAt = nowMs()
   }
 
   /** Every state change goes through here: bumps the chain's version (book cache) and notifies SSE. */
-  _emitOrder(c, hash, status) {
+  private _emitOrder(c: ChainState, hash: Hex, status: OrderStatus): void {
     c.version++
     this.emit('order', { chainId: c.cfg.id, hash, status })
   }
-  _emitAll(c, hashes, status) {
+  private _emitAll(c: ChainState, hashes: Hex[], status: OrderStatus): void {
     for (const hash of hashes) this._emitOrder(c, hash, status)
   }
-  _setStatus(c, hash, status, stamp, block = null) {
+  private _setStatus(c: ChainState, hash: Hex, status: OrderStatus, stamp: number, block: bigint | null = null): void {
     if (this.db.setStatus(hash, status, stamp, block)) {
       // at the moment it becomes invalid_signer the signature does not validate on-chain (delegate set / 1271 refused)
       if (status === 'invalid_signer') this.db.setLive(hash, false, stamp)
@@ -112,7 +123,7 @@ export class Engine extends EventEmitter {
    * open/unfunded → true; invalid_signer → true when the signature validates again (revoke(), smart wallet re-accepts);
    * filled/cancelled/used/expired → false; invalid_fee → false while the contract fee differs (true again if it returns).
    */
-  executableOnChain(row) {
+  executableOnChain(row: OrderRow): boolean {
     const c = this.chain(row.chain_id)
     if (BigInt(row.expiry) <= this.chainNow(c)) return false
     if (row.status === 'open' || row.status === 'unfunded') return true
@@ -121,7 +132,7 @@ export class Engine extends EventEmitter {
   }
 
   /** JSON view of an order for the API: the stored order plus executableOnChain. */
-  orderJson(row, withSignature = true) {
+  orderJson(row: OrderRow, withSignature = true): OrderView {
     return { ...rowToJson(row, withSignature), executableOnChain: this.executableOnChain(row) }
   }
 
@@ -129,11 +140,11 @@ export class Engine extends EventEmitter {
    * Re-check invalid_signer orders (all, or those of `signers`): after revoke() their signature validates again on-chain.
    * One batched snapshot; no request when there is nothing to watch.
    */
-  async _watchRevoked(c, signers = null) {
+  private async _watchRevoked(c: ChainState, signers: Set<Address> | null = null): Promise<{ watched: number }> {
     const now = this.chainNow(c)
     const rows = signers == null ? this.db.revoked(c.cfg.id, now) : [...signers].flatMap((s) => this.db.revokedBySigner(c.cfg.id, s, now))
     if (rows.length === 0) return { watched: 0 }
-    const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i].contract_signer === 1 })
+    const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i]?.contract_signer === 1 })
     const stamp = nowMs()
     rows.forEach((r, i) => {
       const live = !snap.delegated.has(r.signer) && !snap.badSignature.has(i) && !snap.nonceUsed[i] && BigInt(r.protocol_fee) === c.fee
@@ -146,12 +157,12 @@ export class Engine extends EventEmitter {
     return { watched: rows.length }
   }
 
-  publicConfig() {
-    const out = {}
+  publicConfig(): Record<number, unknown> {
+    const out: Record<number, unknown> = {}
     for (const c of this.chains.values()) {
       out[c.cfg.id] = {
         swap: c.cfg.swap,
-        protocolFee: c.fee?.toString(),
+        protocolFee: c.fee.toString(),
         domain: domainFor(c.cfg.id, c.cfg.swap),
         types: ORDER_TYPES,
         tokens: c.cfg.tokens,
@@ -165,12 +176,13 @@ export class Engine extends EventEmitter {
 
   // ------------------------------------------------------------------ intake
   /** Validate and store a batch of orders (e.g. a ladder). One multicall for the whole batch. */
-  async submit(chainId, rawOrders) {
+  async submit(chainId: number | string, rawOrders: unknown[]): Promise<SubmitResult[]> {
     const c = this.chain(chainId)
     const now = this.chainNow(c)
-    const results = []
-    const accepted = []
-    const batchKeys = new Set()
+    const results: SubmitResult[] = []
+    type Acc = { o: NormalizedOrder & { _contract?: boolean }; hash: Hex; reject?: OrderError }
+    const accepted: Acc[] = []
+    const batchKeys = new Set<string>()
     if (this.db.countLive(c.cfg.id) + rawOrders.length > c.cfg.maxLiveOrders) {
       return rawOrders.map(() => ({ error: 'book_full', message: 'the book is at capacity, try later' }))
     }
@@ -178,7 +190,7 @@ export class Engine extends EventEmitter {
       // signature recovery is ~2 ms of CPU: yield so a 50-order batch never blocks reads and SSE for long
       if (i % 8 === 7) await yieldLoop()
       try {
-        const o = normalizeOrder(rawOrders[i])
+        const o: Acc['o'] = normalizeOrder(rawOrders[i])
         validateShape(o, c.cfg, { now, fee: c.fee })
         const hash = orderHash(c.cfg.id, c.cfg.swap, o)
         const nonceKey = `${o.signerWallet}|${o.nonce}`
@@ -190,14 +202,15 @@ export class Engine extends EventEmitter {
         accepted.push({ o, hash })
         results.push({ hash, status: 'pending' })
       } catch (e) {
-        results.push({ error: e.code || 'error', message: e.message })
+        const err = e as { code?: string; message: string }
+        results.push({ error: err.code || 'error', message: err.message })
       }
     }
     if (accepted.length === 0) return results
 
     // Batched on-chain state for the new orders + the signers' existing live orders on the same tokens.
-    const existing = []
-    const seen = new Set()
+    const existing: NormalizedOrder[] = []
+    const seen = new Set<string>()
     for (const { o } of accepted) {
       const key = `${o.signerWallet}|${o.signerToken}`
       if (seen.has(key)) continue
@@ -210,11 +223,11 @@ export class Engine extends EventEmitter {
       existing.push(...rows.map((r) => rowToOrder(r)))
     }
     const fresh = accepted.filter((a) => !a.reject)
-    const snap = await snapshot(c.client, c.cfg, [...existing, ...fresh.map((a) => a.o)], { contractSigned: (o) => o._contract === true })
+    const snap = await snapshot(c.client, c.cfg, [...existing, ...fresh.map((a) => a.o)], { contractSigned: (o) => (o as Acc['o'])._contract === true })
     const base = existing.length
 
     const stamp = nowMs()
-    const ready = []
+    const ready: Acc[] = []
     fresh.forEach((a, i) => {
       if (snap.delegated.has(a.o.signerWallet)) a.reject = new OrderError('delegated_signer', 'wallets with an authorized signatory (SwapERC20.authorize) are not supported; call revoke() first')
       else if (snap.badSignature.has(base + i)) a.reject = new OrderError('bad_signature', 'contract wallet signature not accepted by SwapERC20')
@@ -226,7 +239,7 @@ export class Engine extends EventEmitter {
 
     this.db.tx(() => {
       for (const a of ready) {
-        const c0 = c.cfg.tokens[a.o.signerToken], c1 = c.cfg.tokens[a.o.senderToken]
+        const c0 = c.cfg.tokens[a.o.signerToken] as { decimals: number }, c1 = c.cfg.tokens[a.o.senderToken] as { decimals: number }
         const price = Number(a.o.senderAmount) / 10 ** c1.decimals / (Number(a.o.signerAmount) / 10 ** c0.decimals)
         this.db.insert({
           hash: a.hash, chain_id: c.cfg.id, nonce: a.o.nonce.toString(), expiry: Number(a.o.expiry), signer: a.o.signerWallet,
@@ -240,21 +253,20 @@ export class Engine extends EventEmitter {
     // Allocate funds across all live orders of the touched (signer, token) pairs (oldest first).
     const touched = new Set(ready.map((a) => `${a.o.signerWallet}|${a.o.signerToken}`))
     for (const key of touched) {
-      const [signer, token] = key.split('|')
+      const [signer, token] = key.split('|') as [Address, Address]
       this._allocate(c, this.db.liveBySignerToken(c.cfg.id, signer, token), snap.funds.get(key) ?? 0n, stamp)
     }
-    for (const r of results) {
-      if (!r.hash) continue
-      const a = accepted.find((x) => x.hash === r.hash)
-      if (a.reject) { r.error = a.reject.code; r.message = a.reject.message; delete r.status; delete r.hash }
-      else r.status = this.db.byHash(r.hash).status
-    }
-    return results
+    return results.map((r) => {
+      if (!('hash' in r)) return r
+      const a = accepted.find((x) => x.hash === r.hash) as Acc
+      if (a.reject) return { error: a.reject.code, message: a.reject.message }
+      return { hash: r.hash, status: (this.db.byHash(r.hash) as OrderRow).status }
+    })
   }
 
   /** @returns true for a contract (EIP-1271) signer, false for an EOA; throws on an invalid signature. */
-  async _checkSignature(c, o) {
-    let signatory
+  private async _checkSignature(c: ChainState, o: NormalizedOrder): Promise<boolean> {
+    let signatory: Address | null
     try { signatory = getAddress(await recoverSignatory(c.cfg.id, c.cfg.swap, o)) } catch { signatory = null }
     // EOA: recovered locally, no RPC. The authorized() check happens in the batched snapshot.
     if (signatory === o.signerWallet) return false
@@ -271,11 +283,11 @@ export class Engine extends EventEmitter {
   }
 
   /** Cumulative funding: orders are funded in creation order until min(balance, allowance) runs out. */
-  _allocate(c, rows, available, stamp) {
+  private _allocate(c: ChainState, rows: OrderRow[], available: bigint, stamp: number): void {
     let left = available
     for (const r of rows) {
       const need = requiredSignerFunds(rowToOrder(r))
-      const status = need <= left ? 'open' : 'unfunded'
+      const status: OrderStatus = need <= left ? 'open' : 'unfunded'
       if (status === 'open') left -= need
       if (r.status !== status) this._setStatus(c, r.hash, status, stamp)
     }
@@ -285,26 +297,27 @@ export class Engine extends EventEmitter {
   /**
    * Index the swap contract's events up to the head and collect token signals. Reorg-aware: the hash of the last
    * indexed block is stored; if it is no longer canonical, every status observed in the last `reorgDepth` blocks
-   * goes back to 'unfunded' and those blocks are indexed again.
-   * @returns { pairs: Set<'signer|token'>, signers: Set<signer>, full: boolean }
+   * is rolled back and those blocks are indexed again.
    */
-  async _sync(c, head) {
+  private async _sync(c: ChainState, head: Block): Promise<Signals> {
     const id = c.cfg.id
-    const out = { pairs: new Set(), signers: new Set(), full: false }
-    let last = BigInt(this.db.getMeta(`last_block:${id}`))
+    const out: Signals = { pairs: new Set(), signers: new Set(), full: false }
+    const headNumber = head.number as bigint, headHash = head.hash as Hex
+    let last = BigInt(this.db.getMeta(`last_block:${id}`) as string)
     const lastHash = this.db.getMeta(`last_hash:${id}`) || null
-    if (head.number === last && head.hash === lastHash) return out // nothing new: 1 RPC this tick
+    if (headNumber === last && headHash === lastHash) { out.idle = true; return out } // nothing new: 1 RPC this tick
 
     // continuity: the head's parent proves it for free; otherwise read the stored block once
-    const continuous = lastHash == null || (head.number === last + 1n && head.parentHash === lastHash) ||
+    const continuous = lastHash == null || (headNumber === last + 1n && head.parentHash === lastHash) ||
       (await c.client.getBlock({ blockNumber: last }).then((b) => b.hash === lastHash, () => false))
-    if (!continuous || head.number < last) {
+    if (!continuous || headNumber < last) {
       const floor = c.cfg.startBlock > 0n ? c.cfg.startBlock - 1n : 0n
       const to = last - c.cfg.reorgDepth > floor ? last - c.cfg.reorgDepth : floor
       const stamp = nowMs()
       const rolled = this.db.rollback(id, to + 1n, stamp)
       for (const r of rolled) { this._emitOrder(c, r.hash, r.status); out.pairs.add(`${r.signer}|${r.signer_token}`) }
       this.emit('reorg', { chainId: id, rewoundTo: to, rolledBack: rolled.length })
+      this.hooks.onReorg?.({ chainId: id, rewoundTo: to, rolledBack: rolled.length })
       last = to
       this.db.setMeta(`last_block:${id}`, to.toString())
       this.db.setMeta(`last_hash:${id}`, '')
@@ -312,29 +325,29 @@ export class Engine extends EventEmitter {
     }
 
     const start = last + 1n
-    if (start > head.number) return out
-    if (head.number - start + 1n > c.cfg.signalMaxBlocks) out.full = true
+    if (start > headNumber) return out
+    if (headNumber - start + 1n > c.cfg.signalMaxBlocks) out.full = true
 
     let from = start
-    while (from <= head.number) {
-      const to = minBig(from + c.cfg.logChunk - 1n, head.number)
-      const logs = await c.client.getLogs({ address: c.cfg.swap, events: [EV_SWAP, EV_CANCEL, EV_FEE, EV_AUTHORIZE, EV_REVOKE], fromBlock: from, toBlock: to })
-      const toHash = to === head.number ? head.hash : (await c.client.getBlock({ blockNumber: to })).hash
+    while (from <= headNumber) {
+      const to = minBig(from + c.cfg.logChunk - 1n, headNumber)
+      const logs = await c.client.getLogs({ address: c.cfg.swap, events: [EV_SWAP, EV_CANCEL, EV_FEE, EV_AUTHORIZE, EV_REVOKE], fromBlock: from, toBlock: to }) as unknown as ContractLog[]
+      const toHash = to === headNumber ? headHash : ((await c.client.getBlock({ blockNumber: to })).hash as Hex)
       const stamp = nowMs()
       this.db.tx(() => {
         for (const l of logs) {
           if (l.eventName === 'SetProtocolFee') {
-            c.fee = l.args.protocolFee
+            c.fee = l.args.protocolFee as bigint
             this._emitAll(c, this.db.invalidateFee(id, Number(c.fee), stamp), 'invalid_fee')
             this._emitAll(c, this.db.reviveFee(id, Number(c.fee), Number(this.chainNow(c)), stamp), 'unfunded')
             this.emit('fee', { chainId: id, protocolFee: c.fee.toString() })
             out.full = true
           } else if (l.eventName === 'Authorize' || l.eventName === 'Revoke') {
-            out.signers.add(getAddress(l.args.signerWallet))
+            out.signers.add(getAddress(l.args.signerWallet as string))
           } else {
-            const status = l.eventName === 'SwapERC20' ? 'filled' : 'cancelled'
-            const signer = getAddress(l.args.signerWallet)
-            this._emitAll(c, this.db.setStatusByNonce(id, signer, l.args.nonce.toString(), status, stamp, l.blockNumber), status)
+            const status: OrderStatus = l.eventName === 'SwapERC20' ? 'filled' : 'cancelled'
+            const signer = getAddress(l.args.signerWallet as string)
+            this._emitAll(c, this.db.setStatusByNonce(id, signer, (l.args.nonce as bigint).toString(), status, stamp, l.blockNumber), status)
             out.signers.add(signer) // a fill moved this signer's funds: re-allocate the rest of the ladder
           }
         }
@@ -343,24 +356,25 @@ export class Engine extends EventEmitter {
       })
       from = to + 1n
     }
-    if (!out.full) await this._tokenSignals(c, start, head.number, out)
+    if (!out.full) await this._tokenSignals(c, start, headNumber, out)
     return out
   }
 
   /** Which live signers' balances/allowances may have changed in [from, to], from the whitelisted tokens' logs. */
-  async _tokenSignals(c, from, to, out) {
+  private async _tokenSignals(c: ChainState, from: bigint, to: bigint, out: Signals): Promise<void> {
     const live = this.db.liveSigners(c.cfg.id)
     if (live.length === 0) return
     const all = new Set(live.map((s) => s.signer))
-    const address = Object.keys(c.cfg.tokens)
-    const getLogs = (topics) => c.client.request({ method: 'eth_getLogs', params: [{ address, fromBlock: toHex(from), toBlock: toHex(to), topics }] })
-    let logs
+    const address = Object.keys(c.cfg.tokens) as Address[]
+    type RawLog = { address: Address; topics: Hex[] }
+    const getLogs = (topics: (Hex[] | null)[]) => c.client.request({ method: 'eth_getLogs', params: [{ address, fromBlock: toHex(from), toBlock: toHex(to), topics }] } as never) as Promise<RawLog[]>
+    let logs: RawLog[]
     if (live.length <= c.cfg.logSignerChunk) {
       // filtered at the node: outgoing transfers, approvals, WETH deposits/withdrawals of signers; incoming transfers of unfunded ones
       const unfunded = live.filter((s) => s.unfunded).map((s) => padTopic(s.signer))
       const [a, b] = await Promise.all([
         getLogs([SIGNAL_TOPICS, live.map((s) => padTopic(s.signer))]),
-        unfunded.length ? getLogs([[TOPIC.transfer], null, unfunded]) : [],
+        unfunded.length ? getLogs([[TOPIC.transfer], null, unfunded]) : Promise.resolve([] as RawLog[]),
       ])
       logs = a.concat(b)
     } else {
@@ -370,21 +384,21 @@ export class Engine extends EventEmitter {
     for (const l of logs) {
       const token = getAddress(l.address), t0 = l.topics[0]
       if (!c.cfg.tokens[token] || l.topics.length < 2) continue
-      const a1 = topicAddr(l.topics[1])
+      const a1 = topicAddr(l.topics[1] as Hex)
       if (t0 === TOPIC.approval) {
-        if (l.topics.length > 2 && topicAddr(l.topics[2]) === c.cfg.swap && all.has(a1)) out.pairs.add(`${a1}|${token}`)
+        if (l.topics.length > 2 && topicAddr(l.topics[2] as Hex) === c.cfg.swap && all.has(a1)) out.pairs.add(`${a1}|${token}`)
       } else {
         if (all.has(a1)) out.pairs.add(`${a1}|${token}`)
-        if (t0 === TOPIC.transfer && l.topics.length > 2) { const a2 = topicAddr(l.topics[2]); if (all.has(a2)) out.pairs.add(`${a2}|${token}`) }
+        if (t0 === TOPIC.transfer && l.topics.length > 2) { const a2 = topicAddr(l.topics[2] as Hex); if (all.has(a2)) out.pairs.add(`${a2}|${token}`) }
       }
     }
   }
 
   // ------------------------------------------------------------------ revalidation
   /** Apply a snapshot to live rows: terminal/soft statuses first, then funding allocation per (signer, token). */
-  _apply(c, rows, snap, stamp) {
+  private _apply(c: ChainState, rows: OrderRow[], snap: Snapshot, stamp: number): void {
     const block = snap.blockNumber ?? c.head?.number ?? null // lower bound of the read block: safe for reorg rollback
-    const groups = new Map()
+    const groups = new Map<string, OrderRow[]>()
     rows.forEach((r, i) => {
       if (snap.delegated.has(r.signer) || snap.badSignature.has(i)) {
         // authorize() after posting, or a contract wallet that stopped accepting the signature (terminal; re-sign)
@@ -397,58 +411,61 @@ export class Engine extends EventEmitter {
         return
       }
       const key = `${r.signer}|${r.signer_token}`
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key).push(r)
+      const g = groups.get(key)
+      if (g) g.push(r); else groups.set(key, [r])
     })
     for (const [key, list] of groups) this._allocate(c, list, snap.funds.get(key) ?? 0n, stamp)
   }
 
-  expire(chainId) {
+  expire(chainId: number | string): void {
     const c = this.chain(chainId)
     this._emitAll(c, this.db.expire(c.cfg.id, Number(this.chainNow(c)), nowMs()), 'expired')
   }
 
   /** Full sweep: expire, then re-check every live order with one batched snapshot and re-allocate funds. */
-  async revalidate(chainId) {
+  async revalidate(chainId: number | string): Promise<{ checked: number; full?: boolean }> {
     const c = this.chain(chainId)
     this.expire(chainId)
     const rows = this.db.live(c.cfg.id)
     c.lastFull = nowMs()
     c.forceFull = false
     if (rows.length === 0) return { checked: 0 }
-    const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i].contract_signer === 1 })
+    const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i]?.contract_signer === 1 })
     this._apply(c, rows, snap, nowMs())
     return { checked: rows.length, full: true }
   }
 
   /** Incremental: only the live orders of the touched (signer, token) pairs and signers. */
-  async _revalidateSome(c, pairs, signers) {
-    const byHash = new Map()
+  private async _revalidateSome(c: ChainState, pairs: Set<string>, signers: Set<Address>): Promise<{ checked: number; full?: boolean }> {
+    const byHash = new Map<Hex, OrderRow>()
     for (const key of pairs) {
-      const [signer, token] = key.split('|')
+      const [signer, token] = key.split('|') as [Address, Address]
       for (const r of this.db.liveBySignerToken(c.cfg.id, signer, token)) byHash.set(r.hash, r)
     }
     for (const s of signers) for (const r of this.db.liveBySigner(c.cfg.id, s)) byHash.set(r.hash, r)
     const rows = [...byHash.values()]
     if (rows.length === 0) return { checked: 0 }
-    const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i].contract_signer === 1 })
+    const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i]?.contract_signer === 1 })
     this._apply(c, rows, snap, nowMs())
     return { checked: rows.length, full: false }
   }
 
   /** Serialize work per chain so indexing and revalidation never overlap. */
-  async tick(chainId) {
+  async tick(chainId: number | string): Promise<TickResult> {
     const c = this.chain(chainId)
     if (c.busy) return { skipped: true }
     c.busy = true
+    const t0 = performance.now(), rpc0 = this.counter?.n[c.cfg.id] ?? 0
+    let kind: 'idle' | 'incremental' | 'full' = 'incremental'
+    let res: { checked: number; full?: boolean } = { checked: 0 }
     try {
       const head = await c.client.getBlock()
       this._setHead(c, head)
       const sig = await this._sync(c, head)
       const full = sig.full || c.forceFull || nowMs() - c.lastFull >= c.cfg.fullSweepMs
-      let res
-      if (full) res = await this.revalidate(chainId)
+      if (full) { kind = 'full'; res = await this.revalidate(chainId) }
       else {
+        if (sig.idle) kind = 'idle'
         this.expire(chainId)
         res = await this._revalidateSome(c, sig.pairs, sig.signers)
       }
@@ -456,6 +473,7 @@ export class Engine extends EventEmitter {
       return res
     } finally {
       c.busy = false
+      this.hooks.onTick?.({ chainId: c.cfg.id, kind, ms: performance.now() - t0, rpc: (this.counter?.n[c.cfg.id] ?? 0) - rpc0, checked: res.checked })
     }
   }
 
@@ -464,18 +482,17 @@ export class Engine extends EventEmitter {
    * Book for base/quote. asks: signer gives base, wants quote. bids: signer gives quote, wants base.
    * Cached per chain version (any status change invalidates) and per 5 s of chain time (expiry buffer moves).
    */
-  book(chainId, base, quote, limit = 50, { signed = false } = {}) {
+  book(chainId: number | string, base: string, quote: string, limit = 50, { signed = false }: { signed?: boolean } = {}): BookView {
     const c = this.chain(chainId)
-    base = getAddress(base)
-    quote = getAddress(quote)
-    const db = c.cfg.tokens[base], dq = c.cfg.tokens[quote]
+    const b = getAddress(base), q = getAddress(quote)
+    const db = c.cfg.tokens[b], dq = c.cfg.tokens[q]
     if (!db || !dq) throw new OrderError('token_not_allowed', 'pair not whitelisted')
     const minExpiry = this.chainNow(c) + BigInt(c.cfg.expiryBufferSec)
     const bucket = minExpiry / 5n
-    const key = `${base}|${quote}|${limit}|${signed ? 1 : 0}`
+    const key = `${b}|${q}|${limit}|${signed ? 1 : 0}`
     const hit = c.cache.get(key)
     if (hit && hit.version === c.version && hit.bucket === bucket) return hit.value
-    const fmt = (r, side) => {
+    const fmt = (r: OrderRow, side: 'ask' | 'bid'): BookEntry => {
       const baseAmt = side === 'ask' ? BigInt(r.signer_amount) : BigInt(r.sender_amount)
       const quoteAmt = side === 'ask' ? BigInt(r.sender_amount) : BigInt(r.signer_amount)
       return {
@@ -489,10 +506,10 @@ export class Engine extends EventEmitter {
       }
     }
     // asks: price = quote/base = sender/signer → stored price ascending = best ask first
-    const asks = this.db.side(c.cfg.id, base, quote, minExpiry, limit).map((r) => fmt(r, 'ask'))
+    const asks = this.db.side(c.cfg.id, b, q, minExpiry, limit).map((r) => fmt(r, 'ask'))
     // bids: stored price = base/quote; ascending stored price = highest quote/base first = best bid first
-    const bids = this.db.side(c.cfg.id, quote, base, minExpiry, limit).map((r) => fmt(r, 'bid'))
-    const value = { base, quote, asks, bids, etag: `W/"${c.cfg.id}-${c.version}-${bucket}"` }
+    const bids = this.db.side(c.cfg.id, q, b, minExpiry, limit).map((r) => fmt(r, 'bid'))
+    const value: BookView = { base: b, quote: q, asks, bids, etag: `W/"${c.cfg.id}-${c.version}-${bucket}"` }
     if (c.cache.size > 2000) c.cache.clear()
     c.cache.set(key, { version: c.version, bucket, value })
     return value

@@ -17,13 +17,12 @@ importers:
 
   packages/book-server:
     dependencies:
-      viem:
-        specifier: 2.57.13
-        version: 2.57.13(typescript@5.9.3)
-    devDependencies:
       '@fondaco/contracts':
         specifier: workspace:*
         version: link:../contracts
+      viem:
+        specifier: 2.57.13
+        version: 2.57.13(typescript@5.9.3)
 
   packages/client:
     dependencies:

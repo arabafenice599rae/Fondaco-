@@ -7,8 +7,8 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "build": "pnpm --filter @fondaco/contracts build",
-    "typecheck": "pnpm --filter @fondaco/contracts typecheck",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
     "check:abi": "pnpm --filter @fondaco/contracts check:abi",
     "verify-source": "node tools/verify-source/verify-source.mjs",
     "test:verify-source": "node tools/verify-source/verify-source.test.mjs",

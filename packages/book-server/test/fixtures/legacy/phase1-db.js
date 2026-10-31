@@ -1,3 +1,4 @@
+// FIXTURE: db.js of the JavaScript server at the end of phase 1 (signer_revoked, onchain_live), verbatim. Migration tests only.
 // Storage on the built-in node:sqlite (no native deps). Amounts are stored as decimal strings (exact),
 // plus a REAL price column used only for sorting.
 import { DatabaseSync } from 'node:sqlite'
