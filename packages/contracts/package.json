@@ -5,14 +5,33 @@
   "type": "module",
   "description": "AirSwap SwapERC20 v5.0.0 fixtures (unmodified), deploy script and on-chain tests",
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./fixtures/*": "./fixtures/*",
-    "./deploy": "./scripts/deploy.js"
+    "./deploy": "./scripts/deploy.js",
+    "./compiler-settings.json": "./compiler-settings.json"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "gen:abi": "node scripts/gen-abi.mjs",
+    "check:abi": "node scripts/gen-abi.mjs --check",
     "deploy": "node scripts/deploy.js",
     "test:deploy": "node test/deploy.test.js",
-    "test:fee": "node test/fee-side.test.js"
+    "test:fee": "node test/fee-side.test.js",
+    "test:addresses": "node test/addresses.test.js",
+    "test:foundry": "forge test"
   },
-  "dependencies": { "viem": "2.57.13" },
-  "license": "MIT"
+  "dependencies": {
+    "viem": "2.57.13"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "fixtures",
+    "scripts",
+    "compiler-settings.json"
+  ]
 }
