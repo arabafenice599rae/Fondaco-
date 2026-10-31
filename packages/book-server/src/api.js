@@ -4,7 +4,6 @@
 // per-client SSE cap, ETag/304 on the book.
 import http from 'node:http'
 import { getAddress, isAddress } from 'viem'
-import { rowToJson } from './db.js'
 
 const MAX_BODY = 256 * 1024
 const MAX_BATCH = 50
@@ -140,7 +139,7 @@ export function createServer(engine, { corsOrigin = '*', rate, trustProxy = 0, m
       const m = path.match(/^\/orders\/(0x[0-9a-fA-F]{64})$/)
       if (req.method === 'GET' && m) {
         const row = engine.db.byHash(m[1].toLowerCase())
-        return row ? json(res, 200, rowToJson(row)) : json(res, 404, { error: 'not_found' })
+        return row ? json(res, 200, engine.orderJson(row)) : json(res, 404, { error: 'not_found' })
       }
 
       if (req.method === 'GET' && path === '/orders') {
@@ -148,7 +147,7 @@ export function createServer(engine, { corsOrigin = '*', rate, trustProxy = 0, m
         const signer = url.searchParams.get('signer')
         if (!isAddress(signer || '')) return json(res, 400, { error: 'bad_request', message: 'signer required' })
         // private (OTC) orders: terms shown, signature withheld — the counterparty gets the full order by hash
-        return json(res, 200, { orders: engine.db.bySigner(chainId, getAddress(signer)).map((r) => rowToJson(r, r.sender_wallet === ZERO)) })
+        return json(res, 200, { orders: engine.db.bySigner(chainId, getAddress(signer)).map((r) => engine.orderJson(r, r.sender_wallet === ZERO)) })
       }
 
       if (req.method === 'GET' && path === '/stream') {

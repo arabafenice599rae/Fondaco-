@@ -42,6 +42,8 @@ export function openDb(file) {
   if (!cols.has('contract_signer')) db.exec('ALTER TABLE orders ADD COLUMN contract_signer INTEGER NOT NULL DEFAULT 0')
   // once invalid_signer, always invalid_signer in the book (decision A-02): kept across reorg rollbacks
   if (!cols.has('signer_revoked')) db.exec('ALTER TABLE orders ADD COLUMN signer_revoked INTEGER NOT NULL DEFAULT 0')
+  // invalid_signer orders only: 1 = the signature validates on-chain again (e.g. after revoke()), 0 = not, NULL = unknown
+  if (!cols.has('onchain_live')) db.exec('ALTER TABLE orders ADD COLUMN onchain_live INTEGER')
   db.exec(`
     -- the book query reads only public open orders: a partial index keeps it small and ordered by price
     CREATE INDEX IF NOT EXISTS orders_book_open ON orders (chain_id, signer_token, sender_token, price)
@@ -83,6 +85,10 @@ export function openDb(file) {
     side: db.prepare(`SELECT * FROM orders INDEXED BY orders_book_open WHERE chain_id = ? AND signer_token = ? AND sender_token = ? AND status = 'open'
       AND sender_wallet = '0x0000000000000000000000000000000000000000' AND expiry > ? ORDER BY price ASC LIMIT ?`),
     bySigner: db.prepare('SELECT * FROM orders WHERE chain_id = ? AND signer = ? ORDER BY created_at DESC LIMIT 500'),
+    setLive: db.prepare('UPDATE orders SET onchain_live = ?, updated_at = ? WHERE hash = ?'),
+    // invalid_signer orders whose signature may come back to life: watched until filled, cancelled or expired
+    revoked: db.prepare(`SELECT * FROM orders WHERE chain_id = ? AND status = 'invalid_signer' AND expiry > ? ORDER BY created_at, rowid`),
+    revokedBySigner: db.prepare(`SELECT * FROM orders WHERE chain_id = ? AND signer = ? AND status = 'invalid_signer' AND expiry > ? ORDER BY created_at, rowid`),
     getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
     setMeta: db.prepare('INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
   }
@@ -109,6 +115,9 @@ export function openDb(file) {
     liveBySignerToken: (c, signer, token) => st.liveBySignerToken.all(c, signer, token),
     side: (c, give, want, minExpiry, limit) => st.side.all(c, give, want, Number(minExpiry), limit),
     bySigner: (c, signer) => st.bySigner.all(c, signer),
+    setLive: (hash, live, now) => st.setLive.run(live ? 1 : 0, now, hash),
+    revoked: (c, chainTime) => st.revoked.all(c, Number(chainTime)),
+    revokedBySigner: (c, signer, chainTime) => st.revokedBySigner.all(c, signer, Number(chainTime)),
     getMeta: (k) => st.getMeta.get(k)?.value,
     setMeta: (k, v) => st.setMeta.run(k, String(v)),
   }

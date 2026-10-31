@@ -99,7 +99,51 @@ export class Engine extends EventEmitter {
     for (const hash of hashes) this._emitOrder(c, hash, status)
   }
   _setStatus(c, hash, status, stamp, block = null) {
-    if (this.db.setStatus(hash, status, stamp, block)) this._emitOrder(c, hash, status)
+    if (this.db.setStatus(hash, status, stamp, block)) {
+      // at the moment it becomes invalid_signer the signature does not validate on-chain (delegate set / 1271 refused)
+      if (status === 'invalid_signer') this.db.setLive(hash, false, stamp)
+      this._emitOrder(c, hash, status)
+    }
+  }
+
+  /**
+   * Can this signed order still be executed on-chain, whatever the book says? true = the signature, nonce and expiry are
+   * valid at the current fee, so it fills now or as soon as the signer's balance/allowance allows; only cancel() ends it.
+   * open/unfunded → true; invalid_signer → true when the signature validates again (revoke(), smart wallet re-accepts);
+   * filled/cancelled/used/expired → false; invalid_fee → false while the contract fee differs (true again if it returns).
+   */
+  executableOnChain(row) {
+    const c = this.chain(row.chain_id)
+    if (BigInt(row.expiry) <= this.chainNow(c)) return false
+    if (row.status === 'open' || row.status === 'unfunded') return true
+    if (row.status === 'invalid_signer') return row.onchain_live === 1
+    return false
+  }
+
+  /** JSON view of an order for the API: the stored order plus executableOnChain. */
+  orderJson(row, withSignature = true) {
+    return { ...rowToJson(row, withSignature), executableOnChain: this.executableOnChain(row) }
+  }
+
+  /**
+   * Re-check invalid_signer orders (all, or those of `signers`): after revoke() their signature validates again on-chain.
+   * One batched snapshot; no request when there is nothing to watch.
+   */
+  async _watchRevoked(c, signers = null) {
+    const now = this.chainNow(c)
+    const rows = signers == null ? this.db.revoked(c.cfg.id, now) : [...signers].flatMap((s) => this.db.revokedBySigner(c.cfg.id, s, now))
+    if (rows.length === 0) return { watched: 0 }
+    const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i].contract_signer === 1 })
+    const stamp = nowMs()
+    rows.forEach((r, i) => {
+      const live = !snap.delegated.has(r.signer) && !snap.badSignature.has(i) && !snap.nonceUsed[i] && BigInt(r.protocol_fee) === c.fee
+      if ((r.onchain_live === 1) !== live) {
+        this.db.setLive(r.hash, live, stamp)
+        c.version++
+        this.emit('order', { chainId: c.cfg.id, hash: r.hash, status: r.status, executableOnChain: live })
+      }
+    })
+    return { watched: rows.length }
   }
 
   publicConfig() {
@@ -401,9 +445,15 @@ export class Engine extends EventEmitter {
       const head = await c.client.getBlock()
       this._setHead(c, head)
       const sig = await this._sync(c, head)
-      if (sig.full || c.forceFull || nowMs() - c.lastFull >= c.cfg.fullSweepMs) return await this.revalidate(chainId)
-      this.expire(chainId)
-      return await this._revalidateSome(c, sig.pairs, sig.signers)
+      const full = sig.full || c.forceFull || nowMs() - c.lastFull >= c.cfg.fullSweepMs
+      let res
+      if (full) res = await this.revalidate(chainId)
+      else {
+        this.expire(chainId)
+        res = await this._revalidateSome(c, sig.pairs, sig.signers)
+      }
+      await this._watchRevoked(c, full ? null : sig.signers)
+      return res
     } finally {
       c.busy = false
     }

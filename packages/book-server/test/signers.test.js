@@ -3,6 +3,7 @@
 //   S2 a malleated (high-s) copy of a stored order is a duplicate (dedupe by EIP-712 hash, not by signature)
 //   S3–S6 decision A-02: after authorize() → revoke() the old signature is valid again ON-CHAIN, but the book keeps the
 //         order terminal (invalid_signer, never listed) until it is filled or cancelled; a reorg never revives it.
+//   S7–S8 the API tells the app: executableOnChain in /orders/:hash and /orders?signer (true after revoke until cancel/fill)
 import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, createTestClient, http, parseAbi, encodeAbiParameters, keccak256, toHex, getAddress, hexToString, parseEther } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
@@ -59,6 +60,8 @@ async function main() {
   }
   const tick = async () => { while (engine.chain(1).busy) await new Promise((r) => setTimeout(r, 20)); return engine.tick(1) }
   const status = async (h) => (await api('GET', `/orders/${h}`)).body.status
+  const exe = async (h) => (await api('GET', `/orders/${h}`)).body.executableOnChain
+  const exeListed = async (hs) => { const os = (await api('GET', `/orders?chainId=1&signer=${alice.address}`)).body.orders; return hs.map((h) => os.find((o) => o.hash === h)?.executableOnChain) }
   const inBook = async (h) => (await api('GET', `/book?chainId=1&base=${WETH}&quote=${USDC}&limit=200`)).body.bids.some((b) => b.hash === h)
 
   // S1
@@ -92,11 +95,14 @@ async function main() {
   const [o1, o2, o3] = [await bid(U(200), 8n * 10n ** 16n), await bid(U(201), 8n * 10n ** 16n), await bid(U(202), 8n * 10n ** 16n)]
   const hs = (await submit([o1, o2, o3])).map((r) => r.hash)
   const s0 = await Promise.all(hs.map(status))
+  const e0open = await exe(hs[0])
   await send(alice, { address: SWAP, abi: SwapArt.abi, functionName: 'authorize', args: [delegate.address] })
   await tick()
   const s1 = await Promise.all(hs.map(status))
+  const e1 = await Promise.all(hs.map(exe))
   await send(alice, { address: SWAP, abi: SwapArt.abi, functionName: 'revoke', args: [] })
   await tick()
+  const e2 = await Promise.all(hs.map(exe)), e2l = await exeListed(hs)
   await engine.revalidate(1) // even a full sweep must not revive them
   const s2 = await Promise.all(hs.map(status))
   const listed = await Promise.all(hs.map(inBook))
@@ -104,6 +110,9 @@ async function main() {
   check('S3: post → authorize → revoke: orders stay invalid_signer and unlisted, while check() on-chain reports no error',
     s0.every((x) => x === 'open') && s1.every((x) => x === 'invalid_signer') && s2.every((x) => x === 'invalid_signer') && listed.every((x) => !x) && chk.length === 0,
     `${s0[0]} → ${s1[0]} → after revoke ${s2[0]}; listed ${listed.some(Boolean)}; check(): [${chk.join(',')}]`)
+
+  check('S7: executableOnChain — open → true; invalid_signer while delegated → false; after revoke() → true (by hash and by signer)',
+    e0open === true && e1.every((x) => x === false) && e2.every((x) => x === true) && e2l.every((x) => x === true), `delegated ${e1.join(',')}; after revoke ${e2.join(',')} / listed ${e2l.join(',')}`)
 
   // S4 anyone holding the saved signature can still fill it; the indexer then records the fill
   const rc4 = await send(bob, { address: SWAP, abi: SwapArt.abi, functionName: 'swapAnySender', args: args(o1, bob.address) })
@@ -117,6 +126,9 @@ async function main() {
   await tick()
   check('S5: after cancel() the fill reverts (NonceAlreadyUsed) and the order is cancelled', reverted === 'NonceAlreadyUsed' && (await status(hs[1])) === 'cancelled', `swapAnySender → ${reverted}`)
 
+  const e8 = [await exe(hs[0]), await exe(hs[1]), await exe(hs[2])]
+  const e8l = await exeListed(hs)
+
   // S6 reorg: a fill of a revoked order that is reorged out goes back to invalid_signer, never to open
   const snap = await test.snapshot()
   await send(bob, { address: SWAP, abi: SwapArt.abi, functionName: 'swapAnySender', args: args(o3, bob.address) })
@@ -129,6 +141,10 @@ async function main() {
   await tick()
   const s6b = await status(hs[2])
   check('S6: reorged-out fill of a revoked order rolls back to invalid_signer (not open, not listed)', s6a === 'filled' && reorg?.rolledBack >= 1 && s6b === 'invalid_signer' && !(await inBook(hs[2])), `${s6a} → reorg → ${s6b}`)
+
+  const e8r = await exe(hs[2])
+  check('S8: executableOnChain false once filled or cancelled; still true for the untouched revoked order, also after a reorg',
+    e8[0] === false && e8[1] === false && e8[2] === true && e8l.join() === 'false,false,true' && e8r === true, `filled ${e8[0]}, cancelled ${e8[1]}, open-on-chain ${e8[2]}; after reorg ${e8r}`)
 
   await app.stop()
   const failed = results.filter((x) => !x).length
