@@ -25,6 +25,12 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguo
 - Book server: `invalid_signer` resta terminale anche dopo un reorg (nuova colonna additiva `signer_revoked`); un fill o un cancel
   on-chain di un'offerta `invalid_signer` viene comunque registrato (`filled`/`cancelled`), così l'app smette di chiedere l'annullamento.
 
+### Corretto (bug del codice di riferimento)
+- `invalid_signer` tornava `open` dopo un reorg: il rollback riportava a `unfunded` il fill reorganizzato di un'offerta revocata e la
+  verifica successiva la rimetteva nel book. Ora torna `invalid_signer`. Test: `packages/book-server/test/signers.test.js` **S6**.
+- Un fill o un cancel on-chain di un'offerta `invalid_signer` non veniva mai registrato (restava `invalid_signer` per sempre). Ora diventa
+  `filled`/`cancelled`. Test: `signers.test.js` **S4** (fill) e **S5** (cancel).
+
 ### Osservato e documentato
 - SwapERC20 v5.0.0 **accetta firme high-s**: innocuo on-chain (l'hash dell'ordine esclude la firma e il nonce si usa una volta),
   il book deduplica per hash EIP-712.

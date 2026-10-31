@@ -60,7 +60,7 @@ Nessun test esistente cambia; nuovi test S4–S6. La colonna entrerà nelle migr
 Osservato su fork: il contratto accetta il gemello high-s (Foundry `Malleability`). Il server lo accetta in ingresso (il recupero locale
 non impone low-s) ma deduplica per hash EIP-712 (S2). Non lo normalizziamo: un solo nonce, quindi un solo fill possibile.
 
-### D-10 · Test Foundry senza forge-std — D
+### D-10 · Test Foundry senza forge-std — superata da D-12
 L'aggiunta di forge-std come submodule è stata bloccata dalla policy dell'ambiente (integrazione di codice di terzi). I test usano
 un'interfaccia dei cheatcode scritta qui (`foundry/test/utils/Vm.sol`, solo le funzioni usate) e asserzioni proprie: nessun codice di
 terzi nel repository. Se preferisci forge-std (es. `deal`, `StdInvariant`), si può aggiungere come submodule fissato a un commit, con la tua autorizzazione.
@@ -69,8 +69,28 @@ terzi nel repository. Se preferisci forge-std (es. `deal`, `StdInvariant`), si p
 `@fondaco/contracts` si compila con `tsc` (strict, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`) in `dist/`.
 Niente esecuzione diretta di `.ts` (stripping dei tipi stabile solo da Node 22.18, il requisito è ≥ 22.13). `lib` include `DOM` perché i tipi di viem/ox lo richiedono.
 
-## Punti aperti
+### D-12 · forge-std, solo per i test — D (autorizzata)
+Submodule `packages/contracts/foundry/lib/forge-std`, tag **v1.9.7**, commit **`77041d2ce690e692d6e03cc812b57d1ddaa4d505`**
+(`git submodule update --init` dopo il clone). Usato solo dagli invariant test (`foundry/test/invariant`); i test esistenti restano sulla
+loro interfaccia locale dei cheatcode. Nessuna dipendenza Solidity nel codice di produzione (che non esiste: il contratto è il fixture).
 
-### A-06 · Test sul contratto con fuzz di tipo "invariant"
-I test Foundry coprono le invarianti con fuzz per funzione (256 run). Un invariant test con handler (sequenze casuali di fill/cancel/fee)
-è previsto dal test differenziale della fase 3 lato server; se lo vuoi anche in Solidity, serve forge-std (`StdInvariant`) o un handler scritto qui.
+### D-13 · Invariant test con handler (ex A-06) — D
+`SwapInvariants.t.sol` con `Handler.sol`: azioni casuali fill pubblico, fill privato, cancel (anche del delegato), setProtocolFee 0–9999,
+authorize, revoke, transfer e approve dei firmatari, su USDC, USDT e WETH; firme a volte del firmatario a volte del delegato, fondi a volte
+insufficienti. Invarianti: (1) fee wallet = Σ floor(signerAmount·fee/10000) dei fill riusciti, per token; (2) il contratto non detiene
+token; (3) un nonce usato non torna libero. 32 run × 64 chiamate su fork (≈ 2 000 chiamate per invariante; un controllo di mutazione, fee arrotondata per eccesso, viene rilevato).
+
+### D-14 · `executableOnChain` nell'API — D
+`/orders/:hash` e `/orders?signer` aggiungono `executableOnChain` (campi esistenti invariati): `true` se l'ordine firmato può ancora
+essere eseguito on-chain, ora o appena il firmatario ha fondi, e quindi solo `cancel()` lo chiude. `open`/`unfunded` → `true`;
+`invalid_signer` → `true` quando la firma torna valida (dopo `revoke()`, o se lo smart wallet la riaccetta); `filled`/`cancelled`/`used`/
+scaduto → `false`; `invalid_fee` → `false` finché la fee del contratto è diversa. Per gli `invalid_signer` il motore ricontrolla la firma
+on-chain (stessa multicall: `authorized`, `nonceUsed`, `check()` per gli smart wallet) quando arriva un `Authorize`/`Revoke` del firmatario
+e a ogni verifica completa; nessuna richiesta se non ci sono ordini da sorvegliare. Un cambio emette un evento SSE `order` con
+`executableOnChain`. L'app mostra "annulla ora" quando `executableOnChain` è `true` e lo stato non è `open`/`unfunded`. Test S7, S8.
+
+### D-15 · Firma high-s nel taker — D
+Esito documentato: un ordine valido del book con la firma malleata (high-s) **viene eseguito correttamente**, perché il contratto
+accetta high-s e il taker verifica con `check()` e simula prima di inviare; la copia originale viene poi scartata in verify come
+`taken`, senza transazione. Una malleazione non valida (s alto senza invertire v) è rifiutata in verify (`signature`), nulla inviato.
+Test T12, T13.

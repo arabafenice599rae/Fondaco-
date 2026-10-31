@@ -59,6 +59,11 @@ Lo script di deploy rifiuta un fixture il cui SHA-256 non coincide con quello re
 
 ## Deploy (solo dopo conferma esplicita)
 
+> [!WARNING]
+> **Lo script di deploy non è mai stato eseguito su una rete reale.** È stato provato solo su fork locali (anvil).
+> Il primo deploy su testnet (Sepolia o Base Sepolia) richiede la conferma esplicita del responsabile del progetto (Fase 7),
+> con la checklist di verifica post-deploy. Nessun deploy su mainnet senza un audit di SwapERC20 v5.0.0.
+
 ```bash
 # prova a vuoto: legge soltanto, non firma e non invia nulla (basta l'indirizzo del deployer)
 RPC_URL=… DEPLOYER=0x… FEE_BPS=30 FEE_WALLET=0xSafeFee OWNER=0xSafe pnpm --filter @fondaco/contracts run deploy --dry-run
