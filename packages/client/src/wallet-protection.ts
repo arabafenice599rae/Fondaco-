@@ -82,3 +82,44 @@ export const GUIDE_STEPS: readonly string[] = [
   'Aggiungi un nuovo RPC con l’indirizzo copiato e impostalo come predefinito.',
   'Torna qui e conferma: FONDACO se lo ricorda per questo wallet.',
 ]
+
+// ------------------------------------------------------------------ remembered RPC confirmation, per wallet
+
+/** localStorage key (spec §6.3). */
+export const RPC_CONFIRM_KEY = 'fondaco-rpcset'
+export interface StorageLike { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void }
+
+/**
+ * Remembers that the user confirmed "I set the protected RPC" for a wallet on a chain.
+ * Keyed by the wallet's EIP-6963 rdns (stable), never by its uuid (EIP-6963: new uuid every session).
+ * Works without storage (private mode, storage throwing, SSR): falls back to memory for the session; corrupted data is reset.
+ */
+export function createRpcConfirmations(storage: StorageLike | null | undefined = (globalThis as { localStorage?: StorageLike }).localStorage, key = RPC_CONFIRM_KEY) {
+  let mem: Record<string, number> = {}
+  const id = (rdns: string, chainId: number | string) => `${rdns}:${Number(chainId)}`
+  const load = (): Record<string, number> => {
+    try {
+      const raw = storage?.getItem(key)
+      if (!raw) return { ...mem }
+      const v = JSON.parse(raw) as unknown
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return { ...mem }
+      return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k, t]) => /^[^:]+:\d+$/.test(k) && typeof t === 'number')) as Record<string, number>
+    } catch { return { ...mem } }
+  }
+  const save = (v: Record<string, number>) => { mem = v; try { storage?.setItem(key, JSON.stringify(v)) } catch { /* memory only */ } }
+  return {
+    has: (rdns: string | null | undefined, chainId: number | string): boolean => !!rdns && id(rdns, chainId) in load(),
+    set(rdns: string, chainId: number | string, confirmed = true, now = Date.now()): void {
+      const v = load()
+      if (confirmed) v[id(rdns, chainId)] = now; else delete v[id(rdns, chainId)]
+      save(v)
+    },
+    /** forget one wallet (all chains), or everything */
+    clear(rdns?: string): void {
+      if (!rdns) { mem = {}; try { storage?.removeItem(key) } catch { /* ignore */ } return }
+      save(Object.fromEntries(Object.entries(load()).filter(([k]) => !k.startsWith(`${rdns}:`))))
+    },
+    list: (): { rdns: string; chainId: number; at: number }[] => Object.entries(load()).map(([k, at]) => ({ rdns: k.slice(0, k.lastIndexOf(':')), chainId: Number(k.slice(k.lastIndexOf(':') + 1)), at })),
+  }
+}
+export type RpcConfirmations = ReturnType<typeof createRpcConfirmations>

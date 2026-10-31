@@ -2,6 +2,64 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Fase 4] — Client in TypeScript — 2026-10-31
+
+### Modificato
+- `packages/client` in **TypeScript strict**, compilato in `dist/` con le dichiarazioni (ESM, `sideEffects: false`); porting 1:1 verificato dalle suite
+  esistenti sul build prima di ogni aggiunta (taker 13/13, protect 5/5, wallet 5/5). **Unica dipendenza: `viem`** (verificato da `client-smoke`).
+- API pubblica tipizzata e documentata (`packages/client/README.md`): `Quote = IndicativeQuote | VerifiedQuote`, `ExecuteResult`, `TakerEvent`
+  (unione discriminata su `type`), `Order`/`OrderInput`, `Submitter`, `CancelResult`, `ProtectionStatus`.
+- La guardia sul destinatario non lancia più un'eccezione: blocca con `stopped: 'recipient_guard'` ed evento `blocked`.
+
+### Corretto (bug del codice di riferimento)
+| Bug | Correzione | Test |
+|---|---|---|
+| La guardia ricodificava la richiesta con la **propria** ABI, mentre il wallet la codifica con l'`abi` della richiesta: una richiesta con l'ABI alterata (stessi argomenti, ordine diverso) passava il controllo e veniva inviata diversa | confronto byte per byte tra i dati che il wallet codificherà e quelli attesi (contratto, funzione, destinatario = wallet connesso, ordine) | `taker-advanced` A4 (anche A1–A3: destinatario, contratto, funzione) |
+| Con tutti gli endpoint protetti irraggiungibili il submitter lanciava un errore generico: nessuna indicazione all'app, nessuna scelta | stop esplicito `private_unavailable` (nulla inviato); ricaduta sul wallet solo su richiesta, dichiarata | `taker-advanced` A7–A9 |
+
+### Aggiunto
+- `createSubmitter({ onUnavailable: 'stop' | 'wallet' })`: default `stop`; `wallet` invia dal wallet con evento `protection_downgraded` e `result.downgraded`.
+  `cancelOrders` riporta `private_unavailable`. `isUnreachable()` distingue un endpoint muto da una risposta JSON-RPC.
+- `createRpcConfirmations(storage)`: conferma "Ho impostato l'RPC protetto" ricordata per wallet (rdns) e per chain in `localStorage['fondaco-rpcset']`,
+  robusta a storage assente, che lancia errori o corrotto.
+- Test: guardia sul destinatario (4 manomissioni + controllo), `verify()` subito dopo un fill con cache di 4 s (fallisce senza la correzione T12),
+  approve esatto consumato fino a zero su due esecuzioni, endpoint protetti giù (stop, ricaduta dichiarata, cancel), sostituzione nel wallet con un'altra
+  chiamata, timeout; soglie di prezzo ai confini esatti (2,00 %, 9,99 %, 10,00 %, 1,00 % e vicini) su 4 prezzi di mezzo; wallet finti EIP-6963 × reti
+  1, 8453, 10, 42161, 137; persistenza della conferma.
+- `tools/client-smoke`: impacchetta il client, lo installa con npm in un progetto esterno, lo usa da ESM e lo verifica con TypeScript strict
+  (switch esaustivi su `Quote` e `TakerEvent`; un caso mancante fa fallire il controllo).
+
+### Risultati
+| Suite | Esito |
+|---|---|
+| wallet | 5/5 |
+| client-guards | 9/9 |
+| client-smoke | 4/4 |
+| verify-source | 3/3 |
+| config | 9/9 |
+| allocation | 5/5 |
+| migrations | 7/7 |
+| observability | 5/5 |
+| testkit | 4/4 |
+| fee | 2/2 |
+| foundry | 22/22 |
+| addresses | 5/5 |
+| deploy | 8/8 |
+| e2e | 21/21 |
+| engine | 13/13 |
+| signers | 8/8 |
+| metrics | 7/7 |
+| faults | 12/12 |
+| reorg | 5/5 |
+| pinned-read | 1/1 |
+| differential | 3/3 |
+| event-order | 2/2 |
+| http-security | 11/11 |
+| taker | 13/13 |
+| protect | 5/5 |
+| taker-advanced | 12/12 |
+| **Totale** | **201/201** |
+
 ## [Fase 3] — Test avanzati del book server — 2026-10-31
 
 ### Fase 6b annullata

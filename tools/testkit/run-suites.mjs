@@ -9,6 +9,8 @@ import { ROOT, loadEnv } from './env.js'
 
 export const SUITES = [
   { name: 'wallet', pkg: 'packages/client', file: 'test/wallet.test.js', unit: true },
+  { name: 'client-guards', pkg: 'packages/client', file: 'test/guards.test.js', unit: true },
+  { name: 'client-smoke', pkg: 'tools/client-smoke', file: 'smoke.mjs', unit: true },
   { name: 'verify-source', pkg: 'tools/verify-source', file: 'verify-source.test.mjs', unit: true },
   { name: 'config', pkg: 'packages/book-server', file: 'test/config.test.js', unit: true },
   { name: 'allocation', pkg: 'packages/book-server', file: 'test/allocation.test.js', unit: true },
@@ -31,6 +33,7 @@ export const SUITES = [
   { name: 'http-security', pkg: 'packages/book-server', file: 'test/http-security.test.js' },
   { name: 'taker', pkg: 'packages/client', file: 'test/taker.test.js' },
   { name: 'protect', pkg: 'packages/client', file: 'test/protect.test.js' },
+  { name: 'taker-advanced', pkg: 'packages/client', file: 'test/taker-advanced.test.js' },
 ]
 
 function run(cmd, args, opts) {

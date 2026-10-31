@@ -77,7 +77,10 @@ export interface ExecuteResult {
   paid: bigint
   received: bigint
   gasCostWei: bigint
+  /** how the legs were submitted; 'wallet' after an opt-in downgrade from private */
   protection: SubmitMode
+  /** true if the private endpoints were unreachable and the caller allowed the wallet fallback (onUnavailable: 'wallet') */
+  downgraded?: boolean
 }
 
 export type SubmitMode = 'private' | 'wallet'
@@ -114,4 +117,9 @@ export type Tracked =
   | { status: 'timeout'; hash: Hex; reason: 'timeout' }
 
 /** What a submitter returns for one send. */
-export type SendResult = { hash: Hex } | { rejected: true } | { unavailable: true; error: string }
+export type SendResult =
+  /** sent; `downgraded` = the private endpoints were unreachable and the transaction went through the wallet instead (opt-in) */
+  | { hash: Hex; downgraded?: string }
+  | { rejected: true }
+  /** the private endpoints were unreachable: nothing was sent anywhere */
+  | { unavailable: true; error: string }

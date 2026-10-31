@@ -19,7 +19,19 @@ export const PROTECTED_RPC: Readonly<Record<number, readonly string[]>> = {
 }
 export const SEQUENCER_CHAINS: ReadonlySet<number> = new Set([8453, 10, 42161]) // Base, OP Mainnet, Arbitrum One
 
-export type SubmitterEvent = { type: 'sent_private'; hash: Hex }
+export type SubmitterEvent = { type: 'sent_private'; hash: Hex } | { type: 'private_unavailable'; error: string } | { type: 'protection_downgraded'; error: string; hash: Hex }
+
+/** Transport-level failure (unreachable, timeout, HTTP error): the endpoint did not answer. A JSON-RPC error IS an answer. */
+export function isUnreachable(e: unknown): boolean {
+  const walk = (x: unknown, d = 0): boolean => {
+    if (!x || typeof x !== 'object' || d > 6) return false
+    const err = x as { name?: string; cause?: unknown }
+    if (err.name === 'RpcRequestError') return false
+    if (err.name === 'HttpRequestError' || err.name === 'TimeoutError' || err.name === 'TypeError') return true
+    return walk(err.cause, d + 1)
+  }
+  return walk(e)
+}
 export interface SubmitterOptions {
   publicClient: PublicClient
   walletClient: WalletClient
@@ -27,9 +39,14 @@ export interface SubmitterOptions {
   /** a viem transport to use instead of PROTECTED_RPC[chainId] (tests, a paid endpoint, your own relay) */
   privateTransport?: Transport
   onUpdate?: (e: SubmitterEvent) => void
+  /**
+   * When every protected endpoint is unreachable: 'stop' (default) sends nothing and reports `unavailable`;
+   * 'wallet' sends through the wallet's own RPC (public mempool on mainnet) and reports the downgrade. Never silent.
+   */
+  onUnavailable?: 'stop' | 'wallet'
 }
 
-export function createSubmitter({ publicClient, walletClient, chainId, privateTransport, onUpdate = () => {} }: SubmitterOptions): Submitter {
+export function createSubmitter({ publicClient, walletClient, chainId, privateTransport, onUpdate = () => {}, onUnavailable = 'stop' }: SubmitterOptions): Submitter {
   const account = walletClient.account
   const local = !!account && account.type === 'local' && typeof (account as { signTransaction?: unknown }).signTransaction === 'function'
   const urls = PROTECTED_RPC[chainId] || []
@@ -51,7 +68,18 @@ export function createSubmitter({ publicClient, walletClient, chainId, privateTr
       const nonce = await publicClient.getTransactionCount({ address: (account as { address: Address }).address, blockTag: 'latest' })
       const tx = await prepareTransactionRequest(publicClient, { account: account as never, chain: walletClient.chain, to: getAddress(request.address), data, value: request.value ?? 0n, nonce } as never)
       const raw = await (account as unknown as { signTransaction(t: unknown): Promise<Hex> }).signTransaction(tx)
-      const hash = await (priv as Client).request({ method: 'eth_sendRawTransaction', params: [raw] } as never) as Hex
+      let hash: Hex
+      try {
+        hash = await (priv as Client).request({ method: 'eth_sendRawTransaction', params: [raw] } as never) as Hex
+      } catch (e) {
+        if (!isUnreachable(e)) throw e
+        const error = (e as { shortMessage?: string; message: string }).shortMessage ?? (e as Error).message
+        if (onUnavailable !== 'wallet') { onUpdate({ type: 'private_unavailable', error }); return { unavailable: true, error } }
+        // explicit, reported downgrade: the caller opted in to the wallet's own (public) route
+        const h = await walletClient.writeContract(request as never)
+        onUpdate({ type: 'protection_downgraded', error, hash: h })
+        return { hash: h, downgraded: error }
+      }
       onUpdate({ type: 'sent_private', hash })
       return { hash }
     } catch (e) {
@@ -66,7 +94,8 @@ const CANCEL_ABI = parseAbi(['function cancel(uint256[] nonces)', 'function nonc
 const CANCEL_TOPIC = '0x8dd3c361eb2366ff27c2db0eb07b9261f1d052570742ab8c9a0c326f37aa576d' // Cancel(uint256,address)
 
 export type CancelResult =
-  | { status: 'cancelled' | 'partly_taken'; hash: Hex; receipt: TransactionReceipt; taken: bigint[] }
+  | { status: 'cancelled' | 'partly_taken'; hash: Hex; receipt: TransactionReceipt; taken: bigint[]; downgraded?: string }
+  | { status: 'private_unavailable'; error: string; taken: [] }
   | { status: 'rejected'; taken: [] }
   | { status: 'timeout' | 'reverted'; hash: Hex; taken: [] }
 
@@ -81,7 +110,7 @@ export async function cancelOrders({ publicClient, walletClient, submitter, swap
   const { request } = await publicClient.simulateContract({ account: walletClient.account as never, chain: walletClient.chain, address: swapAddr, abi: CANCEL_ABI, functionName: 'cancel', args: [list] })
   const s = await submitter.send(request as unknown as ContractRequest)
   if ('rejected' in s) return { status: 'rejected', taken: [] }
-  if (!('hash' in s)) throw new Error(s.error)
+  if ('unavailable' in s) return { status: 'private_unavailable', error: s.error, taken: [] }
   let receipt: TransactionReceipt | null = null
   try { receipt = await publicClient.waitForTransactionReceipt({ hash: s.hash, timeout: timeoutMs }) } catch (e) {
     if ((e as { name?: string })?.name !== 'WaitForTransactionReceiptTimeoutError') throw e
@@ -92,7 +121,7 @@ export async function cancelOrders({ publicClient, walletClient, submitter, swap
   if (!receipt) return { status: 'timeout', hash: s.hash, taken: [] }
   const cancelled = new Set(receipt.logs.filter((l) => getAddress(l.address) === swapAddr && l.topics[0] === CANCEL_TOPIC).map((l) => BigInt(l.topics[1] as Hex)))
   const taken = list.filter((n) => !cancelled.has(n))
-  return { status: taken.length ? 'partly_taken' : 'cancelled', hash: s.hash, receipt, taken }
+  return { status: taken.length ? 'partly_taken' : 'cancelled', hash: s.hash, receipt, taken, ...(s.downgraded ? { downgraded: s.downgraded } : {}) }
 }
 
 // ------------------------------------------------------------------ price guards (pure)

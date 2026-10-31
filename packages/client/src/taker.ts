@@ -131,12 +131,27 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
     return null
   }
 
-  /** Calldata guard: whatever is about to be signed must pay out to the connected account, on our contract. */
-  function assertPaysMe(to: Address, data: Hex): void {
-    if (getAddress(to) !== swapAddr) throw new Error(`refusing to send to ${to}: not the configured SwapERC20`)
-    const { functionName, args } = decodeFunctionData({ abi: SWAP_TAKER_ABI, data })
-    if (functionName !== 'swapAnySender' && functionName !== 'swap') throw new Error(`unexpected call ${functionName}`)
-    if (getAddress(args[0] as Address) !== me) throw new Error(`recipient ${args[0]} is not the connected wallet`)
+  /**
+   * Calldata guard, run on the exact request handed to the wallet/submitter: the calldata THAT request encodes (with its own
+   * abi, function and args) must be byte-identical to swapAnySender/swap(recipient = connected account, this order) on the
+   * configured SwapERC20. Anything else — another contract, another function, another recipient, a swapped ABI — is refused.
+   * @returns null if it pays the connected account as expected, otherwise why it was refused
+   */
+  function guard(request: ContractRequest, functionName: 'swapAnySender' | 'swap', o: Order): string | null {
+    try {
+      if (getAddress(request.address) !== swapAddr) return `target ${request.address} is not the configured SwapERC20 ${swapAddr}`
+      const actual = encodeFunctionData({ abi: request.abi, functionName: request.functionName, args: request.args } as never)
+      const expected = encodeFunctionData({ abi: SWAP_TAKER_ABI, functionName, args: orderArgs(me, o) as never })
+      if (actual === expected) return null
+      try {
+        const d = decodeFunctionData({ abi: SWAP_TAKER_ABI, data: actual })
+        if (d.functionName !== functionName) return `unexpected call ${d.functionName}`
+        if (getAddress(d.args[0] as Address) !== me) return `recipient ${d.args[0]} is not the connected wallet`
+      } catch { /* not a SwapERC20 swap call */ }
+      return 'calldata differs from the expected swap of this order'
+    } catch (e) {
+      return `request cannot be checked: ${(e as Error).message}`
+    }
   }
 
   async function takerFunds(token: Address): Promise<{ balance: bigint; allowance: bigint }> {
@@ -284,14 +299,15 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
       emit({ type: 'approval_reset', token })
       const r0 = await send({ ...base, args: [swapAddr, 0n] } as ContractRequest)
       if ('rejected' in r0) return { status: 'stopped', reason: 'rejected' }
-      if ('unavailable' in r0) return { status: 'stopped', reason: 'private_unavailable' }
+      if ('unavailable' in r0) { emit({ type: 'private_unavailable', error: r0.error }); return { status: 'stopped', reason: 'private_unavailable' } }
       const t0 = await track(r0.hash, { step: 'approve_reset' })
       if (t0.status !== 'mined') return stopFrom(t0)
     }
     emit({ type: 'approving', token, amount })
     const r = await send({ ...base, args: [swapAddr, amount] } as ContractRequest)
     if ('rejected' in r) return { status: 'stopped', reason: 'rejected' }
-    if ('unavailable' in r) return { status: 'stopped', reason: 'private_unavailable' }
+    if ('unavailable' in r) { emit({ type: 'private_unavailable', error: r.error }); return { status: 'stopped', reason: 'private_unavailable' } }
+    if (r.downgraded) emit({ type: 'protection_downgraded', from: 'private', to: 'wallet', error: r.downgraded })
     const t = await track(r.hash, { step: 'approve' })
     return t.status === 'mined' ? { status: 'mined', receipt: t.receipt } : stopFrom(t)
   }
@@ -331,13 +347,20 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
         if (reason === 'taker_balance' || reason === 'taker_allowance') { result.stopped = reason; break }
         continue
       }
-      assertPaysMe(request.address, encodeFunctionData({ abi: SWAP_TAKER_ABI, functionName: request.functionName as 'swap', args: request.args as never }))
+      const refused = guard(request, functionName, o)
+      if (refused) {
+        // nothing is sent: a component between us and the wallet altered the call
+        result.stopped = 'recipient_guard'
+        emit({ type: 'blocked', reason: 'recipient_guard', message: refused, ...ctx })
+        break
+      }
 
       // 2) send
       emit({ type: 'awaiting_signature', ...ctx })
       const s = await send(request)
       if ('rejected' in s) { result.stopped = 'rejected'; emit({ type: 'rejected', ...ctx }); break }
-      if ('unavailable' in s) { result.stopped = 'private_unavailable'; break }
+      if ('unavailable' in s) { result.stopped = 'private_unavailable'; emit({ type: 'private_unavailable', error: s.error }); break }
+      if (s.downgraded) { result.protection = 'wallet'; result.downgraded = true; emit({ type: 'protection_downgraded', from: 'private', to: 'wallet', error: s.downgraded }) }
 
       // 3) track
       const t = await track(s.hash, ctx)

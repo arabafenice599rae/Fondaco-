@@ -172,3 +172,29 @@ Trovato dalla tempesta: con più di 400 chiamate la multicall è fissata a `getB
 - `executableOnChain` vero su un'offerta non `open`/`unfunded`: avviso "questa offerta può ancora essere eseguita: annullala" e pulsante di
   annullamento protetto (A-02, D-14).
 - Modalità demo solo con `DEMO=true`, etichetta "Demo" sempre visibile (A-04).
+
+## Fase 4
+
+### D-28 · Guardia sul destinatario per identità dei dati — D
+La guardia confronta i dati che il wallet codificherà dalla richiesta (sua `abi`, funzione, argomenti) con quelli attesi; la copia del riferimento
+ricodificava con la propria ABI e non vedeva un'ABI alterata (A4). Non ricostruisco la richiesta da zero: se un componente intermedio la altera,
+è più sicuro accorgersene e fermarsi (`blocked`) che correggerla in silenzio. Fuori portata: un wallet che modifica la transazione dopo la firma.
+
+### D-29 · Endpoint protetti irraggiungibili: stop esplicito di default — D
+Scelta: `onUnavailable: 'stop'` (default) non invia nulla e ferma l'esecuzione con `private_unavailable`; `onUnavailable: 'wallet'` è un consenso
+esplicito del chiamante a passare dalla mempool pubblica, e viene dichiarato (evento, `result.protection = 'wallet'`, `result.downgraded`).
+"Irraggiungibile" = errore di trasporto (rete, timeout, HTTP); una risposta JSON-RPC (per esempio "nonce too low") viene propagata. Per l'app: con
+un wallet del browser il submitter è sempre in modalità `wallet` e questa regola non si applica.
+
+### D-30 · Conferma dell'RPC protetto per rdns e chain — D
+EIP-6963 dà un `uuid` nuovo a ogni sessione: la conferma è legata all'`rdns` del wallet e alla chain (`io.rabby:1`). Per MetaMask la conferma non
+cambia il consiglio (Smart Transactions; un RPC personalizzato le disattiverebbe), come nel riferimento (G8).
+
+### D-31 · Soglie di prezzo incluse — da notare
+La specifica dice "oltre il 2 %" e "oltre il 10 %"; il riferimento usa `≥` (esattamente 2,00 % → `warn`, 10,00 % → `danger`, 1,00 % → superata).
+Ho mantenuto il comportamento del riferimento e l'ho fissato in una tabella di casi (G1, G2). Se "oltre" va inteso in senso stretto, il cambio è di
+una riga e la tabella va aggiornata.
+
+### D-32 · Il client non dipende da `@fondaco/contracts` — D
+Per avere `viem` come unica dipendenza pubblicata, il client definisce le sue ABI minime e i suoi tipi (`Order`, …) invece di importarli dal pacchetto
+contracts. La coerenza tra i due è coperta dai test su fork (stessi ordini firmati, stesso contratto).
