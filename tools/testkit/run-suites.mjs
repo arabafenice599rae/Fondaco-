@@ -11,6 +11,7 @@ export const SUITES = [
   { name: 'wallet', pkg: 'packages/client', file: 'test/wallet.test.js', unit: true },
   { name: 'verify-source', pkg: 'tools/verify-source', file: 'verify-source.test.mjs', unit: true },
   { name: 'config', pkg: 'packages/book-server', file: 'test/config.test.js', unit: true },
+  { name: 'allocation', pkg: 'packages/book-server', file: 'test/allocation.test.js', unit: true },
   { name: 'migrations', pkg: 'packages/book-server', file: 'test/migrations.test.js', unit: true },
   { name: 'observability', pkg: 'packages/book-server', file: 'test/observability.test.js', unit: true },
   { name: 'testkit', pkg: 'tools/testkit', file: 'testkit.test.js' },
@@ -22,6 +23,8 @@ export const SUITES = [
   { name: 'engine', pkg: 'packages/book-server', file: 'test/engine.test.js' },
   { name: 'signers', pkg: 'packages/book-server', file: 'test/signers.test.js' },
   { name: 'metrics', pkg: 'packages/book-server', file: 'test/metrics.test.js' },
+  { name: 'faults', pkg: 'packages/book-server', file: 'test/faults.test.js' },
+  { name: 'reorg', pkg: 'packages/book-server', file: 'test/reorg.test.js' },
   { name: 'taker', pkg: 'packages/client', file: 'test/taker.test.js' },
   { name: 'protect', pkg: 'packages/client', file: 'test/protect.test.js' },
 ]

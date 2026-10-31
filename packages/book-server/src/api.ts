@@ -216,7 +216,7 @@ export function createServer(engine: Engine, { corsOrigin = '*', rate, trustProx
       return json(res, 404, { error: 'not_found' })
     } catch (err) {
       const e = err as HttpError
-      const status = e.status || (e.code === 'unknown_chain' || e.code === 'token_not_allowed' ? 400 : 500)
+      const status = e.status || (e.code === 'unknown_chain' || e.code === 'token_not_allowed' ? 400 : e.code === 'stale' ? 503 : 500)
       if (status === 500) (log ? log.error('request failed', { route, error: e }) : console.error(e))
       return json(res, status, { error: e.code || 'error', message: status === 500 ? 'internal error' : e.message })
     }

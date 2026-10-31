@@ -77,6 +77,7 @@ export interface ChainCfg {
   maxExpirySec: number
   maxOpenPerSigner: number
   maxLiveOrders: number
+  maxStalenessMs: number
 }
 
 // ---------------------------------------------------------------- events (EventEmitter + SSE)

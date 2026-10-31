@@ -23,6 +23,13 @@ importers:
       viem:
         specifier: 2.57.13
         version: 2.57.13(typescript@5.9.3)
+    devDependencies:
+      '@fondaco/testkit':
+        specifier: workspace:*
+        version: link:../../tools/testkit
+      fast-check:
+        specifier: 4.10.2
+        version: 4.10.2
 
   packages/client:
     dependencies:
@@ -94,6 +101,10 @@ packages:
   eventemitter3@5.0.1:
     resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
 
+  fast-check@4.10.2:
+    resolution: {integrity: sha512-iK2f+YrcmoeGqk6fA0ea2bptcu/itMIm4NfEozq6N25+aG6h7s5HZbB/k1aV7b5w5sFLMCbbtRUsTVR+BgC3xw==}
+    engines: {node: '>=12.17.0'}
+
   isows@1.0.7:
     resolution: {integrity: sha512-I1fSfDCZL5P0v33sVqeTDSpcstAg/N+wF5HS033mogOVIp4B+oHC7oOCsA3axAbBSGTJ8QubbNmnIRN/h8U7hg==}
     peerDependencies:
@@ -106,6 +117,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  pure-rand@8.4.2:
+    resolution: {integrity: sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -170,6 +184,10 @@ snapshots:
 
   eventemitter3@5.0.1: {}
 
+  fast-check@4.10.2:
+    dependencies:
+      pure-rand: 8.4.2
+
   isows@1.0.7(ws@8.21.0):
     dependencies:
       ws: 8.21.0
@@ -188,6 +206,8 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - zod
+
+  pure-rand@8.4.2: {}
 
   typescript@5.9.3: {}
 

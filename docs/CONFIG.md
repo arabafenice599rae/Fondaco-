@@ -61,6 +61,7 @@ Le chiavi sconosciute sono un errore all'avvio. Tutti gli errori vengono elencat
 | `maxExpirySec` | integer ≥ 1 | `604800` | Maximum validity at submission (expiry_too_long). |
 | `maxOpenPerSigner` | integer ≥ 1 | `200` | Max live orders per signer and token (too_many_orders). |
 | `maxLiveOrders` | integer ≥ 1 | `100000` | Max live orders on this chain (book_full). |
+| `maxStalenessMs` | integer ≥ 1000 | `120000` | Fail-closed: if no indexing round has succeeded for this long, GET /book answers 503 stale instead of serving unverified offers. |
 | `tokens` | map address → object | **obbligatoria** | Token whitelist: address → { symbol, decimals, min? }. |
 
 ## `chains.<chainId>.tokens.<address>`

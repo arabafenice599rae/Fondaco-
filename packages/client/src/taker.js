@@ -132,7 +132,8 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
   async function verify(p) {
     if (!p.legs.length) return { ...p, kind: 'verified', ok: false, legs: [], dropped: [], problems: ['empty'] }
     const token = p.legs[0].order.senderToken
-    const block = await publicClient.getBlockNumber()
+    // cacheTime 0: viem caches the block number (default 4 s); verifying at a stale block can miss a fill that just landed
+    const block = await publicClient.getBlockNumber({ cacheTime: 0 })
     const res = await publicClient.multicall({
       blockNumber: block,
       allowFailure: true,

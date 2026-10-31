@@ -71,6 +71,9 @@ export async function multicall(client: PublicClient, multicallAddress: Address,
       contracts: contracts.slice(i, i + CHUNK) as never, allowFailure: true, multicallAddress, batchSize: 0,
       ...(blockNumber != null ? { blockNumber } : {}),
     }) as CallResult[]
+    // viem turns a failed request (timeout, 5xx, revert of the whole aggregate) into "every call failed" when allowFailure
+    // is on. That is a transport failure, not an answer: throw, so the round fails and no status is changed.
+    if (part.length > 0 && part.every((r) => r.status === 'failure')) throw (part[0] as { error: Error }).error
     out.push(...part)
   }
   return { results: out, blockNumber: blockNumber ?? null }
@@ -83,6 +86,8 @@ export interface Snapshot {
   delegated: Set<Address>
   /** indexes (into the orders list) of contract-signed orders whose signature check() rejects */
   badSignature: Set<number>
+  /** indexes of orders with at least one unreadable value (failed sub-call): their state is UNKNOWN, never assume either way */
+  unknown: Set<number>
   blockNumber: bigint | null
 }
 
@@ -117,25 +122,36 @@ export async function snapshot(client: PublicClient, chainCfg: Pick<ChainCfg, 's
   const at_ = (i: number) => res[i] as CallResult
 
   const funds = new Map<string, bigint>()
+  const unreadablePairs = new Set<string>()
   pairList.forEach(([owner, token], i) => {
     const bal = at_(2 * i), alw = at_(2 * i + 1)
+    if (bal.status !== 'success' || alw.status !== 'success') unreadablePairs.add(`${owner}|${token}`)
     const available = bal.status === 'success' && alw.status === 'success'
       ? ((bal.result as bigint) < (alw.result as bigint) ? (bal.result as bigint) : (alw.result as bigint)) : 0n
     funds.set(`${owner}|${token}`, available)
   })
+  const unknown = new Set<number>()
+  orders.forEach((o, i) => { if (unreadablePairs.has(`${o.signerWallet}|${o.signerToken}`)) unknown.add(i) })
   let k = pairList.length * 2
-  const nonceUsed = orders.map((_, i) => { const r = at_(k + i); return r.status === 'success' ? (r.result as boolean) : false })
+  const nonceUsed = orders.map((_, i) => { const r = at_(k + i); if (r.status !== 'success') unknown.add(i); return r.status === 'success' ? (r.result as boolean) : false })
   k += orders.length
-  // fail closed: an unreadable authorized() counts as delegated
-  const delegated = new Set(signers.filter((_, i) => { const r = at_(k + i); return r.status !== 'success' || getAddress(r.result as Address) !== ZERO }))
+  // only a READ delegate counts as delegated: an unreadable authorized() makes the signer's orders unknown, not invalid
+  const unreadableSigners = new Set<Address>()
+  const delegated = new Set(signers.filter((s, i) => {
+    const r = at_(k + i)
+    if (r.status !== 'success') { unreadableSigners.add(s); return false }
+    return getAddress(r.result as Address) !== ZERO
+  }))
+  orders.forEach((o, i) => { if (unreadableSigners.has(o.signerWallet)) unknown.add(i) })
   k += signers.length
   const badSignature = new Set<number>()
   sigIdx.forEach((oi, j) => {
     const r = at_(k + j)
-    const errs = r.status === 'success' ? (r.result as Hex[]).map((e) => hexToString(e, { size: 32 }).replace(/\0+$/, '')) : ['CallFailed']
-    if (errs.some((e) => e === 'SignatureInvalid' || e === 'CallFailed')) badSignature.add(oi)
+    if (r.status !== 'success') { unknown.add(oi); return }
+    const errs = (r.result as Hex[]).map((e) => hexToString(e, { size: 32 }).replace(/\0+$/, ''))
+    if (errs.includes('SignatureInvalid')) badSignature.add(oi)
   })
-  return { funds, nonceUsed, delegated, badSignature, blockNumber: at }
+  return { funds, nonceUsed, delegated, badSignature, unknown, blockNumber: at }
 }
 
 export const readFee = (client: PublicClient, swap: Address): Promise<bigint> => client.readContract({ address: swap, abi: SWAP_ABI, functionName: 'protocolFee' })

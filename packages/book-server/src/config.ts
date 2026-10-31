@@ -44,6 +44,7 @@ export const CHAIN = obj({
   maxExpirySec: int('Maximum validity at submission (expiry_too_long).', { default: 7 * 86_400, min: 1 }),
   maxOpenPerSigner: int('Max live orders per signer and token (too_many_orders).', { default: 200, min: 1 }),
   maxLiveOrders: int('Max live orders on this chain (book_full).', { default: 100_000, min: 1 }),
+  maxStalenessMs: int('Fail-closed: if no indexing round has succeeded for this long, GET /book answers 503 stale instead of serving unverified offers.', { default: 120_000, min: 1_000 }),
   tokens: record(address('Token address.'), TOKEN, 'Token whitelist: address → { symbol, decimals, min? }.', { min: 2 }),
 }, 'One chain served by the book.')
 
@@ -86,7 +87,7 @@ export function toChainCfg(id: string, c: ChainConfig): ChainCfg {
     id: Number(id), rpc: c.rpc.length === 1 ? (c.rpc[0] as string) : c.rpc, rpcTimeoutMs: c.rpcTimeoutMs, swap: c.swap, multicall: c.multicall, tokens,
     startBlock: BigInt(c.startBlock), logChunk: BigInt(c.logChunk), reorgDepth: BigInt(c.reorgDepth), signalMaxBlocks: BigInt(c.signalMaxBlocks),
     logSignerChunk: c.logSignerChunk, fullSweepMs: c.fullSweepMs, expiryBufferSec: c.expiryBufferSec, minExpirySec: c.minExpirySec,
-    maxExpirySec: c.maxExpirySec, maxOpenPerSigner: c.maxOpenPerSigner, maxLiveOrders: c.maxLiveOrders,
+    maxExpirySec: c.maxExpirySec, maxOpenPerSigner: c.maxOpenPerSigner, maxLiveOrders: c.maxLiveOrders, maxStalenessMs: c.maxStalenessMs,
   }
 }
 

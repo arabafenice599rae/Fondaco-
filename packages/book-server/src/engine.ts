@@ -11,6 +11,7 @@ import { parseAbiItem, getAddress, toHex, type Address, type Block, type Hex, ty
 import { normalizeOrder, validateShape, orderHash, recoverSignatory, requiredSignerFunds, packedSignature, domainFor, ORDER_TYPES, typedMessage, OrderError } from './order.js'
 import { makeClient, snapshot, readFee, EV_AUTHORIZE, EV_REVOKE, TOPIC, padTopic, topicAddr, type RequestCounter, type Snapshot } from './chain.js'
 import { rowToOrder, rowToJson, type Db, type OrderJson } from './db.js'
+import { allocate } from './allocation.js'
 import type { ChainCfg, EngineEvents, NormalizedOrder, OrderRow, OrderStatus, SubmitResult, TickResult } from './types.js'
 
 const EV_SWAP = parseAbiItem('event SwapERC20(uint256 indexed nonce, address indexed signerWallet)')
@@ -40,6 +41,8 @@ export interface ChainState {
   cache: Map<string, { version: number; bucket: bigint; value: BookView }>
   lastFull: number
   forceFull: boolean
+  /** wall-clock ms of the last fully successful round (or init) */
+  lastOk: number
 }
 
 export interface BookEntry { hash: Hex; price: number; baseAmount: string; quoteAmount: string; expiry: number; signer: Address; order?: OrderJson['order'] }
@@ -64,7 +67,7 @@ export class Engine extends EventEmitter<EngineEvents> {
     for (const cfg of chains) {
       this.chains.set(cfg.id, {
         cfg, client: makeClient(cfg.id, cfg, counter), fee: 0n, chainTime: 0n, chainTimeAt: 0, head: null, busy: false,
-        version: 0, cache: new Map(), lastFull: 0, forceFull: true,
+        version: 0, cache: new Map(), lastFull: 0, forceFull: true, lastOk: 0,
       })
     }
   }
@@ -85,6 +88,7 @@ export class Engine extends EventEmitter<EngineEvents> {
       c.fee = await readFee(c.client, c.cfg.swap)
       const b = await c.client.getBlock()
       this._setHead(c, b)
+      c.lastOk = nowMs()
       if (this.db.getMeta(`last_block:${c.cfg.id}`) == null) {
         this.db.setMeta(`last_block:${c.cfg.id}`, (c.cfg.startBlock > 0n ? c.cfg.startBlock - 1n : (b.number as bigint)).toString())
         this.db.setMeta(`last_hash:${c.cfg.id}`, '')
@@ -147,6 +151,7 @@ export class Engine extends EventEmitter<EngineEvents> {
     const snap = await snapshot(c.client, c.cfg, rows.map(rowToOrder), { contractSigned: (_, i) => rows[i]?.contract_signer === 1 })
     const stamp = nowMs()
     rows.forEach((r, i) => {
+      if (snap.unknown.has(i)) return // unreadable: keep what we knew
       const live = !snap.delegated.has(r.signer) && !snap.badSignature.has(i) && !snap.nonceUsed[i] && BigInt(r.protocol_fee) === c.fee
       if ((r.onchain_live === 1) !== live) {
         this.db.setLive(r.hash, live, stamp)
@@ -228,8 +233,11 @@ export class Engine extends EventEmitter<EngineEvents> {
 
     const stamp = nowMs()
     const ready: Acc[] = []
+    const taintedPairs = new Set<string>()
+    ;[...existing, ...fresh.map((a) => a.o)].forEach((o, i) => { if (snap.unknown.has(i)) taintedPairs.add(`${o.signerWallet}|${o.signerToken}`) })
     fresh.forEach((a, i) => {
-      if (snap.delegated.has(a.o.signerWallet)) a.reject = new OrderError('delegated_signer', 'wallets with an authorized signatory (SwapERC20.authorize) are not supported; call revoke() first')
+      if (taintedPairs.has(`${a.o.signerWallet}|${a.o.signerToken}`)) a.reject = new OrderError('chain_unavailable', 'on-chain state could not be read completely, retry shortly')
+      else if (snap.delegated.has(a.o.signerWallet)) a.reject = new OrderError('delegated_signer', 'wallets with an authorized signatory (SwapERC20.authorize) are not supported; call revoke() first')
       else if (snap.badSignature.has(base + i)) a.reject = new OrderError('bad_signature', 'contract wallet signature not accepted by SwapERC20')
       else if (snap.nonceUsed[base + i]) a.reject = new OrderError('nonce_used', 'nonce already used or cancelled on-chain')
       else if ((snap.funds.get(`${a.o.signerWallet}|${a.o.signerToken}`) ?? 0n) < requiredSignerFunds(a.o)) {
@@ -284,13 +292,12 @@ export class Engine extends EventEmitter<EngineEvents> {
 
   /** Cumulative funding: orders are funded in creation order until min(balance, allowance) runs out. */
   private _allocate(c: ChainState, rows: OrderRow[], available: bigint, stamp: number): void {
-    let left = available
-    for (const r of rows) {
-      const need = requiredSignerFunds(rowToOrder(r))
-      const status: OrderStatus = need <= left ? 'open' : 'unfunded'
-      if (status === 'open') left -= need
+    // rows come ordered by (created_at, rowid): their position is the tie-break sequence
+    const funded = allocate(rows.map((r, i) => ({ need: requiredSignerFunds(rowToOrder(r)), createdAt: r.created_at, seq: i })), available)
+    rows.forEach((r, i) => {
+      const status: OrderStatus = funded[i] ? 'open' : 'unfunded'
       if (r.status !== status) this._setStatus(c, r.hash, status, stamp)
-    }
+    })
   }
 
   // ------------------------------------------------------------------ indexer
@@ -399,7 +406,14 @@ export class Engine extends EventEmitter<EngineEvents> {
   private _apply(c: ChainState, rows: OrderRow[], snap: Snapshot, stamp: number): void {
     const block = snap.blockNumber ?? c.head?.number ?? null // lower bound of the read block: safe for reorg rollback
     const groups = new Map<string, OrderRow[]>()
+    // fail closed: a (signer, token) pair with any unreadable value is not funded this round, and gets no terminal status
+    const tainted = new Set<string>()
+    rows.forEach((r, i) => { if (snap.unknown.has(i)) tainted.add(`${r.signer}|${r.signer_token}`) })
     rows.forEach((r, i) => {
+      if (tainted.has(`${r.signer}|${r.signer_token}`)) {
+        this._setStatus(c, r.hash, 'unfunded', stamp)
+        return
+      }
       if (snap.delegated.has(r.signer) || snap.badSignature.has(i)) {
         // authorize() after posting, or a contract wallet that stopped accepting the signature (terminal; re-sign)
         this._setStatus(c, r.hash, 'invalid_signer', stamp)
@@ -470,10 +484,12 @@ export class Engine extends EventEmitter<EngineEvents> {
         res = await this._revalidateSome(c, sig.pairs, sig.signers)
       }
       await this._watchRevoked(c, full ? null : sig.signers)
+      c.lastOk = nowMs()
+      // successful rounds only: failures are counted by the caller (fondaco_tick_errors_total)
+      this.hooks.onTick?.({ chainId: c.cfg.id, kind, ms: performance.now() - t0, rpc: (this.counter?.n[c.cfg.id] ?? 0) - rpc0, checked: res.checked })
       return res
     } finally {
       c.busy = false
-      this.hooks.onTick?.({ chainId: c.cfg.id, kind, ms: performance.now() - t0, rpc: (this.counter?.n[c.cfg.id] ?? 0) - rpc0, checked: res.checked })
     }
   }
 
@@ -487,6 +503,8 @@ export class Engine extends EventEmitter<EngineEvents> {
     const b = getAddress(base), q = getAddress(quote)
     const db = c.cfg.tokens[b], dq = c.cfg.tokens[q]
     if (!db || !dq) throw new OrderError('token_not_allowed', 'pair not whitelisted')
+    // fail closed: never serve offers whose verification is older than maxStalenessMs (RPC outage)
+    if (nowMs() - c.lastOk > c.cfg.maxStalenessMs) throw new OrderError('stale', `chain ${c.cfg.id} not verified for ${Math.round((nowMs() - c.lastOk) / 1000)} s`)
     const minExpiry = this.chainNow(c) + BigInt(c.cfg.expiryBufferSec)
     const bucket = minExpiry / 5n
     const key = `${b}|${q}|${limit}|${signed ? 1 : 0}`

@@ -19,6 +19,7 @@ export { createServer, clientKeys, rateLimiter } from './api.js'
 export { createLogger } from './log.js'
 export { Registry } from './metrics.js'
 export { inCidr } from './cidr.js'
+export { allocate, byAge } from './allocation.js'
 export * from './types.js'
 
 export interface StartOptions {

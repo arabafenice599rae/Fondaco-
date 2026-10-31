@@ -29,5 +29,9 @@
     "node": ">=22.13"
   },
   "license": "MIT",
-  "types": "dist/index.d.ts"
+  "types": "dist/index.d.ts",
+  "devDependencies": {
+    "fast-check": "4.10.2",
+    "@fondaco/testkit": "workspace:*"
+  }
 }
