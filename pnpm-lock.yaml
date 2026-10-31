@@ -50,6 +50,21 @@ importers:
         specifier: 2.57.13
         version: 2.57.13(typescript@5.9.3)
 
+  tools/load:
+    dependencies:
+      '@fondaco/book-server':
+        specifier: workspace:*
+        version: link:../../packages/book-server
+      '@fondaco/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@fondaco/testkit':
+        specifier: workspace:*
+        version: link:../testkit
+      viem:
+        specifier: 2.57.13
+        version: 2.57.13(typescript@5.9.3)
+
   tools/testkit:
     dependencies:
       viem:

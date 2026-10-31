@@ -2,6 +2,65 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Fase 3] — Test avanzati del book server — 2026-10-31
+
+### Fase 6b annullata
+- La governance OpenZeppelin avviata è stata rimossa per intero prima di qualsiasi commit (contratti, test, script, submodule OZ,
+  wizard): owner e `protocolFeeWallet` restano il Safe come nella specifica v1.1. Suite verdi dopo la rimozione (137/137).
+
+### Corretto (bug del codice di riferimento)
+- **Un errore RPC distruggeva il book**: una multicall fallita per intero era letta come "delegato" e tutti gli ordini vivi diventavano
+  `invalid_signer` (terminale). Ora il giro fallisce senza cambiare stati; valori illeggibili in una risposta parziale rendono la coppia
+  `unfunded` per un giro (mai `open` non verificato, mai terminale); in ingresso `chain_unavailable`. Test `faults` F1–F5.
+- `taker.verify()` poteva verificare a un blocco vecchio (cache di viem): ora numero di blocco fresco. Test `taker` T12 (era instabile).
+
+### Aggiunto
+- `maxStalenessMs` (default 120 s): oltre questo tempo senza un giro riuscito, `/book` risponde `503 stale` (fail-closed). Test F9.
+- Allocazione dei fondi estratta in una funzione pura (comportamento identico) e **property-based test** con fast-check (2 000 casi per
+  proprietà): mai oltre min(saldo, allowance), sempre dal più vecchio (uguale a un modello scritto dalla specifica), indipendente dall'ordine
+  di arrivo, nessun ordine lasciato senza fondi per errore.
+- **Ordine degli eventi nello stesso blocco**: 20 permutazioni dei log di un blocco con fill, cancel, transfer, approve e withdraw danno stati
+  identici (fast-check + proxy RPC).
+- **Test differenziale** su fork: 3 seed × 40 passi casuali (transfer, approve, deposit/withdraw, fill, cancel, cambio fee, scadenze, nuovi
+  ordini); dopo ogni passo lo stato incrementale coincide con una verifica completa da zero. Un bug piantato (Approval ignorati) viene
+  rilevato al passo 13.
+- **Reorg** con snapshot/revert: profondità 1, 5, 63 (rollback e reindicizzazione corretti), 65 (limite documentato), reorg durante un
+  recupero a più chunk (rilevata al giro dopo, stato corretto).
+- **Fault injection** con un proxy RPC programmabile (`tools/testkit/rpc-proxy.js`): timeout, 429/503 transitori e persistenti, multicall
+  parziali, blocchi mancanti, log fuori ordine, failover; il ciclo di polling sopravvive con log JSON e metrica degli errori.
+- **Sicurezza HTTP**: corpo lento e header lenti (408), corpo > 256 KB anche in streaming, JSON malformato/profondo/prototype pollution,
+  content type, 431, ETag/304, CORS, rate limit IPv4, IPv6 /64 e /48, `X-Forwarded-For` falsificato con e senza `trustProxy`, limite SSE.
+- **Prova di carico** (`tools/load`, fuori da `pnpm test`): 10 000 ordini da 1 000 firmatari. Verifica completa 33–34 RPC in ~0,8 s; giro a
+  vuoto 1 RPC; giro incrementale 4 RPC in ~27 ms; `/book` p50/p95/p99 5,0/9,4/13,0 ms a 5 500 req/s; RSS 323 MB. Dettagli e proposta per
+  `logSignerChunk` in `docs/LOAD.md`.
+
+### Risultati
+| Suite | Esito |
+|---|---|
+| wallet | 5/5 |
+| verify-source | 3/3 |
+| config | 9/9 |
+| allocation | 5/5 |
+| migrations | 7/7 |
+| observability | 5/5 |
+| testkit | 4/4 |
+| fee | 2/2 |
+| foundry | 22/22 |
+| addresses | 5/5 |
+| deploy | 8/8 |
+| e2e | 21/21 |
+| engine | 13/13 |
+| signers | 8/8 |
+| metrics | 7/7 |
+| faults | 10/10 |
+| reorg | 5/5 |
+| differential | 3/3 (120 passi) |
+| event-order | 2/2 (20 permutazioni) |
+| http-security | 11/11 |
+| taker | 13/13 |
+| protect | 5/5 |
+| **Totale** | **173/173** |
+
 ## [Fase 2] — Book server in TypeScript — 2026-10-31
 
 ### Prima della fase 2 (richieste sulla fase 1)

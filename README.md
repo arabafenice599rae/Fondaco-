@@ -34,6 +34,7 @@ pnpm test:fork e2e engine   # solo alcune suite
 Il runner (`tools/testkit/run-suites.mjs`) esegue le suite unitarie senza chain e quelle su fork con un anvil nuovo per suite;
 i conteggi finiscono in `reports/tests.json`, la verifica del sorgente in `reports/verify-source.json`.
 Dopo il clone: `git submodule update --init` (forge-std, solo per i test Foundry).
+Prova di carico (fuori da `pnpm test`, ~3 minuti): `node tools/load/load-test.mjs` → `reports/load.json`; risultati commentati in [`docs/LOAD.md`](docs/LOAD.md).
 
 ## Book server
 

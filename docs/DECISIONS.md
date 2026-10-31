@@ -120,3 +120,43 @@ dietro un proxy serve il token. La route non consuma il rate limit.
 Misurato: 1 richiesta per un giro a vuoto, **5** per un giro con un Transfer di un firmatario quando esistono firmatari `unfunded`
 (testa, log del contratto, due query di log dei token in parallelo — uscite e entrate verso gli unfunded —, multicall), 4 altrimenti.
 La specifica dice "circa 4": coerente. Le misure a 10 000 ordini sono nella fase 3.
+
+## Fase 6b (annullata)
+
+La governance con OpenZeppelin (token, Governor, Timelock) è stata avviata e poi **annullata** su richiesta: nessun file, test,
+dipendenza o submodule è rimasto nel repository (non era stato fatto alcun commit). Restano valide le regole della specifica v1.1:
+owner e `protocolFeeWallet` di SwapERC20 = Safe, nessun Solidity di produzione nostro.
+
+## Fase 3
+
+### D-21 · Fail-closed sugli errori RPC (bug del codice di riferimento) — D
+Trovato con la fault injection. Con `allowFailure: true`, viem trasforma una multicall fallita per intero (timeout, 5xx) in
+"tutte le chiamate fallite"; il riferimento leggeva allora `authorized()` come delegato e **tutti gli ordini vivi diventavano
+`invalid_signer`**, stato terminale: un solo timeout distruggeva il book. Ora:
+- un blocco della multicall con tutte le chiamate fallite è un errore di trasporto: il giro fallisce e nessuno stato cambia;
+- un valore illeggibile in una risposta parziale rende `unknown` gli ordini interessati: l'intera coppia (firmatario, token) va
+  `unfunded` per quel giro (mai `open` senza verifica, mai uno stato terminale) e torna normale al giro successivo;
+- in ingresso un ordine con stato illeggibile è rifiutato con `chain_unavailable` (riprovabile), nulla viene salvato.
+Test `faults` F1–F5.
+
+### D-22 · `maxStalenessMs`: il book non serve offerte non verificate — D
+Durante un'interruzione lunga dell'RPC gli ordini restavano `open` sulla base dell'ultima verifica. Nuovo parametro per chain
+`maxStalenessMs` (default 120 s): se nessun giro è riuscito da più di quel tempo, `GET /book` risponde `503 stale`; torna a 200 al primo
+giro riuscito. Cambia solo il comportamento in caso di guasto. Test F9.
+
+### D-23 · Reorg più profondi di `reorgDepth` — comportamento documentato
+Con una reorg di 65 blocchi (> 64) il server se ne accorge, ma un fill nel primo blocco abbandonato **resta `filled`** e un cancel nel
+primo blocco del nuovo ramo viene visto solo come `used` (dalla verifica completa). In entrambi i casi l'ordine non viene offerto,
+quindi nessuno rischia fondi; su Ethereum 64 blocchi superano la finalità. Test R4.
+
+### D-24 · Generatore di carico in casa invece di autocannon/k6 — D
+La specifica chiede p50/p95/p99; autocannon non riporta il p95 e k6 non è installabile senza binari esterni. `tools/load/bench-http.mjs`
+(40 righe, `node:http`, keep-alive) gira in un processo separato e calcola i percentili esatti su tutti i campioni.
+
+### D-25 · `verify()` del taker legge un numero di blocco fresco — D
+viem tiene in cache il numero di blocco (fino a 4 s): `verify()` poteva controllare gli ordini a un blocco precedente a un fill appena
+avvenuto (test T12 instabile). Ora `getBlockNumber({ cacheTime: 0 })`.
+
+### A-07 · Default di `logSignerChunk`
+Proposta: 1000 invece di 200 (vedi `docs/LOAD.md`): su mainnet la query non filtrata costa ~87 KB per blocco a prescindere dal book,
+quella filtrata 66 byte per firmatario nella richiesta. Da confermare; dipende dai limiti del provider sulla lista dei topic.

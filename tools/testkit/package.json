@@ -4,7 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Local mainnet fork (anvil, fixed block), random test wallets, token funding helpers, suite runner",
-  "exports": { ".": "./index.js", "./anvil": "./anvil.js" },
-  "dependencies": { "viem": "2.57.13" },
+  "exports": {
+    ".": "./index.js",
+    "./anvil": "./anvil.js",
+    "./env": "./env.js"
+  },
+  "dependencies": {
+    "viem": "2.57.13"
+  },
   "license": "MIT"
 }
