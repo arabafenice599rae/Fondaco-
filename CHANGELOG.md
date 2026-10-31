@@ -2,6 +2,53 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Fase 2] — Book server in TypeScript — 2026-10-31
+
+### Prima della fase 2 (richieste sulla fase 1)
+- forge-std **v1.9.7** (`77041d2c…`) come submodule, solo per i test; **invariant test con handler** su fork: fee wallet = Σ floor(signerAmount·fee/10000)
+  dei fill, contratto senza token, nonce usati mai liberati; azioni casuali fill pubblico/privato, cancel, setProtocolFee, authorize, revoke,
+  transfer e approve (32 run × 64 chiamate per invariante). Un controllo di mutazione (fee arrotondata per eccesso) viene rilevato.
+- API: campo **`executableOnChain`** in `/orders/:hash` e `/orders?signer` (true per `invalid_signer` dopo `revoke()` finché non arriva cancel o fill);
+  evento SSE `order` quando cambia. Test `signers` S7, S8.
+- Taker: firma **high-s** presa dal book → eseguita correttamente (il contratto la accetta); malleazione non valida → rifiutata in verify. Test `taker` T12, T13.
+- README: avviso in evidenza che lo script di deploy non è mai stato eseguito su una rete reale.
+
+### Aggiunto
+- Server in **TypeScript strict** (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`), compilato in `dist/`; tipi per stati, ordini, righe DB, eventi.
+- **Migrazioni versionate** (`PRAGMA user_version`, tabella `schema_migrations`, un passo per transazione): v1 schema di riferimento,
+  v2 `status_block`/`contract_signer`/indici, v3 `signer_revoked`, v4 `onchain_live`. Database del server JS di riferimento (e quelli della fase 1)
+  riconosciuti e migrati; database più nuovi rifiutati; passo fallito = rollback completo.
+- **Schema di configurazione in casa** (validatore di 123 righe + definizione): default documentati, chiavi sconosciute rifiutate con
+  "did you mean", tutti gli errori in un solo messaggio con percorso; `docs/CONFIG.md` generato dallo schema e controllato da `pnpm test` (`check:generated`).
+- **Log JSON** (un oggetto per riga, livelli, bigint/Error sicuri) e **metriche Prometheus** in casa; `/metrics` spento di default, protetto da
+  rete (indirizzo diretto) o token bearer.
+- Suite unitarie `config` (9), `migrations` (7), `observability` (5); suite su fork `metrics` (7). Runner unico `tools/testkit/run-suites.mjs`.
+
+### Modificato
+- `confirmations` rimossa dalle configurazioni dei test: ora è una chiave sconosciuta (A-05).
+- `GET /metrics` è una nuova route; con le metriche spente risponde 404 come qualsiasi percorso sconosciuto.
+
+### Risultati
+| Suite | Esito |
+|---|---|
+| wallet | 5/5 |
+| verify-source | 3/3 |
+| config | 9/9 |
+| migrations | 7/7 |
+| observability | 5/5 |
+| testkit | 4/4 |
+| fee | 2/2 |
+| foundry | 22/22 (19 + 3 invarianti) |
+| addresses | 5/5 |
+| deploy | 8/8 |
+| e2e | 21/21 |
+| engine | 13/13 |
+| signers | 8/8 |
+| metrics | 7/7 |
+| taker | 13/13 |
+| protect | 5/5 |
+| **Totale** | **137/137** |
+
 ## [Fase 1] — Libreria contratti e deploy — 2026-10-31
 
 ### Aggiunto

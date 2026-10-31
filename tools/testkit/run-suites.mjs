@@ -1,6 +1,6 @@
 // Runs every fork suite against its OWN fresh anvil fork (same fixed block), so suites cannot leak state into each
 // other (automine toggles, time travel, snapshots). Prints and stores the per-suite counts.
-//   node tools/testkit/run-fork-suites.mjs [suite ...]
+//   node tools/testkit/run-suites.mjs [suite ...]
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -8,6 +8,11 @@ import { startFork, foundryBin } from './anvil.js'
 import { ROOT, loadEnv } from './env.js'
 
 export const SUITES = [
+  { name: 'wallet', pkg: 'packages/client', file: 'test/wallet.test.js', unit: true },
+  { name: 'verify-source', pkg: 'tools/verify-source', file: 'verify-source.test.mjs', unit: true },
+  { name: 'config', pkg: 'packages/book-server', file: 'test/config.test.js', unit: true },
+  { name: 'migrations', pkg: 'packages/book-server', file: 'test/migrations.test.js', unit: true },
+  { name: 'observability', pkg: 'packages/book-server', file: 'test/observability.test.js', unit: true },
   { name: 'testkit', pkg: 'tools/testkit', file: 'testkit.test.js' },
   { name: 'fee', pkg: 'packages/contracts', file: 'test/fee-side.test.js' },
   { name: 'foundry', pkg: 'packages/contracts', forge: true },
@@ -16,6 +21,7 @@ export const SUITES = [
   { name: 'e2e', pkg: 'packages/book-server', file: 'test/e2e.js' },
   { name: 'engine', pkg: 'packages/book-server', file: 'test/engine.test.js' },
   { name: 'signers', pkg: 'packages/book-server', file: 'test/signers.test.js' },
+  { name: 'metrics', pkg: 'packages/book-server', file: 'test/metrics.test.js' },
   { name: 'taker', pkg: 'packages/client', file: 'test/taker.test.js' },
   { name: 'protect', pkg: 'packages/client', file: 'test/protect.test.js' },
 ]
@@ -31,30 +37,32 @@ function run(cmd, args, opts) {
 }
 
 loadEnv()
-const only = process.argv.slice(2)
-const suites = only.length ? SUITES.filter((s) => only.includes(s.name)) : SUITES
+const args = process.argv.slice(2)
+const only = args.filter((a) => !a.startsWith('--'))
+const suites = SUITES.filter((s) => (only.length ? only.includes(s.name) : true) &&
+  (!args.includes('--unit') || s.unit) && (!args.includes('--fork') || !s.unit))
 const summary = []
 for (const s of suites) {
   console.log(`\n=== ${s.name} (${s.pkg}/${s.file}) ===`)
-  const fork = await startFork()
+  const fork = s.unit ? null : await startFork()
   const t0 = Date.now()
   let r
   try {
-    const env = { ...process.env, FORK_URL: fork.url }
+    const env = { ...process.env, ...(fork ? { FORK_URL: fork.url } : {}) }
     r = s.forge
-      ? await run(foundryBin('forge'), ['test', '--fork-url', fork.url], { cwd: resolve(ROOT, s.pkg), env })
+      ? await run(foundryBin('forge'), ['test', '--fork-url', fork?.url ?? ''], { cwd: resolve(ROOT, s.pkg), env })
       : await run(process.execPath, ['--no-warnings=ExperimentalWarning', s.file], { cwd: resolve(ROOT, s.pkg), env })
   } finally {
-    await fork.stop()
+    await fork?.stop()
   }
   let passed = 0, total = 0
   const m = r.out.match(/(\d+)\/(\d+) checks passed/)
   const f = r.out.match(/(\d+) tests passed, (\d+) failed, (\d+) skipped \((\d+) total tests\)/)
   if (m) { passed = Number(m[1]); total = Number(m[2]) } else if (f) { passed = Number(f[1]); total = Number(f[4]) }
-  summary.push({ suite: s.name, passed, total, ok: r.code === 0 && total > 0 && passed === total, seconds: Math.round((Date.now() - t0) / 1000), forkBlock: fork.forkBlock.toString() })
+  summary.push({ suite: s.name, passed, total, ok: r.code === 0 && total > 0 && passed === total, seconds: Math.round((Date.now() - t0) / 1000), forkBlock: fork ? fork.forkBlock.toString() : null })
 }
-console.log('\nsuite      result   time')
-for (const x of summary) console.log(`${x.suite.padEnd(10)} ${`${x.passed}/${x.total}`.padEnd(8)} ${x.seconds}s ${x.ok ? 'OK' : 'FAIL'}`)
+console.log('\nsuite          result   time')
+for (const x of summary) console.log(`${x.suite.padEnd(14)} ${`${x.passed}/${x.total}`.padEnd(8)} ${x.seconds}s ${x.ok ? 'OK' : 'FAIL'}`)
 mkdirSync(resolve(ROOT, 'reports'), { recursive: true })
-writeFileSync(resolve(ROOT, 'reports/fork-tests.json'), JSON.stringify(summary, null, 2))
+writeFileSync(resolve(ROOT, only.length || args.length ? 'reports/tests-partial.json' : 'reports/tests.json'), JSON.stringify(summary, null, 2))
 process.exit(summary.every((x) => x.ok) ? 0 : 1)

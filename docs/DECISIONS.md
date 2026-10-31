@@ -94,3 +94,29 @@ Esito documentato: un ordine valido del book con la firma malleata (high-s) **vi
 accetta high-s e il taker verifica con `check()` e simula prima di inviare; la copia originale viene poi scartata in verify come
 `taken`, senza transazione. Una malleazione non valida (s alto senza invertire v) è rifiutata in verify (`signature`), nulla inviato.
 Test T12, T13.
+
+## Fase 2
+
+### D-16 · Dipendenze di runtime — D
+Il server dipende da `viem` (unica dipendenza di terzi) e dal pacchetto interno `@fondaco/contracts` (ABI, tipi EIP-712, Multicall3), che a
+sua volta dipende solo da `viem`. Validatore dello schema (123 righe), logger, registro Prometheus e confronto CIDR sono scritti qui.
+
+### D-17 · Migrazioni — D
+Versione in `PRAGMA user_version`, storia in `schema_migrations`, ogni passo in una transazione (anche `user_version` è transazionale).
+Un database con `user_version = 0` che contiene già `orders` viene "adottato" come v1 (è il server JS); i passi successivi sono idempotenti
+(aggiungono colonne e indici solo se mancano), così migra qualunque layout intermedio del riferimento. Test con i `db.js` originali come fixture.
+
+### D-18 · Dettagli dello schema di configurazione — D
+- Un valore `undefined` conta come assente (i test passano `rateLimit: undefined` per i default di produzione).
+- `startBlock` e `tokens.*.min` accettano numero o stringa decimale (i test passano stringhe); restano stringhe nella configurazione validata.
+- `config.example.json` resta un modello: l'unico campo non valido è il segnaposto dell'indirizzo del contratto (test C6).
+
+### D-19 · `/metrics` — D
+Spento: 404. Acceso: 200 se l'indirizzo **diretto** del client è in `metrics.allow` (default solo loopback) oppure con `Bearer` uguale a
+`metrics.token` (confronto a tempo costante sugli hash); altrimenti 401. `X-Forwarded-For` non conta mai, anche con `trustProxy`:
+dietro un proxy serve il token. La route non consuma il rate limit.
+
+### D-20 · RPC per giro incrementale — osservazione
+Misurato: 1 richiesta per un giro a vuoto, **5** per un giro con un Transfer di un firmatario quando esistono firmatari `unfunded`
+(testa, log del contratto, due query di log dei token in parallelo — uscite e entrate verso gli unfunded —, multicall), 4 altrimenti.
+La specifica dice "circa 4": coerente. Le misure a 10 000 ordini sono nella fase 3.

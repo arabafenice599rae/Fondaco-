@@ -31,7 +31,29 @@ pnpm test                   # build, ABI, unit, verify-source (positivo e negati
 pnpm test:fork e2e engine   # solo alcune suite
 ```
 
-I risultati per suite finiscono in `reports/fork-tests.json`, quelli della verifica in `reports/verify-source.json`.
+Il runner (`tools/testkit/run-suites.mjs`) esegue le suite unitarie senza chain e quelle su fork con un anvil nuovo per suite;
+i conteggi finiscono in `reports/tests.json`, la verifica del sorgente in `reports/verify-source.json`.
+Dopo il clone: `git submodule update --init` (forge-std, solo per i test Foundry).
+
+## Book server
+
+TypeScript strict compilato in `packages/book-server/dist`; unica dipendenza di runtime di terzi: `viem`.
+
+```bash
+pnpm build
+cp packages/book-server/config.example.json packages/book-server/config.json   # indirizzo del contratto, RPC, token
+pnpm --filter @fondaco/book-server start
+```
+
+- **Configurazione**: validata all'avvio; chiavi sconosciute e valori errati sono elencati tutti insieme con il loro percorso.
+  Riferimento completo con i default: [`docs/CONFIG.md`](docs/CONFIG.md) (generato dallo schema).
+- **Database**: SQLite in WAL, migrazioni versionate (`PRAGMA user_version` + tabella `schema_migrations`) applicate all'avvio;
+  un database del server JavaScript di riferimento viene riconosciuto e migrato; uno più nuovo del codice viene rifiutato.
+- **Log**: JSON su stdout, un oggetto per riga (`log.level`).
+- **Metriche**: `GET /metrics` in formato Prometheus, **spento di default** (`metrics.enabled`). Acceso, risponde solo alle reti in
+  `metrics.allow` (indirizzo diretto del client, mai `X-Forwarded-For`) o con `Authorization: Bearer <metrics.token>`.
+  Serie principali: `fondaco_tick_rpc_requests` e `fondaco_tick_duration_seconds` per tipo di giro (idle, incremental, full),
+  `fondaco_orders` per stato, `fondaco_reorgs_total`, `fondaco_http_request_duration_seconds` per route, `fondaco_rpc_requests_total`.
 
 ## Riproducibilità del bytecode
 
