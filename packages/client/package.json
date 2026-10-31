@@ -5,16 +5,42 @@
   "type": "module",
   "description": "Taker execution, MEV protection and wallet protection status for FONDACO",
   "exports": {
-    "./taker": "./src/taker.js",
-    "./protect": "./src/protect.js",
-    "./wallet-protection": "./src/wallet-protection.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./taker": {
+      "types": "./dist/taker.d.ts",
+      "default": "./dist/taker.js"
+    },
+    "./protect": {
+      "types": "./dist/protect.d.ts",
+      "default": "./dist/protect.js"
+    },
+    "./wallet-protection": {
+      "types": "./dist/wallet-protection.d.ts",
+      "default": "./dist/wallet-protection.js"
+    }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:taker": "node --no-warnings=ExperimentalWarning test/taker.test.js",
     "test:protect": "node --no-warnings=ExperimentalWarning test/protect.test.js",
     "test:wallet": "node test/wallet.test.js"
   },
-  "dependencies": { "viem": "2.57.13" },
-  "devDependencies": { "@fondaco/book-server": "workspace:*", "@fondaco/contracts": "workspace:*" },
-  "license": "MIT"
+  "dependencies": {
+    "viem": "2.57.13"
+  },
+  "devDependencies": {
+    "@fondaco/book-server": "workspace:*",
+    "@fondaco/contracts": "workspace:*"
+  },
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ]
 }

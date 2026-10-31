@@ -3,28 +3,34 @@
 import { PROTECTED_RPC, SEQUENCER_CHAINS } from './protect.js'
 
 /** Human names for the protected endpoints in PROTECTED_RPC. */
-export const RPC_NAMES = {
+export const RPC_NAMES: Readonly<Record<string, string>> = {
   'https://rpc.mevblocker.io/noreverts': 'MEV Blocker (no revert)',
   'https://rpc.flashbots.net/fast': 'Flashbots Protect',
 }
 
 // Wallets whose own transaction routing protects mainnet users by default.
 // MetaMask: Smart Transactions (on by default; turned off by a custom RPC on the same network).
-const WALLET_PROTECTION = {
+const WALLET_PROTECTION: Readonly<Record<string, { name: string; feature: string; path: string; customRpcDisables: boolean }>> = {
   'io.metamask': { name: 'MetaMask', feature: 'Smart Transactions', path: 'Impostazioni › Transazioni (estensione) o Impostazioni › Avanzate (mobile)', customRpcDisables: true },
   'io.metamask.flask': { name: 'MetaMask Flask', feature: 'Smart Transactions', path: 'Impostazioni › Transazioni', customRpcDisables: true },
 }
 
+/** EIP-6963 provider info. */
+export interface WalletInfo { uuid: string; name: string; icon: string; rdns: string }
+export interface Eip1193Provider { request(args: { method: string; params?: unknown }): Promise<unknown> }
+export interface DiscoveredWallet { info: WalletInfo; provider: Eip1193Provider }
+interface AnnounceTarget { addEventListener(t: string, f: (e: Event) => void): void; removeEventListener(t: string, f: (e: Event) => void): void; dispatchEvent(e: Event): boolean }
+
 /**
- * EIP-6963: ask every injected wallet to announce itself. Resolves [{ info: { uuid, name, icon, rdns }, provider }].
+ * EIP-6963: ask every injected wallet to announce itself. Deduplicated by uuid.
  * @param target the window (injectable for tests)
  */
-export function discoverWallets({ target = globalThis.window, timeoutMs = 400 } = {}) {
+export function discoverWallets({ target = (globalThis as { window?: AnnounceTarget }).window, timeoutMs = 400 }: { target?: AnnounceTarget | null; timeoutMs?: number } = {}): Promise<DiscoveredWallet[]> {
   return new Promise((resolve) => {
     if (!target || typeof target.addEventListener !== 'function') return resolve([])
-    const found = new Map()
-    const onAnnounce = (e) => {
-      const d = e.detail
+    const found = new Map<string, DiscoveredWallet>()
+    const onAnnounce = (e: Event) => {
+      const d = (e as CustomEvent<{ info?: WalletInfo; provider?: Eip1193Provider }>).detail
       if (d && d.info && d.info.uuid && d.provider && !found.has(d.info.uuid)) found.set(d.info.uuid, { info: { ...d.info }, provider: d.provider })
     }
     target.addEventListener('eip6963:announceProvider', onAnnounce)
@@ -33,16 +39,17 @@ export function discoverWallets({ target = globalThis.window, timeoutMs = 400 } 
   })
 }
 
+export type ProtectionLevel = 'l2' | 'wallet' | 'user_rpc' | 'guide' | 'none'
+export interface ProtectionStatus { level: ProtectionLevel; protected: boolean; title: string; detail: string; rpc: { name: string; url: string }[]; wallet: string | null }
+
 /**
  * What the UI should say about MEV protection for this wallet on this chain.
  * @param rdns EIP-6963 reverse-DNS id of the connected wallet ('io.metamask', …), or null
- * @param chainId number
  * @param userSetRpc the user confirmed they configured a protected RPC in their wallet (remembered per wallet)
- * @returns { level: 'l2'|'wallet'|'user_rpc'|'guide'|'none', protected: boolean, title, detail, rpc: [{ name, url }], wallet }
  */
-export function protectionStatus({ rdns = null, chainId, userSetRpc = false }) {
+export function protectionStatus({ rdns = null, chainId, userSetRpc = false }: { rdns?: string | null; chainId: number | string; userSetRpc?: boolean }): ProtectionStatus {
   const id = Number(chainId)
-  const w = rdns ? WALLET_PROTECTION[rdns] : null
+  const w = rdns ? WALLET_PROTECTION[rdns] : undefined
   const rpc = (PROTECTED_RPC[id] || []).map((url) => ({ name: RPC_NAMES[url] || url, url }))
   if (SEQUENCER_CHAINS.has(id)) {
     return { level: 'l2', protected: true, title: 'Non serve su questa rete', detail: 'Le transazioni vanno al sequencer: non c’è una mempool pubblica da cui copiarle.', rpc: [], wallet: w?.name ?? null }
@@ -69,7 +76,7 @@ export function protectionStatus({ rdns = null, chainId, userSetRpc = false }) {
 }
 
 /** Steps shown with the 'guide' level (generic: every wallet names its menus differently). */
-export const GUIDE_STEPS = [
+export const GUIDE_STEPS: readonly string[] = [
   'Copia uno degli indirizzi qui sotto.',
   'Nel wallet apri le impostazioni delle reti e scegli Ethereum.',
   'Aggiungi un nuovo RPC con l’indirizzo copiato e impostalo come predefinito.',

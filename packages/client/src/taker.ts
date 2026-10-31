@@ -8,7 +8,13 @@
 //
 // The recipient is never a parameter: every call pays out to the connected account, and the encoded calldata
 // is decoded and checked against it before it is handed to the wallet.
-import { parseAbi, decodeFunctionData, decodeErrorResult, encodeFunctionData, getAddress, hexToString, maxUint256, zeroAddress, BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from 'viem'
+import {
+  parseAbi, decodeFunctionData, decodeErrorResult, encodeFunctionData, getAddress, hexToString, maxUint256, zeroAddress, BaseError,
+  ContractFunctionRevertedError, UserRejectedRequestError, type Address, type Hex, type PublicClient, type WalletClient, type TransactionReceipt,
+} from 'viem'
+import type {
+  StopReason, BookEntry, DroppedLeg, ExecuteResult, IndicativeQuote, Leg, Order, OrderInput, Reason, SendResult, SubmitMode, SubmitWhy, TakerEvent, Tracked, VerifiedQuote,
+} from './types.js'
 
 export const SWAP_TAKER_ABI = parseAbi([
   'function swapAnySender(address recipient, uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount, address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s)',
@@ -29,10 +35,10 @@ const ERC20_ABI = parseAbi([
 // No return value declared: USDT-style tokens return nothing, and simulation must not fail on decoding.
 const APPROVE_ABI = parseAbi(['function approve(address spender, uint256 amount)'])
 const FEE_DIVISOR = 10_000n
-const MULTICALL3 = '0xcA11bde05977b3631167028862bE2a173976CA11' // same address on every major EVM chain
+export const MULTICALL3: Address = '0xcA11bde05977b3631167028862bE2a173976CA11' // same address on every major EVM chain
 
 /** Reasons, with the Italian copy the UI shows. `costsGas` = the user paid for a mined, reverted transaction. */
-export const REASONS = {
+export const REASONS: Record<Reason, string> = {
   taken: 'Offerta già presa da un altro',
   expired: 'Offerta scaduta',
   signature: 'Firma dell’offerta non valida',
@@ -47,28 +53,31 @@ export const REASONS = {
   reverted: 'Transazione fallita',
   not_included: 'Presa da un altro: la tua transazione non è stata inclusa, nessun costo',
   unknown: 'Errore sconosciuto',
+  recipient_guard: 'Invio bloccato: la transazione non pagava il tuo wallet sul contratto previsto',
+  private_unavailable: 'Invio protetto non disponibile: nessuna transazione inviata',
 }
 
-const big = (x) => BigInt(x)
-const norm = (o) => ({
-  nonce: big(o.nonce), expiry: big(o.expiry), signerWallet: getAddress(o.signerWallet), signerToken: getAddress(o.signerToken),
-  signerAmount: big(o.signerAmount), protocolFee: big(o.protocolFee), senderWallet: getAddress(o.senderWallet || zeroAddress),
-  senderToken: getAddress(o.senderToken), senderAmount: big(o.senderAmount), v: Number(o.v), r: o.r, s: o.s,
+const big = (x: unknown) => BigInt(x as string | number | bigint)
+const norm = (o: OrderInput): Order => ({
+  nonce: big(o.nonce), expiry: big(o.expiry), signerWallet: getAddress(String(o.signerWallet)), signerToken: getAddress(String(o.signerToken)),
+  signerAmount: big(o.signerAmount), protocolFee: big(o.protocolFee), senderWallet: getAddress((o.senderWallet as string) || zeroAddress),
+  senderToken: getAddress(String(o.senderToken)), senderAmount: big(o.senderAmount), v: Number(o.v), r: o.r as Hex, s: o.s as Hex,
 })
-const orderArgs = (recipient, o) => [recipient, o.nonce, o.expiry, o.signerWallet, o.signerToken, o.signerAmount, o.senderToken, o.senderAmount, o.v, o.r, o.s]
+const orderArgs = (recipient: Address | null, o: Order) => [recipient, o.nonce, o.expiry, o.signerWallet, o.signerToken, o.signerAmount, o.senderToken, o.senderAmount, o.v, o.r, o.s] as const
 
 /**
  * Indicative plan: take whole orders best-first while the cumulative payment stays ≤ `pay`.
  * @param entries book side, best first: [{ hash, order }] (GET /book?signed=1 → asks to buy base, bids to sell base)
  * @param pay amount of senderToken the taker wants to spend (bigint, base units)
  */
-export function plan(entries, pay) {
-  const legs = []
+export function plan(entries: readonly BookEntry[], pay: bigint): IndicativeQuote {
+  const legs: Leg[] = []
   let paid = 0n, got = 0n
   for (const e of entries) {
     const o = norm(e.order)
     if (o.senderWallet !== zeroAddress) continue // private orders never come from the public book
-    if (legs.length && (o.senderToken !== legs[0].order.senderToken || o.signerToken !== legs[0].order.signerToken)) continue
+    const first = legs[0]?.order
+    if (first && (o.senderToken !== first.senderToken || o.signerToken !== first.signerToken)) continue
     if (paid + o.senderAmount > pay) continue // all-or-nothing: a bigger order further down may not fit either, a smaller one may
     legs.push({ hash: e.hash, order: o })
     paid += o.senderAmount
@@ -77,46 +86,72 @@ export function plan(entries, pay) {
   return { kind: 'indicative', legs, pay: paid, receive: got, left: pay - paid, at: Date.now() }
 }
 
-/**
- * Taker for one connected account. `walletClient.account` is the only possible recipient.
- * @param opts { publicClient, walletClient, swap, confirmations = 1, timeoutMs = 300_000, multicallAddress, onUpdate(event),
- *   submitter?: createSubmitter(...) from ./protect.js — private (MEV-protected) submission when available,
- *   privateTimeoutMs = 120_000: a private transaction that would revert is never included, so it ends in a timeout }
- */
-export function createTaker({ publicClient, walletClient, swap, confirmations = 1, timeoutMs = 300_000, multicallAddress = MULTICALL3, onUpdate = () => {}, submitter, privateTimeoutMs = 120_000 }) {
+/** A way to send transactions: the wallet itself, or a private (MEV-protected) submitter from ./protect.js. */
+export interface Submitter {
+  mode: SubmitMode
+  why: SubmitWhy
+  private: boolean
+  send(request: ContractRequest): Promise<SendResult>
+}
+/** A simulated contract call, as returned by viem's simulateContract (what is handed to the wallet). */
+export interface ContractRequest { address: Address; abi: readonly unknown[]; functionName: string; args?: readonly unknown[]; value?: bigint; [k: string]: unknown }
+
+export interface TakerOptions {
+  publicClient: PublicClient
+  walletClient: WalletClient
+  swap: Address
+  confirmations?: number
+  timeoutMs?: number
+  multicallAddress?: Address
+  onUpdate?: (e: TakerEvent) => void
+  /** private (MEV-protected) submission when available: createSubmitter(...) from ./protect.js */
+  submitter?: Submitter
+  /** a private transaction that would revert is never included, so it ends in a timeout */
+  privateTimeoutMs?: number
+}
+export interface Taker {
+  address: Address
+  plan: typeof plan
+  verify(p: IndicativeQuote): Promise<VerifiedQuote>
+  execute(q: VerifiedQuote, opts?: { approval?: 'exact' | 'max' }): Promise<ExecuteResult>
+  track(hash: Hex, ctx: Record<string, unknown>, timeout?: number): Promise<Tracked>
+}
+
+/** Taker for one connected account. `walletClient.account` is the only possible recipient. */
+export function createTaker({ publicClient, walletClient, swap, confirmations = 1, timeoutMs = 300_000, multicallAddress = MULTICALL3, onUpdate = () => {}, submitter, privateTimeoutMs = 120_000 }: TakerOptions): Taker {
   if (!walletClient?.account) throw new Error('walletClient must have a connected account')
   const account = walletClient.account
   const me = getAddress(account.address)
-  swap = getAddress(swap)
-  const emit = (e) => { try { onUpdate(e) } catch { /* UI errors must not break execution */ } }
+  const swapAddr = getAddress(swap)
+  const emit = (e: TakerEvent) => { try { onUpdate(e) } catch { /* UI errors must not break execution */ } }
 
-  const callFor = (o) => {
+  const callFor = (o: Order): 'swapAnySender' | 'swap' | null => {
     if (o.senderWallet === zeroAddress) return 'swapAnySender'
     if (o.senderWallet === me) return 'swap' // private order addressed to us
     return null
   }
 
   /** Calldata guard: whatever is about to be signed must pay out to the connected account, on our contract. */
-  function assertPaysMe(to, data) {
-    if (getAddress(to) !== swap) throw new Error(`refusing to send to ${to}: not the configured SwapERC20`)
+  function assertPaysMe(to: Address, data: Hex): void {
+    if (getAddress(to) !== swapAddr) throw new Error(`refusing to send to ${to}: not the configured SwapERC20`)
     const { functionName, args } = decodeFunctionData({ abi: SWAP_TAKER_ABI, data })
     if (functionName !== 'swapAnySender' && functionName !== 'swap') throw new Error(`unexpected call ${functionName}`)
-    if (getAddress(args[0]) !== me) throw new Error(`recipient ${args[0]} is not the connected wallet`)
+    if (getAddress(args[0] as Address) !== me) throw new Error(`recipient ${args[0]} is not the connected wallet`)
   }
 
-  async function takerFunds(token) {
+  async function takerFunds(token: Address): Promise<{ balance: bigint; allowance: bigint }> {
     const [balance, allowance] = await publicClient.multicall({
       allowFailure: false,
       multicallAddress,
       contracts: [
         { address: token, abi: ERC20_ABI, functionName: 'balanceOf', args: [me] },
-        { address: token, abi: ERC20_ABI, functionName: 'allowance', args: [me, swap] },
+        { address: token, abi: ERC20_ABI, functionName: 'allowance', args: [me, swapAddr] },
       ],
     })
     return { balance, allowance }
   }
 
-  const checkReason = (errs) => {
+  const checkReason = (errs: readonly Hex[]): Reason | null => {
     const s = errs.map((e) => hexToString(e, { size: 32 }).replace(/\0+$/, ''))
     if (s.includes('NonceAlreadyUsed')) return 'taken'
     if (s.includes('OrderExpired')) return 'expired'
@@ -129,9 +164,9 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
    * One batched read for the whole plan. Returns a VERIFIED quote over the legs that are still fillable
    * (amounts are fixed by the signatures, so a verified leg can only fail if someone takes it first).
    */
-  async function verify(p) {
+  async function verify(p: IndicativeQuote): Promise<VerifiedQuote> {
     if (!p.legs.length) return { ...p, kind: 'verified', ok: false, legs: [], dropped: [], problems: ['empty'] }
-    const token = p.legs[0].order.senderToken
+    const token = (p.legs[0] as Leg).order.senderToken
     // cacheTime 0: viem caches the block number (default 4 s); verifying at a stale block can miss a fill that just landed
     const block = await publicClient.getBlockNumber({ cacheTime: 0 })
     const res = await publicClient.multicall({
@@ -140,35 +175,36 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
       multicallAddress,
       contracts: [
         { address: token, abi: ERC20_ABI, functionName: 'balanceOf', args: [me] },
-        { address: token, abi: ERC20_ABI, functionName: 'allowance', args: [me, swap] },
+        { address: token, abi: ERC20_ABI, functionName: 'allowance', args: [me, swapAddr] },
         // senderWallet in check() is part of the hash: pass the value the order was signed with.
-        ...p.legs.map(({ order: o }) => ({ address: swap, abi: SWAP_TAKER_ABI, functionName: 'check', args: [o.senderWallet, ...orderArgs(null, o).slice(1)] })),
-      ],
-    })
-    const balance = res[0].status === 'success' ? res[0].result : 0n
-    const allowance = res[1].status === 'success' ? res[1].result : 0n
-    const legs = [], dropped = []
+        ...p.legs.map(({ order: o }) => ({ address: swapAddr, abi: SWAP_TAKER_ABI, functionName: 'check', args: [o.senderWallet, ...orderArgs(null, o).slice(1)] })),
+      ] as never,
+    }) as { status: 'success' | 'failure'; result?: unknown }[]
+    const r0 = res[0] as { status: string; result?: unknown }, r1 = res[1] as { status: string; result?: unknown }
+    const balance = r0.status === 'success' ? (r0.result as bigint) : 0n
+    const allowance = r1.status === 'success' ? (r1.result as bigint) : 0n
+    const legs: Leg[] = [], dropped: DroppedLeg[] = []
     p.legs.forEach((l, i) => {
-      const r = res[2 + i]
-      const reason = !callFor(l.order) ? 'private' : r.status !== 'success' ? 'unknown' : checkReason(r.result)
+      const r = res[2 + i] as { status: string; result?: unknown }
+      const reason: Reason | null = !callFor(l.order) ? 'private' : r.status !== 'success' ? 'unknown' : checkReason(r.result as Hex[])
       if (reason) dropped.push({ ...l, reason, message: REASONS[reason] })
       else legs.push(l)
     })
     const pay = legs.reduce((s, l) => s + l.order.senderAmount, 0n)
     const receive = legs.reduce((s, l) => s + l.order.signerAmount, 0n)
-    const problems = []
+    const problems: VerifiedQuote['problems'] = []
     if (balance < pay) problems.push('taker_balance')
-    const out = { kind: 'verified', ok: legs.length > 0 && balance >= pay, block, legs, dropped, pay, receive, left: p.pay + p.left - pay,
+    const out: VerifiedQuote = { kind: 'verified', ok: legs.length > 0 && balance >= pay, block, legs, dropped, pay, receive, left: p.pay + p.left - pay,
       balance, allowance, needsApproval: allowance < pay, problems, at: Date.now(), recipient: me }
     emit({ type: 'verified', quote: out })
     return out
   }
 
-  /** Track a sent transaction to its end state. Resolves { status, hash, receipt?, reason? }. */
-  async function track(hash, ctx, timeout = sub.private ? privateTimeoutMs : timeoutMs) {
-    emit({ type: 'pending', hash, private: sub.private, ...ctx })
-    let replacedBy = null
-    let receipt
+  /** Track a sent transaction to its end state. */
+  async function track(hash: Hex, ctx: Record<string, unknown>, timeout: number = sub.private ? privateTimeoutMs : timeoutMs): Promise<Tracked> {
+    emit({ type: 'pending', hash, private: sub.private, ...ctx } as TakerEvent)
+    let replacedBy: { reason: 'cancelled' | 'replaced' | 'repriced' } | null = null
+    let receipt: TransactionReceipt
     try {
       // viem detects a replacement (same sender + nonce, different hash), calls onReplaced, then resolves
       // with the replacing transaction's receipt.
@@ -177,22 +213,24 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
         onReplaced: (r) => { replacedBy = r },
       })
     } catch (e) {
-      if (e?.name === 'WaitForTransactionReceiptTimeoutError') return { status: 'timeout', hash, reason: 'timeout' }
+      if ((e as { name?: string })?.name === 'WaitForTransactionReceiptTimeoutError') return { status: 'timeout', hash, reason: 'timeout' }
       throw e
     }
-    if (replacedBy && replacedBy.reason !== 'repriced') {
+    const rep = replacedBy as { reason: 'cancelled' | 'replaced' | 'repriced' } | null
+    if (rep && rep.reason !== 'repriced') {
       // cancelled ("send 0 to self") or a different transaction took the nonce: our call never ran
-      return { status: replacedBy.reason, hash: receipt.transactionHash, previous: hash, reason: replacedBy.reason, receipt }
+      return { status: rep.reason, hash: receipt.transactionHash, previous: hash, reason: rep.reason, receipt }
     }
-    if (replacedBy) emit({ type: 'sped_up', hash: receipt.transactionHash, previous: hash, ...ctx })
-    return receipt.status === 'success' ? { status: 'mined', hash: receipt.transactionHash, receipt, previous: replacedBy ? hash : undefined }
+    if (rep) emit({ type: 'sped_up', hash: receipt.transactionHash, previous: hash, ...ctx } as TakerEvent)
+    return receipt.status === 'success'
+      ? { status: 'mined', hash: receipt.transactionHash, receipt, ...(rep ? { previous: hash } : {}) }
       : { status: 'reverted', hash: receipt.transactionHash, receipt }
   }
 
   /** Map a simulation error to a reason. */
-  function simReason(err) {
+  function simReason(err: unknown): Reason | 'transfer' {
     if (err instanceof BaseError) {
-      const rev = err.walk((x) => x instanceof ContractFunctionRevertedError)
+      const rev = err.walk((x) => x instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null
       const name = rev?.data?.errorName
       if (name === 'NonceAlreadyUsed') return 'taken'
       if (name === 'OrderExpired') return 'expired'
@@ -203,12 +241,12 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
   }
 
   /** After a TransferFromFailed or a mined revert: work out which side failed. */
-  async function diagnose(o) {
+  async function diagnose(o: Order): Promise<Reason> {
     const [used, mine, signerBal, signerAlw] = await Promise.all([
-      publicClient.readContract({ address: swap, abi: SWAP_TAKER_ABI, functionName: 'nonceUsed', args: [o.signerWallet, o.nonce] }),
+      publicClient.readContract({ address: swapAddr, abi: SWAP_TAKER_ABI, functionName: 'nonceUsed', args: [o.signerWallet, o.nonce] }),
       takerFunds(o.senderToken),
       publicClient.readContract({ address: o.signerToken, abi: ERC20_ABI, functionName: 'balanceOf', args: [o.signerWallet] }),
-      publicClient.readContract({ address: o.signerToken, abi: ERC20_ABI, functionName: 'allowance', args: [o.signerWallet, swap] }),
+      publicClient.readContract({ address: o.signerToken, abi: ERC20_ABI, functionName: 'allowance', args: [o.signerWallet, swapAddr] }),
     ])
     if (used) return 'taken'
     if (mine.balance < o.senderAmount) return 'taker_balance'
@@ -220,85 +258,90 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
     return 'reverted'
   }
 
-  async function walletSend(request) {
+  async function walletSend(request: ContractRequest): Promise<SendResult> {
     try {
-      const hash = await walletClient.writeContract(request)
+      const hash = await walletClient.writeContract(request as never)
       return { hash }
     } catch (e) {
       if (e instanceof BaseError && e.walk((x) => x instanceof UserRejectedRequestError)) return { rejected: true }
-      if (e?.code === 4001) return { rejected: true }
+      if ((e as { code?: number })?.code === 4001) return { rejected: true }
       throw e
     }
   }
-  const sub = submitter || { mode: 'wallet', why: 'not_configured', private: false, send: walletSend }
-  const send = (request) => sub.send(request)
+  const sub: Submitter = submitter || { mode: 'wallet', why: 'not_configured', private: false, send: walletSend }
+  const send = (request: ContractRequest) => sub.send(request)
+
+  type ApproveOutcome = { status: 'mined'; receipt: TransactionReceipt } | { status: 'stopped'; reason: StopReason; receipt?: TransactionReceipt }
+  const stopFrom = (t: Exclude<Tracked, { status: 'mined' }>): ApproveOutcome =>
+    ({ status: 'stopped', reason: 'reason' in t ? t.reason : 'reverted', ...('receipt' in t ? { receipt: t.receipt } : {}) })
 
   /** Approve exactly `amount` (or unlimited). Handles tokens that require resetting to 0 first (e.g. USDT). */
-  async function approve(token, amount, current) {
-    const base = { account, chain: walletClient.chain, address: token, abi: APPROVE_ABI, functionName: 'approve' }
+  async function approve(token: Address, amount: bigint, current: bigint): Promise<ApproveOutcome> {
+    const base = { account, chain: walletClient.chain, address: token, abi: APPROVE_ABI, functionName: 'approve' as const }
     let direct = true
-    try { await publicClient.simulateContract({ ...base, args: [swap, amount] }) } catch { direct = false }
+    try { await publicClient.simulateContract({ ...base, args: [swapAddr, amount] }) } catch { direct = false }
     if (!direct && current > 0n) {
       emit({ type: 'approval_reset', token })
-      const r0 = await send({ ...base, args: [swap, 0n] })
-      if (r0.rejected) return { status: 'rejected', reason: 'rejected' }
+      const r0 = await send({ ...base, args: [swapAddr, 0n] } as ContractRequest)
+      if ('rejected' in r0) return { status: 'stopped', reason: 'rejected' }
+      if ('unavailable' in r0) return { status: 'stopped', reason: 'private_unavailable' }
       const t0 = await track(r0.hash, { step: 'approve_reset' })
-      if (t0.status !== 'mined') return { ...t0, reason: t0.reason || 'reverted' }
+      if (t0.status !== 'mined') return stopFrom(t0)
     }
     emit({ type: 'approving', token, amount })
-    const r = await send({ ...base, args: [swap, amount] })
-    if (r.rejected) return { status: 'rejected', reason: 'rejected' }
+    const r = await send({ ...base, args: [swapAddr, amount] } as ContractRequest)
+    if ('rejected' in r) return { status: 'stopped', reason: 'rejected' }
+    if ('unavailable' in r) return { status: 'stopped', reason: 'private_unavailable' }
     const t = await track(r.hash, { step: 'approve' })
-    return t.status === 'mined' ? t : { ...t, reason: t.reason || 'reverted' }
+    return t.status === 'mined' ? { status: 'mined', receipt: t.receipt } : stopFrom(t)
   }
 
   /**
    * Execute a verified quote. Legs are separate transactions (all-or-nothing each): a leg that is no longer
    * available at simulation time is skipped at no cost; a user rejection, cancellation or replacement stops the run.
-   * @param q result of verify()
-   * @param opts { approval: 'exact' | 'max' }
    */
-  async function execute(q, { approval = 'exact' } = {}) {
+  async function execute(q: VerifiedQuote, { approval = 'exact' }: { approval?: 'exact' | 'max' } = {}): Promise<ExecuteResult> {
     if (q.kind !== 'verified') throw new Error('execute() needs a verified quote: call verify() first')
-    const result = { filled: [], skipped: [...q.dropped], failed: [], stopped: null, paid: 0n, received: 0n, gasCostWei: 0n, protection: sub.mode }
+    const result: ExecuteResult = { filled: [], skipped: [...q.dropped], failed: [], stopped: null, paid: 0n, received: 0n, gasCostWei: 0n, protection: sub.mode }
     emit({ type: 'protection', mode: sub.mode, why: sub.why })
     if (!q.ok) { result.stopped = q.problems[0] || 'empty'; emit({ type: 'done', result }); return result }
-    const token = q.legs[0].order.senderToken, outToken = q.legs[0].order.signerToken
+    const token = (q.legs[0] as Leg).order.senderToken, outToken = (q.legs[0] as Leg).order.signerToken
 
     const funds = await takerFunds(token)
     if (funds.balance < q.pay) { result.stopped = 'taker_balance'; emit({ type: 'done', result }); return result }
     if (funds.allowance < q.pay) {
       const a = await approve(token, approval === 'max' ? maxUint256 : q.pay, funds.allowance)
       if (a.receipt) result.gasCostWei += a.receipt.gasUsed * a.receipt.effectiveGasPrice
-      if (a.status !== 'mined') { result.stopped = a.reason || a.status; emit({ type: 'done', result }); return result }
+      if (a.status !== 'mined') { result.stopped = a.reason; emit({ type: 'done', result }); return result }
     }
 
     for (let i = 0; i < q.legs.length; i++) {
-      const leg = q.legs[i], o = leg.order, ctx = { leg: i, of: q.legs.length, orderHash: leg.hash }
-      const functionName = callFor(o)
+      const leg = q.legs[i] as Leg, o = leg.order, ctx = { leg: i, of: q.legs.length, orderHash: leg.hash }
+      const functionName = callFor(o) as 'swapAnySender' | 'swap'
       // 1) eth_call right before the send: catches orders taken since verify(), and our own funds
       emit({ type: 'simulating', ...ctx })
-      let request
+      let request: ContractRequest
       try {
-        ;({ request } = await publicClient.simulateContract({ account, chain: walletClient.chain, address: swap, abi: SWAP_TAKER_ABI, functionName, args: orderArgs(me, o) }))
+        ;({ request } = await publicClient.simulateContract({ account, chain: walletClient.chain, address: swapAddr, abi: SWAP_TAKER_ABI, functionName, args: orderArgs(me, o) as never }) as unknown as { request: ContractRequest })
       } catch (e) {
-        let reason = simReason(e)
+        let reason: Reason | 'transfer' = simReason(e)
         if (reason === 'transfer' || reason === 'unknown') reason = await diagnose(o)
         result.skipped.push({ ...leg, reason, message: REASONS[reason], costsGas: false })
         emit({ type: 'skipped', reason, message: REASONS[reason], ...ctx })
         if (reason === 'taker_balance' || reason === 'taker_allowance') { result.stopped = reason; break }
         continue
       }
-      assertPaysMe(request.address, encodeFunctionData({ abi: SWAP_TAKER_ABI, functionName: request.functionName, args: request.args }))
+      assertPaysMe(request.address, encodeFunctionData({ abi: SWAP_TAKER_ABI, functionName: request.functionName as 'swap', args: request.args as never }))
 
       // 2) send
       emit({ type: 'awaiting_signature', ...ctx })
       const s = await send(request)
-      if (s.rejected) { result.stopped = 'rejected'; emit({ type: 'rejected', ...ctx }); break }
+      if ('rejected' in s) { result.stopped = 'rejected'; emit({ type: 'rejected', ...ctx }); break }
+      if ('unavailable' in s) { result.stopped = 'private_unavailable'; break }
 
       // 3) track
       const t = await track(s.hash, ctx)
-      if (t.receipt) result.gasCostWei += t.receipt.gasUsed * t.receipt.effectiveGasPrice
+      if ('receipt' in t && t.receipt) result.gasCostWei += t.receipt.gasUsed * t.receipt.effectiveGasPrice
       if (t.status === 'mined') {
         const received = receivedFrom(t.receipt, outToken, me)
         result.filled.push({ ...leg, txHash: t.hash, received })
@@ -316,9 +359,10 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
         emit({ type: 'skipped', reason: 'not_included', message: REASONS.not_included, txHash: t.hash, ...ctx })
       } else {
         // cancelled / replaced / timeout: the wallet no longer runs our call (or we cannot tell) → stop, do not guess
-        result.failed.push({ ...leg, txHash: t.hash, reason: t.status, message: REASONS[t.status], costsGas: t.status !== 'timeout' })
-        result.stopped = t.status
-        emit({ type: t.status, txHash: t.hash, ...ctx })
+        const st = t.status as 'cancelled' | 'replaced' | 'timeout'
+        result.failed.push({ ...leg, txHash: t.hash, reason: st, message: REASONS[st], costsGas: st !== 'timeout' })
+        result.stopped = st
+        emit({ type: st, txHash: t.hash, ...ctx })
         break
       }
     }
@@ -330,22 +374,22 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
 }
 
 /** Sum of `token` transfers to `to` in a receipt: what actually arrived, not what was quoted. */
-export function receivedFrom(receipt, token, to) {
+export function receivedFrom(receipt: Pick<TransactionReceipt, 'logs'>, token: Address, to: Address): bigint {
   let sum = 0n
   for (const log of receipt.logs) {
     if (getAddress(log.address) !== getAddress(token)) continue
     try {
-      const ev = decodeEventLogSafe(log)
+      const ev = decodeTransfer(log)
       if (ev && getAddress(ev.to) === getAddress(to)) sum += ev.value
     } catch { /* not a Transfer */ }
   }
   return sum
 }
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
-function decodeEventLogSafe(log) {
+function decodeTransfer(log: { topics: readonly Hex[]; data: Hex }): { from: Address; to: Address; value: bigint } | null {
   if (log.topics[0] !== TRANSFER_TOPIC || log.topics.length < 3) return null
-  return { from: '0x' + log.topics[1].slice(26), to: '0x' + log.topics[2].slice(26), value: BigInt(log.data) }
+  return { from: `0x${(log.topics[1] as Hex).slice(26)}` as Address, to: `0x${(log.topics[2] as Hex).slice(26)}` as Address, value: BigInt(log.data) }
 }
 
 /** Helper for SDKs that want the reason of a revert from raw data. */
-export const decodeSwapError = (data) => { try { return decodeErrorResult({ abi: SWAP_TAKER_ABI, data }).errorName } catch { return null } }
+export const decodeSwapError = (data: Hex): string | null => { try { return decodeErrorResult({ abi: SWAP_TAKER_ABI, data }).errorName } catch { return null } }

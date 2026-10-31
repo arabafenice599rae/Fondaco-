@@ -3,8 +3,8 @@
 import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, createTestClient, createClient, http, custom, parseAbi, encodeAbiParameters, keccak256, toHex, getAddress } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { createTaker, plan, SWAP_TAKER_ABI } from '../src/taker.js'
-import { createSubmitter, cancelOrders, priceCheck, isStale } from '../src/protect.js'
+import { createTaker, plan, SWAP_TAKER_ABI } from '../dist/taker.js'
+import { createSubmitter, cancelOrders, priceCheck, isStale } from '../dist/protect.js'
 
 const FORK_URL = process.env.FORK_URL || 'http://127.0.0.1:8545'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'

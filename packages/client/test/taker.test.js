@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, createTestClient, http, parseAbi, encodeAbiParameters, keccak256, toHex, getAddress, decodeFunctionData, UserRejectedRequestError } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { start } from '@fondaco/book-server'
-import { createTaker, plan, SWAP_TAKER_ABI } from '../src/taker.js'
+import { createTaker, plan, SWAP_TAKER_ABI } from '../dist/taker.js'
 
 const FORK_URL = process.env.FORK_URL || 'http://127.0.0.1:8545'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
