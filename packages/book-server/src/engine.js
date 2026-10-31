@@ -37,7 +37,6 @@ export class Engine extends EventEmitter {
         rpc: raw.rpc,
         rpcTimeoutMs: raw.rpcTimeoutMs,
         swap: getAddress(raw.swap),
-        wrapper: raw.wrapper ? getAddress(raw.wrapper) : null,
         multicall: raw.multicall,
         tokens,
         startBlock: BigInt(raw.startBlock ?? 0),
@@ -108,7 +107,6 @@ export class Engine extends EventEmitter {
     for (const c of this.chains.values()) {
       out[c.cfg.id] = {
         swap: c.cfg.swap,
-        wrapper: c.cfg.wrapper,
         protocolFee: c.fee?.toString(),
         domain: domainFor(c.cfg.id, c.cfg.swap),
         types: ORDER_TYPES,
@@ -261,7 +259,7 @@ export class Engine extends EventEmitter {
       const to = last - c.cfg.reorgDepth > floor ? last - c.cfg.reorgDepth : floor
       const stamp = nowMs()
       const rolled = this.db.rollback(id, to + 1n, stamp)
-      for (const r of rolled) { this._emitOrder(c, r.hash, 'unfunded'); out.pairs.add(`${r.signer}|${r.signer_token}`) }
+      for (const r of rolled) { this._emitOrder(c, r.hash, r.status); out.pairs.add(`${r.signer}|${r.signer_token}`) }
       this.emit('reorg', { chainId: id, rewoundTo: to, rolledBack: rolled.length })
       last = to
       this.db.setMeta(`last_block:${id}`, to.toString())

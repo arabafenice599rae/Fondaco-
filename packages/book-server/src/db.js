@@ -40,6 +40,8 @@ export function openDb(file) {
   const cols = new Set(db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name))
   if (!cols.has('status_block')) db.exec('ALTER TABLE orders ADD COLUMN status_block INTEGER')
   if (!cols.has('contract_signer')) db.exec('ALTER TABLE orders ADD COLUMN contract_signer INTEGER NOT NULL DEFAULT 0')
+  // once invalid_signer, always invalid_signer in the book (decision A-02): kept across reorg rollbacks
+  if (!cols.has('signer_revoked')) db.exec('ALTER TABLE orders ADD COLUMN signer_revoked INTEGER NOT NULL DEFAULT 0')
   db.exec(`
     -- the book query reads only public open orders: a partial index keeps it small and ordered by price
     CREATE INDEX IF NOT EXISTS orders_book_open ON orders (chain_id, signer_token, sender_token, price)
@@ -55,13 +57,15 @@ export function openDb(file) {
       :sender_token,:sender_amount,:protocol_fee,:v,:r,:s,:price,:status,:now,:now,:contract_signer)`),
     byHash: db.prepare('SELECT * FROM orders WHERE hash = ?'),
     byNonce: db.prepare('SELECT hash, status FROM orders WHERE chain_id = ? AND signer = ? AND nonce = ?'),
-    setStatus: db.prepare('UPDATE orders SET status = ?, updated_at = ?, status_block = ? WHERE hash = ? AND status <> ?'),
-    // 'used' (seen consumed by a read) is upgraded to filled/cancelled when the event arrives
+    setStatus: db.prepare(`UPDATE orders SET status = ?, updated_at = ?, status_block = ?, signer_revoked = MAX(signer_revoked, ?) WHERE hash = ? AND status <> ?`),
+    // 'used' (seen consumed by a read) is upgraded to filled/cancelled when the event arrives.
+    // invalid_signer too: after revoke() the old signature is valid again on-chain, so it can still be filled or cancelled.
     setStatusByNonce: db.prepare(`UPDATE orders SET status = ?, updated_at = ?, status_block = ? WHERE chain_id = ? AND signer = ? AND nonce = ?
-      AND status IN ('open','unfunded','invalid_fee','used') RETURNING hash`),
+      AND status IN ('open','unfunded','invalid_fee','used','invalid_signer') RETURNING hash`),
     // reorg: statuses observed on blocks that are no longer canonical go back to unfunded and are re-checked
-    rollback: db.prepare(`UPDATE orders SET status = 'unfunded', status_block = NULL, updated_at = ? WHERE chain_id = ?
-      AND status IN ('filled','cancelled','used') AND status_block >= ? RETURNING hash, signer, signer_token`),
+    // a rolled-back order that had been invalid_signer goes back to invalid_signer, never to the book (A-02)
+    rollback: db.prepare(`UPDATE orders SET status = CASE WHEN signer_revoked = 1 THEN 'invalid_signer' ELSE 'unfunded' END, status_block = NULL,
+      updated_at = ? WHERE chain_id = ? AND status IN ('filled','cancelled','used') AND status_block >= ? RETURNING hash, signer, signer_token, status`),
     expire: db.prepare(`UPDATE orders SET status = 'expired', updated_at = ? WHERE chain_id = ? AND status IN ('open','unfunded','invalid_fee')
       AND expiry <= ? RETURNING hash`),
     invalidateFee: db.prepare(`UPDATE orders SET status = 'invalid_fee', updated_at = ? WHERE chain_id = ? AND status IN ('open','unfunded')
@@ -92,7 +96,7 @@ export function openDb(file) {
     insert: (row) => st.insert.run(row),
     byHash: (h) => st.byHash.get(h),
     byNonce: (c, signer, nonce) => st.byNonce.get(c, signer, nonce),
-    setStatus: (hash, status, now, block = null) => st.setStatus.run(status, now, block == null ? null : Number(block), hash, status).changes > 0,
+    setStatus: (hash, status, now, block = null) => st.setStatus.run(status, now, block == null ? null : Number(block), status === 'invalid_signer' ? 1 : 0, hash, status).changes > 0,
     setStatusByNonce: (c, signer, nonce, status, now, block = null) => st.setStatusByNonce.all(status, now, block == null ? null : Number(block), c, signer, nonce).map((r) => r.hash),
     rollback: (c, fromBlock, now) => st.rollback.all(now, c, Number(fromBlock)),
     liveBySigner: (c, signer) => st.liveBySigner.all(c, signer),
