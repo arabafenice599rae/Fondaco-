@@ -10,6 +10,7 @@
 //  6. creation bytecode and ABI must equal packages/contracts/fixtures/SwapERC20.json
 //
 // Usage: node tools/verify-source/verify-source.mjs [--solc /path/to/solc-0.8.23] [--fixture other.json]
+//        [--evm-version X]  override, for the negative test only: anything but 'paris' must FAIL
 // Needs: git, tar, network access to github.com, registry.npmjs.org, binaries.soliditylang.org (or --solc).
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -21,19 +22,14 @@ import { isDeepStrictEqual } from 'node:util'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const CACHE = resolve(ROOT, '.cache/verify-source')
 
+// Single source of truth for the official build settings (also read by the deploy script).
+const OFFICIAL = JSON.parse(readFileSync(resolve(ROOT, 'packages/contracts/compiler-settings.json'), 'utf8'))
 export const EXPECTED = {
-  repo: 'https://github.com/airswap/airswap-protocols.git',
-  tag: 'v5.0.0',
-  commit: '28156e5115218a444d35f35162162f643e5ccb91',
-  file: 'source/swap-erc20/contracts/SwapERC20.sol',
-  fileSha256: '5203e5a0bd04011edf7d479d8506d1269f3caf9987a9765b8aba8b3f02304e64',
-  solc: {
-    version: '0.8.23',
-    build: 'solc-linux-amd64-v0.8.23+commit.f704f362',
-    sha256: '28726a452290c70e1984f15c53ad3088e7d98783ee3070b11b3664da77415732',
-  },
-  settings: { optimizer: { enabled: true, runs: 999999 }, evmVersion: 'paris' },
-  fixture: 'packages/contracts/fixtures/SwapERC20.json',
+  ...OFFICIAL.source,
+  solc: OFFICIAL.solc,
+  settings: OFFICIAL.settings,
+  fixture: `packages/contracts/${OFFICIAL.fixtures.SwapERC20.file}`,
+  fixtureSha256: OFFICIAL.fixtures.SwapERC20.creationBytecodeSha256,
 }
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex')
@@ -135,11 +131,11 @@ function collectSources(projectDir, nodeModules, entryUnit) {
   return sources
 }
 
-function compile(solcPath, sources) {
+function compile(solcPath, sources, settings) {
   const input = {
     language: 'Solidity',
     sources,
-    settings: { ...EXPECTED.settings, outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'metadata'] } } },
+    settings: { ...settings, outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'metadata'] } } },
   }
   const out = JSON.parse(execFileSync(solcPath, ['--standard-json'], { input: JSON.stringify(input), maxBuffer: 64 << 20 }).toString())
   const errors = (out.errors || []).filter((e) => e.severity === 'error')
@@ -187,11 +183,14 @@ async function main() {
   report.steps.solc = { sha256: solc.sha256, matchesOfficialList: solc.listMatches }
   log(`   ${solc.sha256} OK${solc.listMatches ? ' (matches binaries.soliditylang.org list.json)' : ''}`)
 
-  log(`5) compile: optimizer ${EXPECTED.settings.optimizer.runs} runs, evmVersion ${EXPECTED.settings.evmVersion}`)
+  const evmOverride = argv.includes('--evm-version') ? argv[argv.indexOf('--evm-version') + 1] : null
+  const settings = evmOverride ? { ...EXPECTED.settings, evmVersion: evmOverride } : EXPECTED.settings
+  if (evmOverride) log(`   NOTE: evmVersion overridden to '${evmOverride}' (negative test)`)
+  log(`5) compile: optimizer ${settings.optimizer.runs} runs, evmVersion ${settings.evmVersion}`)
   const sources = collectSources(resolve(src.dir, 'source/swap-erc20'), { solady: solady.dir }, 'contracts/SwapERC20.sol')
   report.steps.sources = Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, sha256(v.content)]))
   for (const [k, v] of Object.entries(report.steps.sources)) log(`   ${v.slice(0, 16)}…  ${k}`)
-  const built = compile(solc.path, sources)
+  const built = compile(solc.path, sources, settings)
 
   log(`6) compare with ${EXPECTED.fixture}`)
   const fixturePath = argv.includes('--fixture') ? resolve(argv[argv.indexOf('--fixture') + 1]) : resolve(ROOT, EXPECTED.fixture)
@@ -201,12 +200,13 @@ async function main() {
   const abiSame = isDeepStrictEqual(built.abi, fixture.abi)
   report.result = { bytecodeIdentical: same, abiIdentical: abiSame, bytes: (ours.length - 2) / 2, bytecodeSha256: sha256(Buffer.from(ours.slice(2), 'hex')), metadataHash: JSON.parse(built.metadata).sources['contracts/SwapERC20.sol'].keccak256 }
   mkdirSync(resolve(ROOT, 'reports'), { recursive: true })
-  writeFileSync(resolve(ROOT, 'reports/verify-source.json'), JSON.stringify(report, null, 2))
+  if (!evmOverride && !argv.includes('--fixture')) writeFileSync(resolve(ROOT, 'reports/verify-source.json'), JSON.stringify(report, null, 2))
   if (!same) {
     const i = firstDiff(ours.toLowerCase(), fixture.bytecode.toLowerCase())
     fail(`creation bytecode differs (ours ${(ours.length - 2) / 2} bytes, fixture ${(fixture.bytecode.length - 2) / 2} bytes, first difference at hex char ${i})`)
   }
   if (!abiSame) fail('ABI differs from the fixture')
+  if (!evmOverride && report.result.bytecodeSha256 !== EXPECTED.fixtureSha256) fail(`bytecode SHA-256 ${report.result.bytecodeSha256} ≠ compiler-settings.json ${EXPECTED.fixtureSha256}`)
   log(`   creation bytecode IDENTICAL (${report.result.bytes} bytes, sha256 ${report.result.bytecodeSha256}), ABI identical`)
   log('\nverify-source: OK')
 }

@@ -1,0 +1,26 @@
+{
+  "$comment": "Official build settings of the deployed bytecode. evmVersion 'paris' is REQUIRED: it is Hardhat's default for solc 0.8.23 in the AirSwap repository at the tag, and with solc's own default (shanghai) the bytecode differs. Checked by tools/verify-source and by the deploy script.",
+  "source": {
+    "repo": "https://github.com/airswap/airswap-protocols.git",
+    "tag": "v5.0.0",
+    "commit": "28156e5115218a444d35f35162162f643e5ccb91",
+    "file": "source/swap-erc20/contracts/SwapERC20.sol",
+    "fileSha256": "5203e5a0bd04011edf7d479d8506d1269f3caf9987a9765b8aba8b3f02304e64"
+  },
+  "solc": {
+    "version": "0.8.23",
+    "build": "solc-linux-amd64-v0.8.23+commit.f704f362",
+    "sha256": "28726a452290c70e1984f15c53ad3088e7d98783ee3070b11b3664da77415732"
+  },
+  "settings": {
+    "optimizer": { "enabled": true, "runs": 999999 },
+    "evmVersion": "paris"
+  },
+  "fixtures": {
+    "SwapERC20": {
+      "file": "fixtures/SwapERC20.json",
+      "creationBytecodeSha256": "139ab5cbba7bfa70a5199bc69e232e253add456c233cd621a1804ea450963d77",
+      "bytes": 12221
+    }
+  }
+}
