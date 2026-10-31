@@ -3,8 +3,8 @@
 import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, createTestClient, http, parseAbi, encodeAbiParameters, keccak256, toHex, getAddress, decodeFunctionData, UserRejectedRequestError } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { start } from '../src/index.js'
-import { createTaker, plan, SWAP_TAKER_ABI } from '../client/taker.js'
+import { start } from '@fondaco/book-server'
+import { createTaker, plan, SWAP_TAKER_ABI } from '../src/taker.js'
 
 const FORK_URL = process.env.FORK_URL || 'http://127.0.0.1:8545'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
@@ -18,7 +18,7 @@ const ERC20 = parseAbi(['function approve(address,uint256)', 'function balanceOf
 
 const pub = createPublicClient({ chain, transport: transport(), pollingInterval: 100 })
 const test = createTestClient({ chain, mode: 'hardhat', transport: transport() })
-const SwapArt = JSON.parse(readFileSync(new URL('./fixtures/SwapERC20.json', import.meta.url)))
+const SwapArt = JSON.parse(readFileSync(new URL(import.meta.resolve('@fondaco/contracts/fixtures/SwapERC20.json'))))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const results = []

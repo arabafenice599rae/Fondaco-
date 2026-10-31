@@ -1,5 +1,5 @@
 // EIP-6963 discovery and protection status (no chain needed).
-import { discoverWallets, protectionStatus } from '../client/wallet-protection.js'
+import { discoverWallets, protectionStatus } from '../src/wallet-protection.js'
 
 const results = []
 const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'} | ${n}${d ? ' | ' + d : ''}`) }

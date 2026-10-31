@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, http, getContractAddress, getAddress, domainSeparator } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
-const load = (n) => JSON.parse(readFileSync(new URL(`../test/fixtures/${n}.json`, import.meta.url)))
+const load = (n) => JSON.parse(readFileSync(new URL(`../fixtures/${n}.json`, import.meta.url)))
 const need = (k) => { const v = process.env[k]; if (!v) throw new Error(`missing env ${k}`); return v }
 
 export async function deploy({ rpc, privateKey, feeBps, feeWallet, owner, weth, allowNonZeroNonce = false, log = console.log }) {

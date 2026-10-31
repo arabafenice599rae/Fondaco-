@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+config.json
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.cache/
+reports/
+out/
+cache/
+dist/
+coverage/

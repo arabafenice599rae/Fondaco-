@@ -11,7 +11,7 @@ const chain = { id: 1, name: 'fork', nativeCurrency: { name: 'ETH', symbol: 'ETH
 const t = () => http(FORK_URL, { timeout: 180_000 })
 const pub = createPublicClient({ chain, transport: t() }), test = createTestClient({ chain, mode: 'hardhat', transport: t() })
 const ERC20 = parseAbi(['function approve(address,uint256)', 'function deposit() payable', 'function balanceOf(address) view returns (uint256)'])
-const Art = JSON.parse(readFileSync(new URL('./fixtures/SwapERC20.json', import.meta.url)))
+const Art = JSON.parse(readFileSync(new URL('../fixtures/SwapERC20.json', import.meta.url)))
 const results = []
 const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'} | ${n}${d ? ' | ' + d : ''}`) }
 const wallet = async () => { const account = privateKeyToAccount(generatePrivateKey()); await test.setBalance({ address: account.address, value: 10n ** 21n }); return { account, address: account.address, client: createWalletClient({ account, chain, transport: t() }) } }

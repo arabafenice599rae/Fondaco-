@@ -1,0 +1,13 @@
+{
+  "name": "fondaco",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "verify-source": "node tools/verify-source/verify-source.mjs",
+    "test:unit": "pnpm --filter @fondaco/client test:wallet",
+    "test:fork": "node tools/testkit/run-fork-suites.mjs",
+    "test": "pnpm test:unit && pnpm test:fork"
+  }
+}

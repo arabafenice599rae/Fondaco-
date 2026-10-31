@@ -9,7 +9,7 @@ const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 const chain = { id: 1, name: 'fork', nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [FORK_URL] } } }
 const pub = createPublicClient({ chain, transport: http(FORK_URL, { timeout: 180_000 }) })
 const test = createTestClient({ chain, mode: 'hardhat', transport: http(FORK_URL, { timeout: 180_000 }) })
-const swapAbi = JSON.parse(readFileSync(new URL('./fixtures/SwapERC20.json', import.meta.url))).abi
+const swapAbi = JSON.parse(readFileSync(new URL('../fixtures/SwapERC20.json', import.meta.url))).abi
 
 const results = []
 const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'} | ${n}${d ? ' | ' + d : ''}`) }

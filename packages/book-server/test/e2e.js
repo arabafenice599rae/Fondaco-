@@ -17,7 +17,7 @@ const ERC20 = parseAbi(['function approve(address,uint256) returns (bool)', 'fun
 
 const pub = createPublicClient({ chain, transport: http(FORK_URL, { timeout: 180_000 }) })
 const test = createTestClient({ chain, mode: 'hardhat', transport: http(FORK_URL, { timeout: 180_000 }) })
-const SwapArt = JSON.parse(readFileSync(new URL('./fixtures/SwapERC20.json', import.meta.url)))
+const SwapArt = JSON.parse(readFileSync(new URL(import.meta.resolve('@fondaco/contracts/fixtures/SwapERC20.json'))))
 
 const results = []
 function check(name, ok, detail = '') {

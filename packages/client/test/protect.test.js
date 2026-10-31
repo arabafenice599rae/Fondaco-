@@ -3,8 +3,8 @@
 import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, createTestClient, createClient, http, custom, parseAbi, encodeAbiParameters, keccak256, toHex, getAddress } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { createTaker, plan, SWAP_TAKER_ABI } from '../client/taker.js'
-import { createSubmitter, cancelOrders, priceCheck, isStale } from '../client/protect.js'
+import { createTaker, plan, SWAP_TAKER_ABI } from '../src/taker.js'
+import { createSubmitter, cancelOrders, priceCheck, isStale } from '../src/protect.js'
 
 const FORK_URL = process.env.FORK_URL || 'http://127.0.0.1:8545'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
@@ -16,7 +16,7 @@ const transport = () => http(FORK_URL, { timeout: 180_000 })
 const ERC20 = parseAbi(['function approve(address,uint256)', 'function deposit() payable', 'function balanceOf(address) view returns (uint256)'])
 const pub = createPublicClient({ chain, transport: transport(), pollingInterval: 200 })
 const test = createTestClient({ chain, mode: 'hardhat', transport: transport() })
-const SwapArt = JSON.parse(readFileSync(new URL('./fixtures/SwapERC20.json', import.meta.url)))
+const SwapArt = JSON.parse(readFileSync(new URL(import.meta.resolve('@fondaco/contracts/fixtures/SwapERC20.json'))))
 const results = []
 const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'} | ${n}${d ? ' | ' + d : ''}`) }
 

@@ -1,0 +1,20 @@
+{
+  "name": "@fondaco/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Taker execution, MEV protection and wallet protection status for FONDACO",
+  "exports": {
+    "./taker": "./src/taker.js",
+    "./protect": "./src/protect.js",
+    "./wallet-protection": "./src/wallet-protection.js"
+  },
+  "scripts": {
+    "test:taker": "node --no-warnings=ExperimentalWarning test/taker.test.js",
+    "test:protect": "node --no-warnings=ExperimentalWarning test/protect.test.js",
+    "test:wallet": "node test/wallet.test.js"
+  },
+  "dependencies": { "viem": "2.57.13" },
+  "devDependencies": { "@fondaco/book-server": "workspace:*", "@fondaco/contracts": "workspace:*" },
+  "license": "MIT"
+}
