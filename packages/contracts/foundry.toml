@@ -1,0 +1,20 @@
+# Foundry tests of the UNMODIFIED SwapERC20 v5.0.0 bytecode (loaded from fixtures/SwapERC20.json, never compiled here).
+# Test code only: no production Solidity lives in this repository.
+# Run on a mainnet fork at the block pinned in ../../fork.config.json (the runner starts anvil and passes --fork-url).
+[profile.default]
+src = "foundry/test"
+test = "foundry/test"
+out = "foundry/out"
+cache_path = "foundry/cache"
+libs = []
+solc_version = "0.8.23"
+evm_version = "paris"
+optimizer = false
+fs_permissions = [
+  { access = "read", path = "./fixtures" },
+  { access = "read", path = "../../fork.config.json" },
+]
+
+[fuzz]
+runs = 256
+seed = "0x46"
