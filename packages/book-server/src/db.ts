@@ -16,6 +16,8 @@ export interface Db {
   migration: MigrationReport
   tx<T>(fn: () => T): T
   insert(row: OrderInsert): void
+  /** remove a row (an invalid_fee order re-signed with the same nonce: the new row takes its place) */
+  deleteOrder(hash: Hex): void
   byHash(h: string): OrderRow | undefined
   byNonce(c: number, signer: Address, nonce: string): Pick<OrderRow, 'hash' | 'status'> | undefined
   orderByNonce(c: number, signer: Address, nonce: string): OrderRow | undefined
@@ -67,6 +69,7 @@ export function openDb(file: string): Db {
       :sender_token,:sender_amount,:protocol_fee,:v,:r,:s,:price,:status,:now,:now,:contract_signer)`),
     byHash: p('SELECT * FROM orders WHERE hash = ?'),
     byNonce: p('SELECT hash, status FROM orders WHERE chain_id = ? AND signer = ? AND nonce = ?'),
+    deleteOrder: p('DELETE FROM orders WHERE hash = ?'),
     orderByNonce: p('SELECT * FROM orders WHERE chain_id = ? AND signer = ? AND nonce = ?'),
     setStatus: p(`UPDATE orders SET status = ?, updated_at = ?, status_block = ?, signer_revoked = MAX(signer_revoked, ?) WHERE hash = ? AND status <> ?`),
     // 'used' (seen consumed by a read) is upgraded to filled/cancelled when the event arrives.
@@ -121,6 +124,7 @@ export function openDb(file: string): Db {
       try { const r = fn(); db.exec('COMMIT'); return r } catch (e) { db.exec('ROLLBACK'); throw e }
     },
     insert: (row) => { st.insert.run(row as unknown as Record<string, string | number>) },
+    deleteOrder: (hash) => { st.deleteOrder.run(hash) },
     byHash: (h) => get<OrderRow>(st.byHash, h),
     byNonce: (c, signer, nonce) => get(st.byNonce, c, signer, nonce),
     orderByNonce: (c, signer, nonce) => get<OrderRow>(st.orderByNonce, c, signer, nonce),

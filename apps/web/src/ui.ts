@@ -867,9 +867,14 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
       try { await B.approveFor(give.address, need); toast('Fondi autorizzati', 'Tutte le parti tornano visibili al prossimo controllo') } catch (err) { toast('Autorizzazione non riuscita', humanError(err)) }
       render(); return
     }
-    // resign: same terms at the current fee, new nonces; the old (invalid_fee) orders cannot fill unless the fee returns
-    const terms = o.orders.filter((x) => x.status === 'invalid_fee').map((x) => ({ signerToken: getAddress(x.order.signerToken) as Address, signerAmount: BigInt(x.order.signerAmount), senderToken: getAddress(x.order.senderToken) as Address, senderAmount: BigInt(x.order.senderAmount) }))
+    // resign: same terms and SAME nonces at the current fee. The old orders become valid again on-chain if the fee ever returns;
+    // sharing the nonce, at most one of each pair can be filled (the book replaces the invalid_fee order).
+    const terms = o.orders.filter((x) => x.status === 'invalid_fee').map((x) => ({ signerToken: getAddress(x.order.signerToken) as Address, signerAmount: BigInt(x.order.signerAmount), senderToken: getAddress(x.order.senderToken) as Address, senderAmount: BigInt(x.order.senderAmount), nonce: BigInt(x.order.nonce) }))
     try {
+      // a higher fee needs a larger allowance: authorize first (one transaction), otherwise the book would pause the offer
+      const fee = B.protocolFee()
+      const need = terms.reduce((s, t) => s + t.signerAmount + feeOf(t.signerAmount, fee), 0n) + B.liveNeed(give.address)
+      if (allowance(give.symbol) < need) { toast('Autorizzazione', 'La nuova commissione richiede un’autorizzazione più alta: conferma nel wallet'); await B.approveFor(give.address, need) }
       const res = await B.publish(terms, Math.max(o.expiry, B.nowSec() + 3600), o.privateFor ? (getAddress(o.privateFor) as Address) : null)
       toast(res.ok ? 'Offerta rifirmata' : 'Rifirma non riuscita', res.ok ? 'Di nuovo in vendita, senza costi' : res.errors.join(' · '))
     } catch (err) { toast('Rifirma non riuscita', humanError(err)) }

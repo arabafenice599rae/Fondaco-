@@ -119,10 +119,10 @@ export async function closeBrowser() { await browser?.close(); browser = null }
  *   wallet.setChain(id)                the wallet moves to `id` and emits chainChanged
  *   logs                               console errors/warnings and page errors of this page
  */
-export async function session(url, account, { label = 'w', viewport = { width: 1440, height: 900 }, splash = false, connect = true, chainId = 1, rdns = 'test.fondaco.e2e' } = {}) {
+export async function session(url, account, { label = 'w', viewport = { width: 1440, height: 900 }, splash = false, connect = true, chainId = 1, rdns = 'test.fondaco.e2e', beforeSend = null } = {}) {
   const b = await launch()
-  const ctx = await b.newContext({ viewport })
-  const state = { account, chainId, reject: { sign: 0, tx: 0 }, sent: [] }
+  const ctx = await b.newContext({ viewport, permissions: ['clipboard-read', 'clipboard-write'] })
+  const state = { account, chainId, reject: { sign: 0, tx: 0 }, sent: [], hashes: [] }
   const logs = []
   await ctx.exposeBinding('__walletRpc', async (_src, method, params) => {
     const err = (code, message) => ({ __error: { code, message } })
@@ -132,7 +132,12 @@ export async function session(url, account, { label = 'w', viewport = { width: 1
     if (/^eth_signTypedData/.test(method) && state.reject.sign > 0) { state.reject.sign--; return err(4001, 'User rejected the request.') }
     if (method === 'eth_sendTransaction') {
       if (state.reject.tx > 0) { state.reject.tx--; return err(4001, 'User rejected the request.') }
-      state.sent.push(params?.[0])
+      const tx = { ...params?.[0] }
+      // like a wallet that broadcasts anyway: a fixed gas limit when none is given (a call that reverts is still sent and mined)
+      if (!tx.gas) tx.gas = '0x' + (400_000).toString(16)
+      if ((await beforeSend?.(tx, state.sent.length)) === 'reject') return err(4001, 'User rejected the request.')
+      state.sent.push(tx)
+      try { const h = await pub.request({ method, params: [tx] }); state.hashes.push(h); return h } catch (e) { return err(e?.code ?? -32603, e?.details ?? e?.shortMessage ?? String(e)) }
     }
     try { return await pub.request({ method, params }) } catch (e) { return err(e?.code ?? -32603, e?.details ?? e?.shortMessage ?? String(e)) }
   })

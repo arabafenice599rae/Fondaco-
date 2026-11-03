@@ -212,7 +212,8 @@ export class Engine extends EventEmitter<EngineEvents> {
     const c = this.chain(chainId)
     const now = this.chainNow(c)
     const results: SubmitResult[] = []
-    type Acc = { o: NormalizedOrder & { _contract?: boolean }; hash: Hex; reject?: OrderError }
+    // replaces: an invalid_fee order with the same nonce and terms, re-signed at the current fee (only one of the two can ever fill)
+    type Acc = { o: NormalizedOrder & { _contract?: boolean }; hash: Hex; reject?: OrderError; replaces?: Hex }
     const accepted: Acc[] = []
     const batchKeys = new Set<string>()
     if (this.db.countLive(c.cfg.id) + rawOrders.length > c.cfg.maxLiveOrders) {
@@ -228,10 +229,20 @@ export class Engine extends EventEmitter<EngineEvents> {
         const nonceKey = `${o.signerWallet}|${o.nonce}`
         // dedupe on the EIP-712 hash, not the signature: a malleated (high-s) copy of a signature maps to the same order
         if (batchKeys.has(hash) || this.db.byHash(hash)) throw new OrderError('duplicate', 'order already submitted')
-        if (batchKeys.has(nonceKey) || this.db.byNonce(c.cfg.id, o.signerWallet, o.nonce.toString())) throw new OrderError('nonce_reused', 'another order uses this nonce')
+        if (batchKeys.has(nonceKey)) throw new OrderError('nonce_reused', 'another order uses this nonce')
+        // Re-signing after a fee change keeps the nonce: the old order (still valid on-chain if the fee ever returns) and the
+        // new one share it, so at most one of them can be filled. Allowed only over an invalid_fee order with the same terms.
+        const prev = this.db.orderByNonce(c.cfg.id, o.signerWallet, o.nonce.toString())
+        let replaces: Hex | undefined
+        if (prev) {
+          const same = prev.status === 'invalid_fee' && prev.signer_token === o.signerToken && prev.sender_token === o.senderToken && prev.sender_wallet === o.senderWallet &&
+            prev.signer_amount === o.signerAmount.toString() && prev.sender_amount === o.senderAmount.toString() && BigInt(prev.protocol_fee) !== o.protocolFee
+          if (!same) throw new OrderError('nonce_reused', 'another order uses this nonce')
+          replaces = prev.hash as Hex
+        }
         batchKeys.add(hash).add(nonceKey)
         o._contract = await this._checkSignature(c, o)
-        accepted.push({ o, hash })
+        accepted.push({ o, hash, ...(replaces ? { replaces } : {}) })
         results.push({ hash, status: 'pending' })
       } catch (e) {
         const err = e as { code?: string; message: string }
@@ -274,6 +285,7 @@ export class Engine extends EventEmitter<EngineEvents> {
 
     this.db.tx(() => {
       for (const a of ready) {
+        if (a.replaces) this.db.deleteOrder(a.replaces)
         const c0 = c.cfg.tokens[a.o.signerToken] as { decimals: number }, c1 = c.cfg.tokens[a.o.senderToken] as { decimals: number }
         const price = Number(a.o.senderAmount) / 10 ** c1.decimals / (Number(a.o.signerAmount) / 10 ** c0.decimals)
         this.db.insert({

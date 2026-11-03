@@ -290,7 +290,7 @@ export class LiveBackend implements Backend {
     const domain = { name: 'SWAP_ERC20', version: '4.3', chainId: this.chain, verifyingContract: swap } as const
     const signed = []
     for (const t of terms) {
-      const message = { nonce: randomNonce(), expiry: BigInt(expirySec), signerWallet: me, signerToken: t.signerToken, signerAmount: t.signerAmount, protocolFee: fee,
+      const message = { nonce: t.nonce ?? randomNonce(), expiry: BigInt(expirySec), signerWallet: me, signerToken: t.signerToken, signerAmount: t.signerAmount, protocolFee: fee,
         senderWallet: (counterparty ?? ZERO) as Address, senderToken: t.senderToken, senderAmount: t.senderAmount }
       const sig = await wc.signTypedData({ account: me, domain, types: ORDER_TYPES, primaryType: 'OrderERC20', message })
       signed.push({ ...Object.fromEntries(Object.entries(message).map(([k, v]) => [k, String(v)])), v: parseInt(sig.slice(130, 132), 16), r: `0x${sig.slice(2, 66)}` as Hex, s: `0x${sig.slice(66, 130)}` as Hex })

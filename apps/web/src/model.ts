@@ -95,7 +95,8 @@ export function toUnits(amount: number, decimals: number): bigint {
 
 // ------------------------------------------------------------------ proposing a price
 
-export interface OrderTerms { signerToken: Address; signerAmount: bigint; senderToken: Address; senderAmount: bigint }
+/** `nonce`: only to re-sign an invalid_fee order (same nonce → the old and the new order can never both fill) */
+export interface OrderTerms { signerToken: Address; signerAmount: bigint; senderToken: Address; senderAmount: bigint; nonce?: bigint }
 
 /**
  * Exact terms of a ladder: `amount` of the token given, split in `parts` equal slices (the last takes the remainder),
