@@ -2,6 +2,47 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Fase 5] — App web — 2026-11-03
+
+### Aggiunto
+- `apps/web`: app **statica** (Vite 8, TypeScript strict, nessun framework: D-33), senza processo server e senza chiavi. Markup e CSS sono quelli
+  del prototipo, con breakpoint < 860, 860–1179 e ≥ 1180, splash C e `prefers-reduced-motion`. Font Geist self-hosted, CSP in `<meta>`.
+- Configurazione iniziale in `config.json` (contratto per chain, bacheca, monete). **Impostazioni**: URL della bacheca e RPC per chain, salvati nel
+  browser, con **Ripristina**; contratto mostrato e modificabile solo dietro un avviso esplicito con conferma.
+- Dati reali:
+  - bacheca via API + SSE con riconnessione (1 s → 30 s); 503 `stale` → banner **"Dati non aggiornati"** e scambio bloccato;
+  - contratto diverso tra app e bacheca → scambio bloccato;
+  - banner di governance quando `protocolFeeLight ≠ protocolFee` o arriva un evento SSE `governance`;
+  - coppie da `/config` intersecate con le monete dell'app, con stato vuoto esplicito.
+- Grafico 1 h / 4 h / 24 h con crosshair, dai fill indicizzati (`/candles` con ETag); ultimi scambi da `/trades`.
+- Wallet via EIP-6963 + EIP-1193 (viem). Esecuzione e protezione con `@fondaco/client` (verify → autorizza → una tx per offerta) e stato MEV reale
+  nella riga di conferma.
+- "Le mie offerte" con stati attiva / in pausa / da rifirmare / **ancora eseguibile → Annulla ora** (cancel protetto).
+- Modalità demo solo con `DEMO=true`: dati simulati, etichetta "Demo" sempre visibile anche su telefono, codice assente dal bundle di produzione.
+- Book server (commit `9300523`): tabella `fills` (migrazione v5), `GET /trades`, `GET /candles` con ETag/304, `protocolFeeLight` e `markets` in
+  `/config`, eventi SSE `trade` e `governance`.
+- Test: `web-model` (35), `web-keys` (5), `web-e2e` (18) nel runner; `scripts/screenshots.mjs`; screenshot in `docs/screenshots/`.
+- Specifica (D-31 approvato): soglie "dal 2% in su", "dal 10% in su", "dall'1% in su".
+
+### Corretto
+- Importi convertiti in unità base con `toFixed(18)`: 0,2 WETH diventava 0,200000000000000011. Ora si usa la rappresentazione decimale più corta
+  (U15–U17, e2e W12). Stessa correzione per il prezzo nel calcolo della scala.
+- Il primo clic su "Altro" dopo aver scritto un importo andava perso: il ridisegno al blur sostituiva il pulsante tra mousedown e mouseup. Ora il
+  pulsante si ridisegna solo se cambia (trovato dall'e2e; c'era anche nel prototipo).
+- Percentuale di commissione nel riquadro "Proponi": ora viene da `/config`, non è più fissa allo 0,30%.
+
+### Risultati
+`node tools/testkit/run-suites.mjs`: **30 suite, 305 controlli, tutti verdi**. Ogni suite su fork usa un anvil nuovo, sempre allo stesso blocco.
+
+| Suite | Esito | Cosa copre in questa fase |
+|---|---|---|
+| typecheck `apps/web` | ok | TypeScript strict (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`) |
+| web-model | 35/35 | quotazione indicativa/verificata, stati di ordini e offerte, termini esatti, serie del grafico, banner, impostazioni, client API |
+| web-keys | 5/5 | nessuna chiave nelle build di produzione e demo, autotest dello scanner, codice demo assente dalla produzione |
+| web-e2e | 18/18 | pubblica → compra da un secondo account → saldi esatti; seconda bacheca; governance; stale |
+| trades | 10/10 | fill, `/trades`, `/candles` con ETag, rollback sul reorg |
+| altre 25 suite | tutte ok | regressione delle fasi 0–4, invariate |
+
 ## [Fase 4] — Client in TypeScript — 2026-10-31
 
 ### Modificato

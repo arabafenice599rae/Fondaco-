@@ -192,9 +192,50 @@ cambia il consiglio (Smart Transactions; un RPC personalizzato le disattiverebbe
 
 ### D-31 · Soglie di prezzo incluse — da notare
 La specifica dice "oltre il 2 %" e "oltre il 10 %"; il riferimento usa `≥` (esattamente 2,00 % → `warn`, 10,00 % → `danger`, 1,00 % → superata).
-Ho mantenuto il comportamento del riferimento e l'ho fissato in una tabella di casi (G1, G2). Se "oltre" va inteso in senso stretto, il cambio è di
-una riga e la tabella va aggiornata.
+Ho mantenuto il comportamento del riferimento e l'ho fissato in una tabella di casi (G1, G2). **Approvato (Fase 5): si mantiene `≥`**; la specifica
+(`docs/reference/exchange-book-README.md`) ora dice "dal 2% in su", "dal 10% in su" e, per coerenza, "dall'1% in su" per `isStale`.
 
 ### D-32 · Il client non dipende da `@fondaco/contracts` — D
 Per avere `viem` come unica dipendenza pubblicata, il client definisce le sue ABI minime e i suoi tipi (`Order`, …) invece di importarli dal pacchetto
 contracts. La coerenza tra i due è coperta dai test su fork (stessi ordini firmati, stesso contratto).
+
+## Fase 5
+
+### D-33 · App senza framework — D
+TypeScript + DOM con Vite. Il prototipo è già DOM + CSS: markup e foglio di stile restano identici (fedeltà esatta), il bundle resta piccolo.
+La UI parla solo con un'interfaccia `Backend` (`src/backend.ts`), implementata dal backend live e, solo nella build `DEMO=true`, da quello simulato
+(import dinamico: il codice demo non è nel bundle di produzione, verificato da K4).
+
+### D-34 · L'app si fida della propria configurazione — D
+Contratto e monete vengono da `config.json` (o da Impostazioni, con avviso esplicito), mai dalla bacheca. Se la bacheca dichiara un altro contratto lo
+scambio è bloccato; il dominio EIP-712 è costruito dall'app; una coppia appare solo se entrambe le monete sono configurate nell'app.
+
+### D-35 · Niente source map nella build pubblicata — D
+Le source map contengono i commenti dei sorgenti di terze parti (viem cita fornitori RPC nella documentazione), che la scansione delle chiavi dovrebbe
+altrimenti mettere in whitelist. La build è riproducibile dal repository.
+
+### D-36 · Tempo della catena per scadenze e "scade tra" — D
+L'app usa il tempo della catena servito dalla bacheca (`/candles.now`, estrapolato), non l'orologio del dispositivo: il contratto confronta la scadenza
+con `block.timestamp`. Verificato sul fork, dove il tempo della catena è indietro di un anno.
+
+### D-37 · Impostazioni su telefono — da notare
+Sotto 520 px l'intestazione non ha spazio per un quarto elemento: l'ingranaggio passa nel foglio Wallet ("Impostazioni: bacheca, RPC, contratto") e
+l'etichetta Demo diventa una linguetta sotto il logo (il prototipo la nasconde sotto 520 px; qui deve restare sempre visibile).
+
+### D-38 · Due correzioni rispetto al prototipo — da notare
+1. Dopo aver scritto un importo, il primo clic su un prezzo ("Altro") andava perso: il blur del campo ridisegnava i pulsanti tra mousedown e mouseup
+   (stesso comportamento nel prototipo). Ora i pulsanti si ridisegnano solo se cambiano. Trovato dall'e2e.
+2. Gli importi venivano convertiti con `toFixed(18)`, che espone il rumore binario (0,2 → 0,200000000000000011 WETH firmati). Ora si parte dalla
+   rappresentazione decimale più corta (U15–U17, W12).
+
+### D-39 · Commissione mostrata dalla bacheca — D
+La percentuale nel riquadro "Proponi" e il calcolo dell'importo da autorizzare usano `protocolFee` di `/config`, non lo 0,30% scritto nel
+prototipo.
+
+### Punti aperti (Fase 5)
+- **Avviso sulla scadenza**: la specifica originale dice "avviso oltre 24 h"; la richiesta di Fase 5 e il prototipo lo mostrano a 7 giorni. Ho
+  seguito la Fase 5 e il prototipo.
+- **"Annulla ora" su `invalid_signer` ancora eseguibile**: coperto dai test unitari (U12) e dalla UI, ma non dall'e2e (servirebbe una delega
+  `authorize` revocata e poi ripristinata sul fork). Si può aggiungere in Fase 6.
+- **MEV nel browser**: con un wallet del browser l'invio passa sempre dal wallet (`createSubmitter` in modalità wallet). La riga MEV mostra lo
+  stato reale di quel wallet (W3b: "Mempool pubblica" per un wallet sconosciuto, con il link "Attivala" alla guida).
