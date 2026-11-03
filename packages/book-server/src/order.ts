@@ -1,4 +1,4 @@
-// Order model for AirSwap SwapERC20 v5.0.0: EIP-712 types, normalization, pure validation.
+// Order model for AirSwap SwapERC20 v4.3: EIP-712 types, normalization, pure validation.
 import { getAddress, hashTypedData, isAddress, recoverTypedDataAddress, zeroAddress, type Address, type Hex } from 'viem'
 import { DOMAIN_NAME, DOMAIN_VERSION, FEE_DIVISOR, ORDER_TYPES, domainFor } from '@fondaco/contracts'
 import type { ChainCfg, NormalizedOrder } from './types.js'

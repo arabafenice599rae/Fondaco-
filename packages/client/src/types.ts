@@ -1,7 +1,7 @@
 // Public types of @fondaco/client. No dependency but viem (types only from viem).
 import type { Address, Hex, TransactionReceipt } from 'viem'
 
-/** A signed SwapERC20 v5.0.0 order, normalized (BigInt amounts, checksummed addresses). The recipient is NOT signed. */
+/** A signed SwapERC20 v4.3 order, normalized (BigInt amounts, checksummed addresses). The recipient is NOT signed. */
 export interface Order {
   nonce: bigint
   expiry: bigint

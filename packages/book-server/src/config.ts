@@ -30,7 +30,7 @@ export const TOKEN = obj({
 export const CHAIN = obj({
   rpc: oneOrMany(url('JSON-RPC endpoint.'), 'One RPC URL or a list (automatic failover to the next one).'),
   rpcTimeoutMs: int('Timeout of one RPC request.', { default: 15_000, min: 100 }),
-  swap: address('SwapERC20 v5.0.0 address on this chain.'),
+  swap: address('SwapERC20 v4.3 address on this chain.'),
   multicall: address('Multicall3 address (same on every major EVM chain).', MULTICALL3),
   startBlock: uint('First block to index (deployment block of the contract). 0 = start from the current head.', { default: '0' }),
   pollMs: int('Interval between two indexing rounds.', { default: 4_000, min: 100 }),

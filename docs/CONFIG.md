@@ -47,7 +47,7 @@ Le chiavi sconosciute sono un errore all'avvio. Tutti gli errori vengono elencat
 |---|---|---|---|
 | `rpc` | an http(s) URL or list of an http(s) URL | **obbligatoria** | One RPC URL or a list (automatic failover to the next one). |
 | `rpcTimeoutMs` | integer ≥ 100 | `15000` | Timeout of one RPC request. |
-| `swap` | address | **obbligatoria** | SwapERC20 v5.0.0 address on this chain. |
+| `swap` | address | **obbligatoria** | SwapERC20 v4.3 address on this chain. |
 | `multicall` | address | `"0xcA11bde05977b3631167028862bE2a173976CA11"` | Multicall3 address (same on every major EVM chain). |
 | `startBlock` | integer (decimal string allowed) | `"0"` | First block to index (deployment block of the contract). 0 = start from the current head. |
 | `pollMs` | integer ≥ 100 | `4000` | Interval between two indexing rounds. |

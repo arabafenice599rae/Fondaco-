@@ -186,7 +186,7 @@ async function main() {
   check('T11: private order for another address is dropped at verify', !q11.ok && q11.dropped[0]?.reason === 'private')
 
   // ---------------- T12 high-s (malleated) copy of a valid order taken from the book
-  // Documented outcome: SwapERC20 v5.0.0 ACCEPTS high-s signatures, so the taker executes it correctly (verify → check() ok,
+  // Documented outcome: SwapERC20 v4.3 ACCEPTS high-s signatures, so the taker executes it correctly (verify → check() ok,
   // eth_call ok, fill). The original low-s copy is then dropped at verify as 'taken': never a failed transaction.
   const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
   const [h12] = await post([await sell(W(0.01), U(24))])

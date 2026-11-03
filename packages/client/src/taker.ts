@@ -1,4 +1,4 @@
-// Taker-side execution for AirSwap SwapERC20 v5.0.0 (browser or Node, viem only).
+// Taker-side execution for AirSwap SwapERC20 v4.3 (browser or Node, viem only).
 //
 //  1. plan()     whole signed orders from the book → an INDICATIVE quote (orders are all-or-nothing)
 //  2. verify()   one batched read: SwapERC20.check() per leg (signature, nonce, expiry, signer funds at the

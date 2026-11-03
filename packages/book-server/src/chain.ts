@@ -160,7 +160,7 @@ export async function snapshot(client: PublicClient, chainCfg: Pick<ChainCfg, 's
 export const readFee = (client: PublicClient, swap: Address): Promise<bigint> => client.readContract({ address: swap, abi: SWAP_ABI, functionName: 'protocolFee' })
 export const readFeeLight = (client: PublicClient, swap: Address): Promise<bigint> => client.readContract({ address: swap, abi: SWAP_ABI, functionName: 'protocolFeeLight' })
 
-/** Administrative events of SwapERC20 v5.0.0 (signatures from the verified ABI): any of them triggers a 'governance' notice. */
+/** Administrative events of SwapERC20 v4.3 (signatures from the verified ABI): any of them triggers a 'governance' notice. */
 export const GOVERNANCE_EVENTS = [
   parseAbiItem('event SetProtocolFeeLight(uint256 protocolFeeLight)'),
   parseAbiItem('event SetProtocolFeeWallet(address indexed feeWallet)'),

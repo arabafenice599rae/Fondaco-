@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Off-chain order book for AirSwap SwapERC20 v5.0.0 (non-custodial P2P, proposer-paid fee)",
+  "description": "Off-chain order book for AirSwap SwapERC20 v4.3 (non-custodial P2P, proposer-paid fee)",
   "main": "dist/index.js",
   "exports": {
     ".": {

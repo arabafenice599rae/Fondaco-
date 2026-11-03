@@ -1,5 +1,5 @@
 // End-to-end test against a local mainnet fork (hardhat/anvil) at FORK_URL (default http://127.0.0.1:8545, chainId 1).
-// Deploys SwapERC20 v5.0.0 (fixture compiled from the tagged source), runs the book server in-process and
+// Deploys SwapERC20 v4.3 (fixture compiled from the tagged source), runs the book server in-process and
 // drives it over HTTP while performing real fills/cancels on-chain.
 import { readFileSync } from 'node:fs'
 import { createPublicClient, createWalletClient, createTestClient, http, parseAbi, encodeAbiParameters, keccak256, toHex, getAddress } from 'viem'
