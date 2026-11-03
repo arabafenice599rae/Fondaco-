@@ -1,0 +1,6 @@
+/* Geist and Geist Mono (SIL Open Font License, npm "geist" 1.8.1) served from this build: no third-party font requests. */
+@font-face { font-family: "Geist Mono"; font-weight: 400; font-display: swap; src: url("../node_modules/geist/dist/fonts/geist-mono/GeistMono-Regular.woff2") format("woff2") }
+@font-face { font-family: "Geist Mono"; font-weight: 500; font-display: swap; src: url("../node_modules/geist/dist/fonts/geist-mono/GeistMono-Medium.woff2") format("woff2") }
+@font-face { font-family: "Geist Mono"; font-weight: 600; font-display: swap; src: url("../node_modules/geist/dist/fonts/geist-mono/GeistMono-SemiBold.woff2") format("woff2") }
+@font-face { font-family: "Geist Mono"; font-weight: 700; font-display: swap; src: url("../node_modules/geist/dist/fonts/geist-mono/GeistMono-Bold.woff2") format("woff2") }
+@font-face { font-family: "Geist"; font-weight: 700; font-display: swap; src: url("../node_modules/geist/dist/fonts/geist-sans/Geist-Bold.woff2") format("woff2") }

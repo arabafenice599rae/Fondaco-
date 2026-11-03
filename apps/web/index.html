@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="referrer" content="no-referrer">
+<!-- Static app: no inline scripts; fonts and code are served from here. The book and the RPC are user-configurable, hence connect-src https/wss + local. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>FONDACO</title>
+<meta name="description" content="FONDACO: exchange P2P non-custodial. Il prezzo lo fate voi.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 14'%3E%3Crect x='1' width='8' height='3' fill='%23F4AE52'/%3E%3Crect x='11' width='6' height='3' fill='%237C93FF'/%3E%3Crect x='3' y='5.5' width='6' height='3' fill='%23F4AE52'/%3E%3Crect x='11' y='5.5' width='8' height='3' fill='%237C93FF'/%3E%3Crect y='11' width='9' height='3' fill='%23F4AE52'/%3E%3Crect x='11' y='11' width='5' height='3' fill='%237C93FF'/%3E%3C/svg%3E">
+<script type="module" src="./src/main.ts"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 19V10M10 19V5M15 19v-6M20 19V8"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 9.5h8M8 14.5h5"/></symbol>
+  <symbol id="i-flip" viewBox="0 0 24 24"><path d="M12 4v16M6.5 14.5 12 20l5.5-5.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 19 6v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><path d="M12 3 5 12l7 9 7-9z"/><path d="M5 12h14"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+</svg>
+
+<div class="splash" id="splash" role="status" aria-live="polite" aria-label="Avvio di FONDACO">
+  <div class="sp-in">
+    <div class="sp-top"><span class="ask-t">VENDO</span><span class="bid-t">COMPRO</span></div>
+    <div class="sp-mid">
+      <div class="sp-rows" id="sp-rows" aria-hidden="true"></div>
+      <div class="sp-word" id="sp-word"><h1>FONDACO</h1><p>IL PREZZO LO FATE VOI</p></div>
+    </div>
+    <div class="sp-bot">
+      <div class="sp-bar" aria-hidden="true"><span id="sp-l"></span><span id="sp-r"></span></div>
+      <div class="sp-meta"><span id="sp-step">RACCOLGO LE OFFERTE</span><span id="sp-pct">000%</span></div>
+      <button type="button" class="sp-skip" id="sp-skip">Salta</button>
+    </div>
+  </div>
+</div>
+<div class="ambient" aria-hidden="true"></div>
+<div class="app">
+  <header class="top">
+    <div class="shell top-in">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"><svg width="20" height="14" viewBox="0 0 20 14"><rect x="1" y="0" width="8" height="3" fill="#F4AE52"/><rect x="11" y="0" width="6" height="3" fill="#7C93FF"/><rect x="3" y="5.5" width="6" height="3" fill="#F4AE52"/><rect x="11" y="5.5" width="8" height="3" fill="#7C93FF"/><rect x="0" y="11" width="9" height="3" fill="#F4AE52"/><rect x="11" y="11" width="5" height="3" fill="#7C93FF"/></svg></span>
+        <span class="brand-name">FONDACO</span>
+        <span class="demo" id="demo-badge" title="Dati simulati: nessuna offerta reale" hidden>Demo</span>
+      </div>
+      <div class="hchips">
+        <button type="button" class="hchip" id="net-chip" aria-haspopup="dialog" aria-label="Rete e protezione MEV"><svg class="ic sm net" aria-hidden="true"><use href="#i-net"/></svg><span class="lbl" id="net-lbl">Ethereum</span></button>
+        <button type="button" class="hchip" id="wal-chip" aria-haspopup="dialog" aria-label="Wallet e protezione MEV"><span class="avatar" aria-hidden="true"></span><span class="mono" id="wal-addr">Collega</span><span class="wdot" id="wal-dot" aria-hidden="true"></span></button>
+        <button type="button" class="hchip" id="set-chip" aria-haspopup="dialog" aria-label="Impostazioni"><svg class="ic sm" aria-hidden="true"><use href="#i-gear"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell banners" id="banners" aria-live="polite"></div>
+
+  <main class="shell layout">
+    <!-- MERCATI -->
+    <aside class="card rail area" id="rail" aria-labelledby="rail-t">
+      <div class="rail-head"><h2 class="screen-title" id="rail-t">Mercati</h2><span class="muted" style="font-size: 13px" id="m-count"></span></div>
+      <label class="search"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="m-search" type="search" placeholder="Cerca una moneta" aria-label="Cerca un mercato" autocomplete="off"></label>
+      <div class="chips" id="m-chips" role="group" aria-label="Filtra mercati">
+        <button type="button" class="chip" data-filter="all" aria-pressed="true">Tutti</button>
+        <button type="button" class="chip" data-filter="USDC" aria-pressed="false">USDC</button>
+        <button type="button" class="chip" data-filter="WETH" aria-pressed="false">WETH</button>
+        <button type="button" class="chip" data-filter="stable" aria-pressed="false">Stable</button>
+      </div>
+      <div class="mlist" id="m-list"></div>
+    </aside>
+
+    <!-- COPPIA -->
+    <section class="center area" id="center" aria-label="Coppia selezionata">
+      <button type="button" class="back" id="back" hidden><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg>Mercati</button>
+
+      <div class="card ticker">
+        <button type="button" class="pair-btn" id="pair-btn" aria-haspopup="dialog" aria-label="Cambia mercato">
+          <span class="coins2" id="ph-coins"></span><span><b id="ph-name"></b><small id="ph-desc"></small></span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
+        </button>
+        <div class="tk-price"><span class="big" id="ph-mid"></span><span class="u" id="ph-unit"></span></div>
+        <dl class="tk-stats">
+          <div><dt>24 h</dt><dd><span class="chg" id="ph-chg"></span></dd></div>
+          <div><dt>Massimo 24 h</dt><dd id="st-hi"></dd></div>
+          <div><dt>Minimo 24 h</dt><dd id="st-lo"></dd></div>
+          <div><dt>Volume 24 h</dt><dd id="st-vol"></dd></div>
+          <div><dt>Differenza</dt><dd id="st-spr"></dd></div>
+          <div><dt>Liquidità</dt><dd id="st-liq"></dd></div>
+        </dl>
+        <span class="live"><span class="pulse" aria-hidden="true"></span>Live</span>
+        <div class="ph-actions">
+          <button type="button" class="btn accent lg" id="ph-buy"></button>
+          <button type="button" class="btn lg" id="ph-sell"></button>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <div class="sec-head"><h2>Prezzo</h2>
+          <div class="chips tf" id="tf" role="group" aria-label="Intervallo del grafico">
+            <button type="button" class="chip" data-tf="12" aria-pressed="false">1 h</button>
+            <button type="button" class="chip" data-tf="48" aria-pressed="false">4 h</button>
+            <button type="button" class="chip" data-tf="288" aria-pressed="true">24 h</button>
+          </div>
+        </div>
+        <div class="chart" id="chart" role="img" aria-label="Andamento del prezzo">
+          <svg id="ch-svg" aria-hidden="true"></svg>
+          <div id="ch-labels" aria-hidden="true"></div>
+          <div class="ch-tip" id="ch-tip" hidden></div>
+        </div>
+      </div>
+
+      <div class="card market-card">
+        <div class="seg" id="bt-seg" style="--n: 2" role="group" aria-label="Vista">
+          <button type="button" data-at="book" aria-pressed="true">Libro offerte</button>
+          <button type="button" data-at="trades" aria-pressed="false">Ultimi scambi</button>
+        </div>
+        <div class="bt" id="bt" data-show="book">
+          <section class="ob" aria-labelledby="ob-t">
+            <div class="sec-head"><h2 id="ob-t">Libro offerte</h2><p>Tocca un prezzo per scambiare fino a lì</p></div>
+            <div class="bh" aria-hidden="true"><span>Prezzo <i class="bh-quote"></i></span><span class="bh-base"></span><span>Totale</span></div>
+            <div class="lvls" id="asks"></div>
+            <div class="ob-mid"><span class="ob-midp" id="ob-midp"></span><span class="ob-spr" id="ob-spr"></span></div>
+            <div class="lvls" id="bids"></div>
+            <div class="depth">
+              <div class="depth-bar" aria-hidden="true"><span class="da" id="depth-a"></span><span class="db" id="depth-b"></span></div>
+              <div class="depth-l"><span><b class="ask-t" id="liq-a"></b> in vendita</span><span><b class="bid-t" id="liq-b"></b> richiesti</span></div>
+            </div>
+          </section>
+          <section class="tw" aria-labelledby="tw-t">
+            <div class="sec-head"><h2 id="tw-t">Ultimi scambi</h2></div>
+            <div class="trh" aria-hidden="true"><span>Prezzo</span><span class="bh-base"></span><span>Quando</span></div>
+            <div class="trades" id="trades"></div>
+          </section>
+        </div>
+        <p class="book-foot">Per chi accetta un’offerta la commissione è zero: la paga chi l’ha proposta.</p>
+      </div>
+
+      <div class="card" id="act-card">
+        <div class="sec-head"><h2>Le mie offerte <span class="pbadge" id="act-badge" hidden></span></h2></div>
+        <div id="offers-d"></div>
+      </div>
+    </section>
+
+    <!-- SCHEDA -->
+    <section class="ticket area" id="ticket" aria-label="Scambio">
+      <div class="card trade-card" id="trade-card">
+        <div class="seg" id="mode-seg" style="--n: 2" role="group" aria-label="Modalità">
+          <button type="button" data-m="swap" aria-pressed="true">Scambia subito</button>
+          <button type="button" data-m="make" aria-pressed="false">Proponi un prezzo</button>
+        </div>
+
+        <div class="mode" id="m-swap">
+          <p class="rate-top"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg><span id="rate"></span></p>
+          <div class="pair">
+            <div class="box">
+              <div class="box-top">
+                <label for="pay-in">Paghi</label>
+                <div class="quick" role="group" aria-label="Importo rapido">
+                  <button type="button" class="qb" data-q="0.25">25%</button>
+                  <button type="button" class="qb" data-q="0.5">50%</button>
+                  <button type="button" class="qb" data-q="1">Max</button>
+                </div>
+              </div>
+              <div class="box-main">
+                <input id="pay-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="pay-usd">
+                <button type="button" class="tok" id="pay-tok" aria-label="Scegli la moneta da pagare"></button>
+              </div>
+              <div class="box-foot"><span id="pay-usd"></span><span>Saldo <b id="pay-bal"></b></span></div>
+            </div>
+            <div class="flip-wrap"><button type="button" class="flip" id="flip" aria-label="Inverti le monete"><svg class="ic"><use href="#i-flip"/></svg></button></div>
+            <div class="box">
+              <div class="box-top"><span>Ricevi</span><span class="tag ind" title="Calcolato dal libro offerte: diventa definitivo dopo la verifica on-chain">Indicativo</span></div>
+              <div class="box-main">
+                <output id="recv-out" class="amount" for="pay-in" aria-live="polite">0</output>
+                <button type="button" class="tok" id="recv-tok" aria-label="Scegli la moneta da ricevere"></button>
+              </div>
+              <div class="box-foot"><span id="recv-usd"></span><span>Saldo <b id="recv-bal"></b></span></div>
+            </div>
+          </div>
+          <div class="recip">
+            <span class="recip-l" id="recip-l">Ricevi su</span>
+            <div class="recip-f" aria-labelledby="recip-l"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg><span class="mono" id="recip-addr">—</span><small>il tuo wallet</small></div>
+          </div>
+          <p class="fit-note" id="fit-note" hidden></p>
+          <button type="button" class="sum" id="sum-btn" aria-expanded="false" aria-controls="details">
+            <span class="rate">Dettagli</span><span class="zero">0 commissioni</span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
+          </button>
+          <div class="details" id="details"><div><div class="details-in">
+            <div class="legs" id="legs" aria-hidden="true"></div>
+            <p class="legs-t" id="legs-text"></p>
+            <dl class="kvs">
+              <div class="kv"><dt>Prezzo medio</dt><dd id="d-avg"></dd></div>
+              <div class="kv"><dt>Esecuzione</dt><dd id="d-exec"></dd></div>
+              <div class="kv"><dt>Commissione per te</dt><dd class="accent">Zero, la paga chi propone</dd></div>
+              <div class="kv"><dt>Ricevi su</dt><dd><span class="contract"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg>Il tuo wallet</span></dd></div>
+              <div class="kv"><dt>Costo di rete</dt><dd id="d-gas">calcolato alla verifica</dd></div>
+            </dl>
+          </div></div></div>
+          <button type="button" class="callout" id="over" hidden>
+            <svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>
+            <span><b id="over-title"></b>Proponi tu un prezzo per il resto</span>
+            <svg class="ic sm" aria-hidden="true"><use href="#i-right"/></svg>
+          </button>
+          <button type="button" class="cta" id="review"><span id="review-t">Rivedi lo scambio</span></button>
+        </div>
+
+        <div class="mode" id="m-make" hidden>
+          <div class="box">
+            <div class="box-top"><label for="mk-in" id="mk-label">Vendi</label><span class="tag">Pubblicare è gratis</span></div>
+            <div class="box-main">
+              <input id="mk-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="mk-usd">
+              <button type="button" class="tok" id="mk-give" aria-label="Scegli la moneta che dai"></button>
+            </div>
+            <div class="box-foot"><span id="mk-usd"></span><span>Saldo <b id="mk-bal"></b></span></div>
+          </div>
+          <div class="box row-box"><span class="muted">In cambio di</span><button type="button" class="tok" id="mk-get" aria-label="Scegli la moneta che ricevi"></button></div>
+          <div class="box">
+            <div class="box-top"><span id="mk-plabel">Prezzo</span><b class="price-v" id="mk-price"></b></div>
+            <div class="choices" id="modes" role="group" aria-label="Scegli il prezzo"></div>
+            <div class="custom" id="custom-wrap" hidden>
+              <label for="custom-in">Il tuo prezzo</label>
+              <input id="custom-in" type="text" inputmode="decimal" autocomplete="off">
+              <span id="custom-unit"></span>
+            </div>
+            <div class="meter">
+              <div class="track" aria-hidden="true"><div id="ticks"></div><span class="you" id="you"></span></div>
+              <div class="meter-scale" aria-hidden="true"><span>Davanti in coda</span><span>In fondo</span></div>
+              <p class="pos" id="pos-text" aria-live="polite"></p>
+              <p class="guard" id="mk-guard" role="alert" hidden></p>
+              <label class="guard-ok" id="mk-guard-ok-wrap" hidden><input type="checkbox" id="mk-guard-ok">Ho capito, pubblica comunque</label>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-top"><span id="exp-l">Valida per</span></div>
+            <div class="seg" id="exp-seg" style="--n: 3" role="group" aria-labelledby="exp-l">
+              <button type="button" data-exp="1h" aria-pressed="true">1 ora</button>
+              <button type="button" data-exp="24h" aria-pressed="false">24 ore</button>
+              <button type="button" data-exp="7d" aria-pressed="false">7 giorni</button>
+            </div>
+            <p class="o-note" id="exp-note" hidden>Un prezzo fisso che resta aperto a lungo è un regalo per i bot se il mercato si muove: controllalo o scegli una durata più breve.</p>
+            <div class="hr" aria-hidden="true"></div>
+            <label class="toggle" for="partial">
+              <span><b>Accetta acquisti parziali</b><small id="partial-note"></small><span class="parts" id="parts" aria-hidden="true"></span></span>
+              <input type="checkbox" class="switch" id="partial" role="switch" checked>
+            </label>
+          </div>
+          <dl class="summary">
+            <div class="kv big"><dt>Riceverai</dt><dd id="mk-recv"></dd></div>
+            <div class="kv"><dt id="mk-fee-l">Commissione 0,30% (se accettata)</dt><dd id="mk-fee"></dd></div>
+            <div class="kv"><dt>Da autorizzare</dt><dd id="mk-need"></dd></div>
+          </dl>
+          <p class="err" id="mk-error" role="alert" hidden></p>
+          <button type="button" class="cta" id="publish"><span>Pubblica l’offerta</span><span class="cta-sub">gratis</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- OFFERTE (telefono) -->
+    <section class="card area" id="offers-m" aria-labelledby="om-t" hidden>
+      <div class="rail-head"><h2 class="screen-title" id="om-t">Le mie offerte</h2></div>
+      <div id="offers-m-list"></div>
+    </section>
+  </main>
+
+  <nav class="dock" id="dock" aria-label="Sezioni">
+    <button type="button" data-tab="swap"><svg class="ic lg" aria-hidden="true"><use href="#i-swap"/></svg>Scambia</button>
+    <button type="button" data-tab="markets"><svg class="ic lg" aria-hidden="true"><use href="#i-book"/></svg>Mercati</button>
+    <button type="button" data-tab="offers"><svg class="ic lg" aria-hidden="true"><use href="#i-list"/></svg>Offerte<span class="badge" id="badge" hidden></span></button>
+  </nav>
+</div>
+
+<!-- conferma -->
+<div class="scrim" id="confirm" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="c-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="c-title">Conferma lo scambio</h2><button type="button" class="icon-btn" id="c-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <div class="sheet-body" id="c-main">
+      <div class="cf-pair">
+        <div class="cf-row"><div><div class="cf-l">Paghi</div><div class="cf-amt" id="c-pay"></div></div><span class="cf-tok" id="c-pay-tok"></span></div>
+        <div class="cf-row"><div><div class="cf-l">Ricevi</div><div class="cf-amt accent" id="c-recv"></div></div><span class="cf-tok" id="c-recv-tok"></span></div>
+      </div>
+      <div class="qline" aria-live="polite"><span class="qs ind" id="c-qs">Indicativo</span><span id="c-qs-t"></span></div>
+      <dl class="kvs" style="padding: 0 var(--s1)">
+        <div class="kv"><dt>Prezzo medio</dt><dd id="c-avg"></dd></div>
+        <div class="kv"><dt>Offerte</dt><dd id="c-legs"></dd></div>
+        <div class="kv"><dt>Ricevi su</dt><dd><span class="contract" title="Il destinatario non è modificabile"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg><span class="mono" id="c-recip">—</span>&nbsp;· il tuo wallet</span></dd></div>
+        <div class="kv"><dt>Commissione per te</dt><dd class="accent">Zero</dd></div>
+        <div class="kv"><dt>Protezione MEV</dt><dd id="c-mev"></dd></div>
+        <div class="kv"><dt>Costo di rete</dt><dd id="c-gas">—</dd></div>
+        <div class="kv"><dt>Contratto</dt><dd><span class="contract"><svg class="ic sm" aria-hidden="true"><use href="#i-shield"/></svg><span class="mono" id="c-contract">SwapERC20</span></span></dd></div>
+      </dl>
+      <div class="olist" id="c-olist"></div>
+      <fieldset class="appr-f" id="c-appr">
+        <legend>Quanto autorizzare</legend>
+        <div class="appr">
+          <label><input type="radio" name="appr" value="exact" checked><span><b>Solo questo importo</b><small>consigliato</small></span></label>
+          <label><input type="radio" name="appr" value="max"><span><b>Illimitato</b><small>meno passaggi in futuro</small></span></label>
+        </div>
+      </fieldset>
+      <ol class="steps" aria-label="Passaggi">
+        <li class="step" id="st0" data-s="idle"><span class="st-ic"><span class="n">1</span><span class="spin" aria-hidden="true"></span><svg class="ic sm ck" aria-hidden="true"><use href="#i-check"/></svg></span><span class="st-tx"><b>Verifica on-chain</b><small></small></span></li>
+        <li class="step" id="st1" data-s="idle"><span class="st-ic"><span class="n">2</span><span class="spin" aria-hidden="true"></span><svg class="ic sm ck" aria-hidden="true"><use href="#i-check"/></svg></span><span class="st-tx"><b id="st1-t">Autorizza</b><small></small></span></li>
+        <li class="step" id="st2" data-s="idle"><span class="st-ic"><span class="n">3</span><span class="spin" aria-hidden="true"></span><svg class="ic sm ck" aria-hidden="true"><use href="#i-check"/></svg></span><span class="st-tx"><b>Scambia</b><small></small></span></li>
+      </ol>
+      <p class="note"><svg class="ic sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Il wallet ti mostrerà esattamente questi importi e il tuo indirizzo come destinatario. Se vedi cifre o indirizzi diversi, rifiuta.</span></p>
+      <label class="toggle demo-t" for="c-race" id="c-race-wrap" hidden><span><b>Demo · compratore concorrente</b><small>Simula offerte prese da altri durante lo scambio</small></span><input type="checkbox" class="switch" id="c-race" role="switch"></label>
+      <button type="button" class="cta" id="c-go"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg><span id="c-go-t">Autorizza e scambia</span></button>
+    </div>
+    <div class="done" id="c-done" hidden>
+      <span class="done-ic" aria-hidden="true"><svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="26"/><path d="M17 29l7 7 15-15"/></svg></span>
+      <h3 id="c-done-h">Scambio completato</h3>
+      <div class="done-amt" id="c-done-amt"></div>
+      <p id="c-done-sub"></p>
+      <div class="done-list" id="c-done-list"></div>
+      <button type="button" class="cta" id="c-done-btn">Fatto</button>
+    </div>
+  </div>
+</div>
+
+<!-- scelta moneta -->
+<div class="scrim" id="picker" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="p-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="p-title">Scegli la moneta</h2><button type="button" class="icon-btn" id="p-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <label class="search"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="p-search" type="search" placeholder="Cerca per nome o simbolo" aria-label="Cerca una moneta" autocomplete="off"></label>
+    <div class="coin-list" id="p-list"></div>
+  </div>
+</div>
+
+<!-- wallet e protezione -->
+<div class="scrim" id="wsheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="w-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="w-title">Wallet e protezione</h2><button type="button" class="icon-btn" id="w-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <div class="sheet-body">
+      <fieldset class="appr-f"><legend id="w-list-l">Wallet collegato</legend><div class="appr" id="w-list"></div></fieldset>
+      <fieldset class="appr-f"><legend>Rete</legend><div class="appr" id="w-net"></div></fieldset>
+      <div class="wstat" id="w-stat" aria-live="polite"></div>
+      <button type="button" class="cta" id="w-connect" hidden>Collega il wallet</button>
+      <button type="button" class="btn w-settings" id="w-settings"><svg class="ic sm" aria-hidden="true"><use href="#i-gear"/></svg>Impostazioni: bacheca, RPC, contratto</button>
+    </div>
+  </div>
+</div>
+
+<!-- scelta mercato -->
+<div class="scrim" id="mpicker" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mp-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="mp-title">Mercati</h2><button type="button" class="icon-btn" id="mp-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <label class="search"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="mp-search" type="search" placeholder="Cerca una moneta" aria-label="Cerca un mercato" autocomplete="off"></label>
+    <div class="mlist" id="mp-list"></div>
+  </div>
+</div>
+
+<!-- impostazioni (non nel prototipo: richiesta dalla fase 5) -->
+<div class="scrim" id="ssheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="s-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="s-title">Impostazioni</h2><button type="button" class="icon-btn" id="s-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <form class="sheet-body settings" id="s-form" novalidate>
+      <div class="box"><div class="box-top"><label for="s-book">Bacheca delle offerte</label></div>
+        <input id="s-book" class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false">
+        <p class="o-note">L’indirizzo del server che raccoglie le offerte. Puoi usarne uno diverso da quello ufficiale.</p></div>
+      <div id="s-chains"></div>
+      <p class="err" id="s-error" role="alert" hidden></p>
+      <div class="two"><button type="button" class="btn" id="s-reset">Ripristina</button><button type="submit" class="btn accent" id="s-save">Salva</button></div>
+      <p class="o-note" id="s-origin"></p>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <span class="toast-ic" aria-hidden="true"><svg class="ic sm"><use href="#i-check"/></svg></span>
+  <span><b id="toast-t"></b><small id="toast-s"></small></span>
+</div>
+</body>
+</html>

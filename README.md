@@ -10,7 +10,7 @@ Chi propone firma gratis e paga lo 0,30% solo se l'offerta viene eseguita; chi a
 | `packages/contracts` | fixture SwapERC20 (bytecode verificato), script di deploy, test fee e deploy |
 | `packages/book-server` | book server (Node, viem, `node:sqlite` WAL) |
 | `packages/client` | `taker`, `protect`, `wallet-protection` |
-| `apps/web` | app (fase 5) |
+| `apps/web` | app web statica (Vite, TypeScript senza framework): `apps/web/README.md` |
 | `tools/verify-source` | ricompila SwapERC20 dal tag e confronta il bytecode |
 | `tools/testkit` | fork di mainnet con anvil a blocco fisso, wallet casuali, saldi di test, runner delle suite |
 | `docs/reference` | materiale di partenza: prototipo `mini-exchange.html`, README originale |
