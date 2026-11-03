@@ -28,7 +28,7 @@ In CI servirà un RPC archivio a pagamento come secret (fase 7).
 
 | Punto | Decisione | Stato |
 |---|---|---|
-| A-01 Wrapper | tolto da deploy e `/config`; `Wrapper.json` resta come riferimento; D1–D4 invariati; test D5 e S1 | fatto (fase 1) |
+| A-01 Wrapper | tolto da deploy e `/config`; `Wrapper.json` (v5.0.0) rimosso col cambio di riferimento (D-40); D1–D4 invariati; test D5 e S1 | fatto (fase 1) |
 | A-02 `invalid_signer` dopo `revoke()` | terminale nel book; avviso "questa offerta può ancora essere eseguita: annullala" e annullamento protetto nell'app | server e test fatti (fase 1, S3–S6); app in fase 5 |
 | A-03 dipendenze | runtime solo `viem`; schema, log JSON e Prometheus scritti in casa con test; `zod` al massimo come devDependency; stop se lo schema supera 200 righe | fase 2 |
 | A-04 mercati di esempio | solo con `DEMO=true` esplicito, etichetta "Demo" sempre visibile, dati marcati come simulati; in produzione dalla whitelist di `/config`, stato vuoto se vuota | fase 5 |
@@ -239,3 +239,44 @@ prototipo.
   `authorize` revocata e poi ripristinata sul fork). Si può aggiungere in Fase 6.
 - **MEV nel browser**: con un wallet del browser l'invio passa sempre dal wallet (`createSubmitter` in modalità wallet). La riga MEV mostra lo
   stato reale di quel wallet (W3b: "Mempool pubblica" per un wallet sconosciuto, con il link "Attivala" alla guida).
+
+## Cambio del contratto di riferimento
+
+### D-40 · Riferimento = tag v4.3 (6ad0137), identico al deploy AirSwap "V5.0" — D (richiesto)
+Il sorgente di riferimento passa da v5.0.0 (`28156e5`) a **v4.3** (`6ad0137fa62ab2bd9eead257b77b8f77962d0bf3`, SwapERC20.sol
+SHA-256 `4103d213…3a36`), stesse impostazioni (solc 0.8.23, 999999 run, paris, solady 0.0.173). Motivo: è il codice che AirSwap ha
+deployato come "V5.0" ed è coperto dall'audit PeckShield "AirSwap V4.3".
+
+Confronto con `eth_getCode` di `0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46` (verify-source passo 7, `reports/verify-source.json`):
+
+| Chain | RPC | Runtime | Escluso metadata | Metadata | Immutabili lette | sha256 del codice on-chain |
+|---|---|---|---|---|---|---|
+| Ethereum (1) | eth.drpc.org | 11 264 byte | **identico** | identico | `DOMAIN_CHAIN_ID` = 1, `DOMAIN_SEPARATOR` = `0xaabfe942…1d9d` | `58c22fde…7be8` |
+| Base (8453) | mainnet.base.org | 11 264 byte | **identico** | identico | `DOMAIN_CHAIN_ID` = 8453, `DOMAIN_SEPARATOR` = `0x15c1a531…527c` | `dfbbf66e…ec40` |
+
+Le immutabili vengono mascherate nel confronto (posizioni da `immutableReferences` di solc) e poi controllate: i due
+`DOMAIN_SEPARATOR` coincidono con keccak(EIP712Domain, `SWAP_ERC20`, `4.3`, chainId, indirizzo) ricalcolato a parte. Sourcify:
+`exact_match` di creazione e runtime su entrambe le chain (verificato rispettivamente l'8 agosto 2024 e il 9 luglio 2026).
+Fixture ricompilato: 12 123 byte, sha256 `45dffc57…6109`. Fixture v5.0.0 e `Wrapper.json` rimossi; differenze in `docs/AUDIT-DIFF.md`.
+
+### D-41 · Audit PeckShield V4.3 e riserva — da notare
+Report #2024-047 (23 aprile 2024, `docs/audits/`, SHA-256 `d1ccb9b3…03e2`): commit esaminato `bcd4c48`, commit dopo le correzioni
+`27b60da`. Accettato `27b60da` come riferimento auditato: dal sorgente deployato differisce **solo** per `version = "4.2"` → `"4.3"`
+nel dominio EIP-712 (più commenti); i sei file solady importati sono identici tra 0.0.172 e 0.0.173.
+Rilievi: PVE-001 (Low) e PVE-002 (Informational) su Staking, che il progetto non usa (stakingToken = 0); PVE-003 (Informational)
+su `check()`, risolto in `bcd4c48`. Nota: PVE-002 è "Resolved" nella tabella ma "confirmed" nel dettaglio.
+**Riserva:** il passaggio OpenZeppelin → solady (#1293) sta tra il commit esaminato e quello post-correzioni; il report indica
+`27b60da` come commit finale ma non dice se quel cambio è stato riesaminato.
+
+### D-42 · Nomi degli errori e `check()` della v4.3 — D
+`InvalidFee`, `InvalidFeeLight`, `InvalidFeeWallet`, `InvalidStaking`, `ChainIdChanged`; `check()` con `MAX_ERROR_COUNT = 8`.
+`SignatureInvalid` e `NonceAlreadyUsed` si escludono, quindi il caso peggiore riempie 7 slot su 8 (test
+`test_checkWorstCaseSevenErrorsInEightSlots`). Il client e il book server non decodificano gli errori di parametro e leggono
+`check()` come array dinamico: nessuna modifica di logica. `ChainIdChanged` nel client ricade su `unknown`, ma non può presentarsi:
+il client legge sempre la chain del contratto configurato.
+
+### D-43 · `swapLight` della v4.3 non controlla la chain — da notare
+In v4.3 solo `swap`/`swapAnySender` passano da `_check` (che reverte con `ChainIdChanged`); `swapLight` no, e il
+`DOMAIN_SEPARATOR` è fisso: dopo uno split della chain un ordine `swapLight` firmato sulla chain originale resterebbe
+eseguibile sull'altra. FONDACO non firma né esegue ordini `swapLight` (senderWallet = 0, `swapAnySender`). Fissato dal test
+`test_swapLightIgnoresChainId`. Non è tra i rilievi dell'audit.

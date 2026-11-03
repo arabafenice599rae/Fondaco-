@@ -2,6 +2,37 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Riferimento v4.3] — Cambio del contratto di riferimento — 2026-11-04
+
+### Modificato
+- Contratto di riferimento: da tag `v5.0.0` (`28156e5`) a tag **`v4.3`** (`6ad0137`, SwapERC20.sol SHA-256 `4103d213…3a36`), il
+  sorgente deployato da AirSwap come "V5.0" a `0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46`. Stesse impostazioni (0.8.23, 999999, paris).
+- Fixture ricompilato: 12 123 byte, sha256 `45dffc57…6109`; `abi.ts` rigenerato. Fixture v5.0.0 e `Wrapper.json` (v5.0.0) rimossi.
+- Riferimenti a v5.0.0 come versione di riferimento rimossi da codice, commenti e documentazione (restano nella storia e in
+  `docs/AUDIT-DIFF.md`).
+
+### Aggiunto
+- `verify-source` passo 7: runtime ricompilato contro `eth_getCode` su Ethereum e Base (metadata esclusa, immutabili mascherate e
+  poi controllate): **identico, metadata compresa** (D-40). Opzione `--write-fixture`; `BASE_RPC_URL` in `.env.example`; test V4.
+- `docs/audits/`: report PeckShield #2024-047 "AirSwap V4.3" (23 aprile 2024) con SHA-256, diff `27b60da→6ad0137` e `bcd4c48→6ad0137`.
+  Sintesi e riserva sul passaggio a solady nel README (D-41).
+- Foundry: `ChainId.t.sol` (swap su un'altra chain → `ChainIdChanged`; `check()` lo riporta; caso peggiore 7 errori su 8 slot;
+  `swapLight` non controlla la chain, D-43) ed `Errors.t.sol` (`InvalidFee`, `InvalidFeeLight`, `InvalidFeeWallet`,
+  `InvalidStaking` da costruttore e setter).
+- `docs/AUDIT-DIFF.md`: differenze e diff completo v4.3 ↔ v5.0.0.
+
+### Risultati
+`node tools/testkit/run-suites.mjs`: **30 suite, 313 controlli, tutti verdi**, nessuna modifica di logica nel codice del progetto.
+
+| Suite | Esito | Note |
+|---|---|---|
+| verify-source | 4/4 | V1 fixture v4.3; V2 shanghai fallisce; V3 fixture alterato fallisce; **V4 runtime = deploy AirSwap su Ethereum e Base** |
+| foundry | 29/29 | +7: `ChainId.t.sol` (5), `Errors.t.sol` (2); invarianti 1–3 invariate |
+| fee, addresses, deploy | 2/2, 5/5, 8/8 | sul fixture v4.3 |
+| book server (13 suite) | tutte ok | e2e 21, engine 13, signers 8, metrics 7, trades 10, faults 12, reorg 5, pinned-read 1, differential 3, event-order 2, http-security 11, config 9, migrations 7 |
+| client (6 suite) | tutte ok | taker 13, protect 5, taker-advanced 12, wallet 5, client-guards 9, client-smoke 4 |
+| web | 35/35, 5/5, 18/18 | web-model, web-keys, web-e2e |
+
 ## [Fase 5] — App web — 2026-11-03
 
 ### Aggiunto

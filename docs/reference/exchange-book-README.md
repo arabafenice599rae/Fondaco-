@@ -1,6 +1,6 @@
 # exchange-book
 
-Book off-chain per un mini exchange **P2P non-custodial** basato su **AirSwap SwapERC20 v5.0.0** (codice AirSwap invariato dal tag v5.0.0, nessun codice Solidity proprio; prima della produzione serve un audit di questa versione).
+Book off-chain per un mini exchange **P2P non-custodial** basato su **AirSwap SwapERC20 v4.3** (codice AirSwap invariato dal tag v4.3, lo stesso deployato da AirSwap come "V5.0"; nessun codice Solidity proprio; audit PeckShield "AirSwap V4.3", vedi README).
 Chi propone firma l'ordine senza gas e paga la fee di piattaforma; chi accetta paga solo il prezzo e il gas.
 
 - Una sola dipendenza: `viem`. Database: `node:sqlite` integrato in Node ≥ 22.13 (nessun modulo nativo).
@@ -96,11 +96,11 @@ npm test            # 19 controlli end-to-end
 npm run test:deploy # 4 controlli sullo script di deploy
 ```
 
-I bytecode in `test/fixtures/` sono compilati dal tag `v5.0.0` di `airswap-protocols` (solc 0.8.23, optimizer 999999 run, le stesse impostazioni del repository).
+I bytecode in `test/fixtures/` sono compilati dal tag `v4.3` di `airswap-protocols` (solc 0.8.23, optimizer 999999 run, le stesse impostazioni del repository).
 
 ## Rischi residui da gestire
 
-- Nessun report di audit pubblico copre esattamente SwapERC20 v5.0.0: conviene una review del diff rispetto alla v4 auditata.
+- L'audit PeckShield "AirSwap V4.3" copre `bcd4c48`/`27b60da`; dal deploy differisce solo la versione del dominio. Riserva: il passaggio a solady (#1293) sta tra i due commit (vedi README).
 - Togliere un ordine dal book non lo annulla: la firma resta valida fino alla scadenza o a `cancel` on-chain (per questo le scadenze sono brevi).
 - Phishing tramite firme: mostrare l'ordine in chiaro prima della firma e proporre approvazioni limitate.
 - L'operatore vede gli ordini per primo: dichiarare o vietare l'esecuzione in proprio.
