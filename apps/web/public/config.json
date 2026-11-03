@@ -1,0 +1,28 @@
+{
+  "$comment": "Initial configuration shipped with the build (editable at deploy time). The user can override the book URL, the RPC and, with an explicit warning, the contract, from Impostazioni. Tokens: only those listed here AND on the book are shown (a book cannot add tokens). swap null = not deployed yet on that chain: trading disabled with an explicit notice.",
+  "book": "",
+  "defaultChain": 1,
+  "chains": {
+    "1": {
+      "name": "Ethereum",
+      "rpc": "",
+      "swap": null,
+      "explorer": "https://etherscan.io",
+      "tokens": {
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": { "symbol": "USDC", "decimals": 6, "name": "USD Coin", "stable": true },
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7": { "symbol": "USDT", "decimals": 6, "name": "Tether USD", "stable": true },
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": { "symbol": "WETH", "decimals": 18, "name": "Wrapped Ether" }
+      }
+    },
+    "8453": {
+      "name": "Base",
+      "rpc": "",
+      "swap": null,
+      "explorer": "https://basescan.org",
+      "tokens": {
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": { "symbol": "USDC", "decimals": 6, "name": "USD Coin", "stable": true },
+        "0x4200000000000000000000000000000000000006": { "symbol": "WETH", "decimals": 18, "name": "Wrapped Ether" }
+      }
+    }
+  }
+}

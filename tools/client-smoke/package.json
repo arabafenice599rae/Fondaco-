@@ -1,0 +1,9 @@
+{
+  "name": "@fondaco/client-smoke",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Installs the packed @fondaco/client in a minimal external project (npm, outside the workspace) and uses it from JS and strict TS",
+  "scripts": { "smoke": "node smoke.mjs" },
+  "license": "MIT"
+}

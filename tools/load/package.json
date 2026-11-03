@@ -1,0 +1,10 @@
+{
+  "name": "@fondaco/load",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Load test of the book server: 10 000 orders from 1 000 signers on a mainnet fork",
+  "scripts": { "load": "node load-test.mjs" },
+  "dependencies": { "@fondaco/book-server": "workspace:*", "@fondaco/contracts": "workspace:*", "@fondaco/testkit": "workspace:*", "viem": "2.57.13" },
+  "license": "MIT"
+}

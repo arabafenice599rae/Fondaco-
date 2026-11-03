@@ -1,0 +1,37 @@
+{
+  "name": "@fondaco/book-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Off-chain order book for AirSwap SwapERC20 v4.3 (non-custodial P2P, proposer-paid fee)",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node --no-warnings=ExperimentalWarning dist/index.js config.json",
+    "docs:config": "node scripts/gen-config-doc.mjs",
+    "check:config-doc": "node scripts/gen-config-doc.mjs --check",
+    "test:e2e": "node --no-warnings=ExperimentalWarning test/e2e.js",
+    "test:engine": "node --no-warnings=ExperimentalWarning test/engine.test.js",
+    "test:signers": "node --no-warnings=ExperimentalWarning test/signers.test.js"
+  },
+  "dependencies": {
+    "@fondaco/contracts": "workspace:*",
+    "viem": "2.57.13"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "license": "MIT",
+  "types": "dist/index.d.ts",
+  "devDependencies": {
+    "fast-check": "4.10.2",
+    "@fondaco/testkit": "workspace:*"
+  }
+}

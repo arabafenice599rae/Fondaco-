@@ -1,0 +1,19 @@
+node_modules/
+.env
+.env.*
+!.env.example
+config.json
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.cache/
+reports/
+out/
+cache/
+dist/
+coverage/
+packages/contracts/foundry/out/
+packages/contracts/foundry/cache/
+dist-demo/
+# the web app ships its public, key-free initial configuration
+!apps/web/public/config.json

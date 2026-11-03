@@ -1,0 +1,46 @@
+/* Additions to the prototype's stylesheet, for what only the real app has: banners, settings, empty states. Same tokens. */
+
+/* the Demo label must stay visible at every width (the prototype hides it on phones) */
+#demo-badge:not([hidden]) { display: inline-block !important; color: var(--warn); border-color: var(--warn-line) }
+
+.banners { display: flex; flex-direction: column; gap: var(--s2); max-width: 1440px; margin: var(--s3) auto 0; padding: 0 var(--s4) }
+.banners:empty { display: none }
+.banner { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s3) var(--s4); border-radius: var(--r-lg); border: 1px solid var(--line-2); background: var(--box); font-size: 14px; color: var(--fg-2) }
+.banner .ic { flex: none; margin-top: 2px }
+.banner b { display: block; color: var(--fg); font-weight: 650; margin-bottom: 2px }
+.banner.warn { border-color: var(--warn-line); background: var(--warn-soft) }
+.banner.warn .ic { color: var(--warn) }
+.banner.danger { border-color: rgba(255,110,110,.42); background: rgba(255,90,90,.08) }
+.banner.danger .ic { color: #FF8A8A }
+.banner.info .ic { color: var(--accent-ink) }
+
+.ch-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; pointer-events: none }
+
+.field { width: 100%; min-height: 44px; padding: 0 var(--s3); border-radius: var(--r); border: 1px solid var(--line-2); background: var(--bg); color: var(--fg); font: inherit; font-size: 14px }
+.field:focus { outline: none; border-color: var(--accent-line) }
+.field:disabled { opacity: .5 }
+.field.mono { font-family: var(--f-mono); font-size: 13px }
+.settings { display: flex; flex-direction: column; gap: var(--s3) }
+.settings .box { display: flex; flex-direction: column; gap: var(--s2) }
+.s-contract { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-size: 13px; color: var(--muted) }
+.s-addr { color: var(--fg-2); word-break: break-all; font-size: 12px }
+.s-mod { color: var(--warn); font-weight: 600 }
+.link { border: 0; background: none; color: var(--accent-ink); font: inherit; font-weight: 600; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px }
+.s-danger { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3); border-radius: var(--r); border: 1px solid var(--warn-line); background: var(--warn-soft) }
+.s-danger[hidden] { display: none }
+.warn-t { font-size: 13px; color: var(--fg-2) }
+.chk { display: flex; gap: var(--s2); align-items: flex-start; font-size: 13px; color: var(--fg-2) }
+.chk input { margin-top: 3px; accent-color: var(--accent) }
+.settings .err { padding: 0 }
+
+.fatal { margin: var(--s6) auto; max-width: 640px; padding: var(--s4); border: 1px solid var(--warn-line); border-radius: var(--r-lg); background: var(--warn-soft); color: var(--fg) }
+.fatal pre { white-space: pre-wrap; font-size: 13px; margin-top: var(--s2) }
+
+.w-settings { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2) }
+/* phones: the header has no room for a fourth element; Impostazioni is reached from the Wallet sheet, and the Demo label
+   becomes a tag under the logo (still always visible) */
+@media (max-width: 520px) {
+  #set-chip { display: none }
+  .brand { position: relative }
+  #demo-badge:not([hidden]) { position: absolute; left: 0; top: calc(100% + 4px); z-index: 2; background: var(--bg) }
+}

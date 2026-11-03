@@ -1,0 +1,1959 @@
+<title>FONDACO</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: ≥1180px three columns (Mercati 272 · coppia 1fr · scheda 380); 860–1179 two columns (coppia · scheda, mercati in a sheet);
+   <860 one column with dock (Scambia · Mercati · Offerte). Every card: 8px frame, rows inset 16px → text 24px from the card edge. */
+:root {
+  color-scheme: dark;
+  --bg: #08090D; --card: #111319; --box: #171A22; --box-hi: #1F232D;
+  --line: rgba(255,255,255,.06); --line-2: rgba(255,255,255,.10); --line-3: rgba(255,255,255,.17);
+  --fg: #EEF0F5; --fg-2: #C6CAD5; --muted: #8C92A2; --faint: #5F6575;
+  --accent: #4A67F7; --accent-ink: #A3B4FF; --accent-soft: rgba(74,103,247,.15); --accent-line: rgba(110,135,255,.55);
+  --ask: #F4AE52; --ask-soft: rgba(244,174,82,.11); --bid: #93A7FF; --bid-soft: rgba(120,145,255,.13);
+  --up: #A3B4FF; --down: #F4AE52;
+  --warn: #F6B455; --warn-soft: rgba(246,180,85,.09); --warn-line: rgba(246,180,85,.32);
+  --scrim: rgba(3,4,7,.62);
+  --grad: linear-gradient(180deg, #4A67F7 0%, #3149E2 100%);
+  --f-ui: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.2,.8,.2,1); --spring: cubic-bezier(.16,1,.3,1);
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px;
+  --pad: 16px;
+  --r-sm: 10px; --r: 12px; --r-lg: 16px; --r-xl: 24px;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 16px; line-height: 1.45; font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg) }
+button, input, output { font: inherit; color: inherit }
+button { cursor: pointer }
+button[disabled] { cursor: not-allowed }
+:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px }
+h1, h2, h3, p, dl, dd { margin: 0 }
+.ic { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round }
+.ic.sm { width: 16px; height: 16px } .ic.lg { width: 22px; height: 22px }
+.muted { color: var(--muted) }
+.mono { font-family: var(--f-mono); font-weight: 500; font-size: 13px }
+.up { color: var(--up) } .down { color: var(--down) }
+.ask-t { color: var(--ask) } .bid-t { color: var(--bid) }
+
+.ambient { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden }
+.ambient::before { content: ""; position: absolute; left: 55%; top: -40vh; width: 130vw; height: 85vh; transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(74,103,247,.2), transparent); animation: drift 24s ease-in-out infinite alternate }
+@keyframes drift { to { transform: translateX(-44%) translateY(5vh) scale(1.08) } }
+.app { position: relative; z-index: 1 }
+.shell { max-width: 1400px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+
+/* header */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: rgba(8,9,13,.74); -webkit-backdrop-filter: blur(16px) saturate(160%); backdrop-filter: blur(16px) saturate(160%); border-bottom: 1px solid var(--line) }
+.top-in { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 60px }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0 }
+.logo { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(140deg, #6E88FF, #3149E2); display: grid; place-items: center; color: #FFFFFF; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 8px 20px -8px rgba(74,103,247,.8) }
+.brand-name { font-weight: 650; font-size: 16px; letter-spacing: -.01em; white-space: nowrap }
+.demo { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 6px }
+.hchips { display: flex; gap: var(--s2); align-items: center }
+.hchip { height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255,255,255,.03); display: inline-flex; align-items: center; gap: var(--s2); font-size: 14px; font-weight: 550; color: var(--fg-2); white-space: nowrap }
+.hchip .net { color: var(--accent-ink) }
+.avatar { width: 24px; height: 24px; border-radius: 50%; margin-left: -6px; background: conic-gradient(from 210deg, #4A67F7, #A3B4FF, #F4AE52, #4A67F7) }
+
+/* grid */
+main.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); padding-block: var(--s4) calc(112px + env(safe-area-inset-bottom, 0px)) }
+.area { min-width: 0; width: 100%; max-width: 560px; margin-inline: auto }
+.center { display: flex; flex-direction: column; gap: var(--s4) }
+.enter { animation: enter .42s var(--spring) both }
+@keyframes enter { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@media (min-width: 860px) {
+  main.layout { grid-template-columns: minmax(0, 1fr) 380px; gap: var(--s5); align-items: start; padding-block: var(--s6) var(--s8) }
+  .area { max-width: none; margin: 0 }
+  .center { grid-column: 1; grid-row: 1 } .ticket { grid-column: 2; grid-row: 1 }
+}
+@media (min-width: 1180px) {
+  main.layout { grid-template-columns: 296px minmax(0, 1fr) 380px }
+  .ticket { position: sticky; top: 84px }
+  .rail { grid-column: 1; grid-row: 1 } .center { grid-column: 2 } .ticket { grid-column: 3 }
+}
+
+/* cards */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-xl); padding: var(--s2); display: flex; flex-direction: column; gap: var(--s2) }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--pad) 0 }
+.sec-head h2, .sec-title { font-size: 16px; line-height: 22px; font-weight: 650; letter-spacing: -.01em }
+.sec-head p { font-size: 13px; color: var(--muted) }
+.screen-title { font-size: 24px; line-height: 30px; font-weight: 650; letter-spacing: -.02em }
+
+/* segmented */
+.seg { --i: 0; --seg-r: 16px; position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); padding: var(--s1); border-radius: var(--seg-r); background: rgba(255,255,255,.045) }
+.box .seg { --seg-r: 12px }
+.seg::before { content: ""; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: calc(var(--seg-r) - 4px); background: var(--box-hi);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 6px 16px -8px rgba(0,0,0,.9); transform: translateX(calc(100% * var(--i))); transition: transform .45s var(--spring) }
+.seg button { position: relative; z-index: 1; min-height: 40px; border: 0; border-radius: calc(var(--seg-r) - 4px); background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; transition: color .2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px }
+.seg button:hover { color: var(--fg-2) }
+.seg button[aria-pressed="true"] { color: var(--fg) }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 var(--s2) }
+.chip { position: relative; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; transition: .2s }
+.chip::after { content: ""; position: absolute; inset: -6px -2px }
+.chip:hover { color: var(--fg-2); border-color: var(--line-3) }
+.chip[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); border-color: var(--accent-line) }
+
+/* coins */
+.coin { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #FFFFFF; font-size: 12px; font-weight: 700;
+  background: linear-gradient(140deg, var(--c1), var(--c2)); box-shadow: inset 0 1px 0 rgba(255,255,255,.28) }
+.coins2 { display: inline-flex; flex: none }
+.coins2 .coin + .coin { margin-left: -9px; box-shadow: 0 0 0 2px var(--card), inset 0 1px 0 rgba(255,255,255,.28) }
+
+/* markets rail */
+.rail { gap: var(--s3) }
+.rail-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); padding: var(--s3) var(--pad) 0 }
+.search { display: flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 var(--pad); border-radius: var(--r-lg); background: var(--box); color: var(--muted); transition: box-shadow .2s }
+.search:focus-within { box-shadow: inset 0 0 0 1px var(--line-3) }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 15px; color: var(--fg) }
+.search input::placeholder { color: var(--faint) }
+.search input::-webkit-search-cancel-button { filter: invert(.6) }
+.mlist { display: flex; flex-direction: column; gap: 2px }
+.mrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s3); width: 100%; min-height: 60px; padding: var(--s2) var(--s3);
+  border: 0; border-radius: var(--r-lg); background: transparent; text-align: left; transition: background .15s }
+.mrow:hover { background: rgba(255,255,255,.04) }
+.mrow.sel { background: var(--box); box-shadow: inset 0 0 0 1px var(--line-2) }
+.mrow.sel .coins2 .coin + .coin { box-shadow: 0 0 0 2px var(--box), inset 0 1px 0 rgba(255,255,255,.28) }
+.mr-name { min-width: 0 }
+.mr-name b { display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.mr-name b span { color: var(--muted); font-weight: 500 }
+.mr-name small, .mr-p small { display: block; font-size: 12px }
+.mr-name small { color: var(--muted) }
+.mr-p { text-align: right }
+.mr-p b { display: block; font-size: 15px; font-weight: 600; transition: color .6s }
+.mr-p small { font-weight: 600 }
+.mrow.tick-up .mr-p b { color: var(--up); transition: none } .mrow.tick-down .mr-p b { color: var(--down); transition: none }
+.empty { font-size: 14px; color: var(--muted); text-align: center; padding: var(--s6) var(--pad) }
+
+/* pair */
+.back { align-self: flex-start; min-height: 44px; padding: 0 12px 0 4px; border: 0; border-radius: var(--r); background: transparent; color: var(--fg-2); display: inline-flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 600 }
+.back:hover { color: var(--fg) }
+.ph { display: flex; flex-direction: column; gap: var(--s4); padding-top: var(--s1) }
+.ph-row { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); padding: 0 var(--s2) }
+.pair-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 12px 6px 6px; border-radius: var(--r-lg); border: 1px solid var(--line-2); background: rgba(255,255,255,.03); text-align: left; transition: background .2s, border-color .2s; min-width: 0 }
+.pair-btn:hover { background: rgba(255,255,255,.07); border-color: var(--line-3) }
+.pair-btn b { display: block; font-size: 16px; font-weight: 650; white-space: nowrap }
+.pair-btn small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap }
+.pair-btn .chev { color: var(--muted) }
+.live { display: inline-flex; align-items: center; gap: var(--s2); height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255,255,255,.03); font-size: 12px; font-weight: 600; color: var(--fg-2); flex: none }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-ink); animation: pulse 2s ease-out infinite }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(163,180,255,.7) } 100% { box-shadow: 0 0 0 8px rgba(163,180,255,0) } }
+.ph-in { padding: 0 var(--pad); display: flex; flex-direction: column; gap: var(--s4) }
+.ph-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s2) var(--s3) }
+.big { font-size: 40px; line-height: 46px; font-weight: 600; letter-spacing: -.03em }
+.ph-price .u { font-size: 16px; color: var(--muted); margin-left: calc(var(--s1) * -1) }
+.chg { font-size: 13px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap }
+.chg.up { color: var(--up); background: var(--accent-soft) } .chg.down { color: var(--down); background: var(--ask-soft) }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3) }
+.stats dt { font-size: 12px; color: var(--muted) }
+.stats dd { font-size: 15px; font-weight: 600; margin-top: 2px }
+.depth { display: flex; flex-direction: column; gap: var(--s2) }
+.depth-bar { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden }
+.depth-bar span { flex: 1 1 0; transition: flex-grow .7s var(--spring) }
+.da { background: var(--ask) } .db { background: var(--bid) }
+.depth-l { display: flex; justify-content: space-between; gap: var(--s3); font-size: 13px; color: var(--muted) }
+.depth-l b { font-weight: 600 }
+.ph-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) }
+
+/* book */
+.book2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--s2) var(--s3) }
+.bcol-t { font-size: 12px; font-weight: 600; padding: var(--s3) var(--pad) var(--s2) }
+.bh, .trh { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 var(--pad) var(--s1); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted) }
+.bh span:not(:first-child), .trh span:not(:first-child) { text-align: right }
+.lvls { display: flex; flex-direction: column; gap: 2px }
+.lvl { position: relative; width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; min-height: 38px; padding: 0 var(--pad); border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--fg); font-size: 14px; font-weight: 500; text-align: left; overflow: hidden; transition: background .15s }
+.lvl:hover { background: rgba(255,255,255,.045) }
+.lvl > span:not(.lvl-bar) { position: relative }
+.lvl .r { text-align: right } .lvl .t { color: var(--muted) }
+.lvl-bar { position: absolute; top: 4px; bottom: 4px; right: 0; border-radius: 8px; transition: width .5s var(--spring) }
+.lvl.ask .lvl-bar { background: var(--ask-soft) } .lvl.bid .lvl-bar { background: var(--bid-soft) }
+.lvl.ask .p { color: var(--ask); font-weight: 600 } .lvl.bid .p { color: var(--bid); font-weight: 600 }
+.flash { animation: flash 1.2s var(--ease) }
+@keyframes flash { 0% { background: rgba(255,255,255,.13) } 100% { background: transparent } }
+.you-tag { margin-left: 6px; font-size: 10px; font-weight: 700; letter-spacing: .04em; color: #FFFFFF; background: var(--accent); border-radius: 5px; padding: 1px 5px; vertical-align: 1px }
+.book-foot { font-size: 13px; color: var(--muted); padding: var(--s2) var(--pad) var(--s2) }
+
+/* trades */
+.trades { display: flex; flex-direction: column }
+.tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; min-height: 36px; padding: 0 var(--pad); font-size: 14px; border-radius: var(--r-sm) }
+.tr .r { text-align: right } .tr .when { color: var(--muted); text-align: right }
+.tr .p { font-weight: 600 }
+
+/* ticket */
+.trade-card { box-shadow: 0 40px 120px -60px rgba(74,103,247,.45), 0 30px 60px -30px rgba(0,0,0,.85) }
+.trade-card.ping { animation: ping .9s var(--ease) }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(110,135,255,.55), 0 30px 60px -30px rgba(0,0,0,.85) } 100% { box-shadow: 0 0 0 14px rgba(110,135,255,0), 0 30px 60px -30px rgba(0,0,0,.85) } }
+.mode { display: flex; flex-direction: column; gap: var(--s2) }
+.pair { display: flex; flex-direction: column; gap: var(--s1) }
+.box { background: var(--box); border-radius: var(--r-lg); padding: var(--s4) var(--pad); display: flex; flex-direction: column; gap: var(--s3); transition: box-shadow .2s }
+.box:focus-within { box-shadow: inset 0 0 0 1px var(--line-3) }
+.box-top { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); min-height: 28px; font-size: 13px; color: var(--muted) }
+.box-top label, .box-top > span:first-child { font-weight: 500 }
+.box-main { display: flex; align-items: center; gap: var(--s3); margin-block: calc(var(--s1) * -1) }
+.amount { display: block; flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 0; font-size: 40px; line-height: 48px; font-weight: 500; letter-spacing: -.035em;
+  color: var(--fg); caret-color: var(--accent-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: font-size .2s var(--ease) }
+.amount.fit-m { font-size: 32px } .amount.fit-s { font-size: 26px }
+.amount::placeholder { color: var(--faint) }
+.amount .dec { color: var(--muted) }
+.box-foot { display: flex; justify-content: space-between; gap: var(--s2); font-size: 13px; color: var(--muted) }
+.box-foot b { color: var(--fg-2); font-weight: 550 }
+.row-box { flex-direction: row; align-items: center; justify-content: space-between; padding-block: var(--s3); font-size: 14px }
+.tag { font-size: 12px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 3px 9px; white-space: nowrap }
+.tok { flex: none; height: 44px; display: inline-flex; align-items: center; gap: var(--s2); padding: 0 10px 0 6px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255,255,255,.05); font-size: 16px; font-weight: 600; transition: background .2s, border-color .2s, transform .15s }
+.tok:hover { background: rgba(255,255,255,.09); border-color: var(--line-3) }
+.tok:active { transform: scale(.97) }
+.tok .chev { color: var(--muted) }
+.quick { display: flex; gap: 6px }
+.qb { position: relative; height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: rgba(255,255,255,.05); color: var(--muted); font-size: 12px; font-weight: 600; transition: color .2s, background .2s }
+.qb::after { content: ""; position: absolute; inset: -8px -3px }
+.qb:hover { color: var(--fg); background: rgba(255,255,255,.1) }
+.flip-wrap { position: relative; height: 0; z-index: 3 }
+.flip { --rot: 0deg; position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%) rotate(var(--rot)); width: 46px; height: 46px; padding: 0; border-radius: 14px; border: 4px solid var(--card); background: var(--box-hi); color: var(--fg-2); display: grid; place-items: center; transition: transform .55s var(--spring), color .2s, background .2s }
+.flip:hover { color: var(--fg); background: #272C38 }
+.sum { display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: 48px; padding: 0 var(--pad); border: 0; border-radius: var(--r); background: transparent; color: var(--fg-2); font-size: 14px; font-weight: 500; text-align: left; transition: background .2s }
+.sum:hover { background: rgba(255,255,255,.03) }
+.sum .rate { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.zero { font-size: 12px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 4px 10px; white-space: nowrap }
+.sum .chev { color: var(--muted); transition: transform .35s var(--spring) }
+.sum[aria-expanded="true"] .chev { transform: rotate(180deg) }
+.details { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .4s var(--spring) }
+.details.open { grid-template-rows: 1fr }
+.details > div { overflow: hidden; min-height: 0 }
+.details-in { padding: 0 var(--pad) var(--s3); display: flex; flex-direction: column; gap: var(--s3) }
+.legs { display: flex; gap: 3px; height: 6px }
+.legs span { border-radius: 3px; min-width: 8px }
+.legs-t { font-size: 13px; color: var(--muted) }
+.kvs { display: flex; flex-direction: column; gap: var(--s3) }
+.kv { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s4); font-size: 14px }
+.kv dt { color: var(--muted) } .kv dd { color: var(--fg); font-weight: 550; text-align: right } .kv dd.accent { color: var(--accent-ink) }
+.callout { display: flex; align-items: center; gap: var(--s3); width: 100%; padding: var(--s3) var(--pad); border-radius: var(--r-lg); border: 1px solid var(--warn-line); background: var(--warn-soft); color: var(--warn); text-align: left; font-size: 13px; transition: background .2s }
+.callout:hover { background: rgba(246,180,85,.14) }
+.callout > span { flex: 1; min-width: 0 } .callout b { display: block; font-size: 14px; font-weight: 600 }
+.cta { width: 100%; min-height: 56px; border: 0; border-radius: var(--r-lg); background: var(--grad); color: #FFFFFF; font-size: 17px; font-weight: 600; letter-spacing: -.005em;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 12px 32px -14px rgba(74,103,247,.9); transition: transform .15s var(--ease), filter .2s, box-shadow .25s }
+.cta:hover { filter: brightness(1.1) } .cta:active { transform: scale(.985) }
+.cta[disabled] { background: var(--box-hi); color: var(--muted); box-shadow: none; filter: none; transform: none }
+.cta-sub { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.18) }
+.cta[disabled] .cta-sub { background: rgba(255,255,255,.06) }
+.btn { min-height: 44px; padding: 0 16px; border-radius: var(--r); border: 1px solid var(--line-2); background: rgba(255,255,255,.04); color: var(--fg); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); transition: background .2s, border-color .2s, transform .15s, filter .2s }
+.btn:hover { background: rgba(255,255,255,.08); border-color: var(--line-3) } .btn:active { transform: scale(.98) }
+.btn.accent { border: 0; background: var(--grad); color: #FFFFFF; box-shadow: inset 0 1px 0 rgba(255,255,255,.2) } .btn.accent:hover { filter: brightness(1.1) }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted) } .btn.ghost:hover { color: var(--fg); background: rgba(255,255,255,.04) }
+.btn.lg { min-height: 48px; font-size: 15px; border-radius: var(--r-lg) }
+.btn.block { width: 100% }
+.price-v { font-size: 15px; font-weight: 600; color: var(--fg) }
+.choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px }
+.choice { min-height: 58px; border-radius: var(--r); border: 1px solid var(--line-2); background: rgba(255,255,255,.025); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px; transition: border-color .2s, background .2s, transform .15s; min-width: 0 }
+.choice b { font-size: 14px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.choice small { font-size: 12px; color: var(--muted) }
+.choice:hover { border-color: var(--line-3) } .choice:active { transform: scale(.97) }
+.choice[aria-pressed="true"] { border-color: var(--accent-line); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line) }
+.choice[aria-pressed="true"] small { color: var(--accent-ink) }
+.custom { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 14px; border-radius: var(--r); background: rgba(255,255,255,.04); border: 1px solid var(--line-2); font-size: 14px; color: var(--muted) }
+.custom:focus-within { border-color: var(--accent-line) }
+.custom input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; text-align: right; font-size: 18px; font-weight: 600; color: var(--fg) }
+.custom span:last-child { color: var(--fg); font-weight: 600 }
+.meter { display: flex; flex-direction: column; gap: var(--s2) }
+.track { position: relative; height: 26px }
+.track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 2px; background: rgba(255,255,255,.07) }
+.tick { position: absolute; top: 50%; width: 3px; height: 12px; border-radius: 2px; transform: translate(-50%, -50%); background: var(--faint); transition: left .45s var(--spring), background .2s }
+.tick.ahead { background: var(--ask) }
+.you { position: absolute; top: 50%; left: 0; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3px solid #DCE3FF; transform: translate(-50%, -50%); box-shadow: 0 0 0 5px rgba(74,103,247,.22), 0 0 22px rgba(74,103,247,.7); transition: left .5s var(--spring) }
+.meter-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted) }
+.pos { font-size: 14px; font-weight: 600; color: var(--fg-2) } .pos.good { color: var(--accent-ink) } .pos.warn { color: var(--warn) }
+.hr { height: 1px; background: var(--line) }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 48px; cursor: pointer }
+.toggle b { display: block; font-size: 15px; font-weight: 600 } .toggle small { display: block; font-size: 13px; color: var(--muted) }
+.parts { display: flex; gap: 3px; margin-top: var(--s2); width: 132px } .parts span { flex: 1; height: 4px; border-radius: 2px; background: var(--accent) }
+.switch { appearance: none; -webkit-appearance: none; flex: none; width: 50px; height: 30px; margin: 0; border-radius: 15px; background: rgba(255,255,255,.12); position: relative; cursor: pointer; transition: background .25s }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 2px 6px rgba(0,0,0,.45); transition: transform .35s var(--spring) }
+.switch:checked { background: var(--accent) } .switch:checked::after { transform: translateX(20px) }
+.summary { padding: var(--s2) var(--pad) var(--s1); display: flex; flex-direction: column; gap: var(--s3) }
+.kv.big { align-items: center } .kv.big dd { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -.02em; color: var(--accent-ink) }
+.err { font-size: 13px; color: var(--warn); padding: 0 var(--pad) }
+.tag.ind { color: var(--warn); background: var(--warn-soft) }
+.fit-note { font-size: 13px; color: var(--muted); padding: 0 var(--pad) }
+.qline { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 0 var(--s1) }
+.qs { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; transition: color .3s, background .3s }
+.qs.ind { color: var(--warn); background: var(--warn-soft) } .qs.ok { color: var(--accent-ink); background: var(--accent-soft) }
+.olist { background: var(--box); border-radius: var(--r-lg); padding: var(--s1) var(--pad) }
+.orow { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); min-height: 42px; font-size: 13px; border-top: 1px solid var(--line) }
+.orow:first-child { border-top: 0 }
+.orow > span:first-child { color: var(--fg-2) }
+.os { font-weight: 600; color: var(--muted); text-align: right; display: inline-flex; align-items: center; gap: 6px }
+.os.ok { color: var(--accent-ink) } .os.bad { color: var(--warn) } .os.run { color: var(--fg) }
+.os .spin { width: 12px; height: 12px; border-width: 1.5px }
+.orow.gone > span:first-child { color: var(--faint); text-decoration: line-through }
+.demo-t { min-height: 40px; padding: 0 var(--s1) } .demo-t b { font-size: 13px } .demo-t small { font-size: 12px }
+.done-list { width: 100%; text-align: left; display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s2) }
+.done-list p { margin: 0; font-size: 13px; color: var(--muted); display: flex; gap: var(--s2) } .done-list .ic { color: var(--warn); margin-top: 1px }
+.done.none .done-ic { display: none }
+
+/* offers */
+.offers { display: flex; flex-direction: column; gap: var(--s2) }
+.offer { background: var(--box); border-radius: var(--r-lg); padding: var(--s4) var(--pad); display: flex; flex-direction: column; gap: var(--s3) }
+.offer.attn { box-shadow: inset 0 0 0 1px var(--warn-line) }
+.o-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3) }
+.o-title { font-size: 16px; font-weight: 600; letter-spacing: -.01em } .o-sub { font-size: 13px; color: var(--muted); margin-top: 2px }
+.o-mkt { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 6px }
+.status { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; flex: none }
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor }
+.status.ok { color: var(--accent-ink); background: var(--accent-soft) } .status.warn { color: var(--warn); background: var(--warn-soft) }
+.segbar { display: grid; gap: 4px } .segbar span { height: 6px; border-radius: 3px; background: rgba(255,255,255,.08) }
+.segbar .done { background: var(--accent) } .segbar .wait { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent-line) }
+.segbar .pause { background: repeating-linear-gradient(135deg, rgba(246,180,85,.6) 0 3px, transparent 3px 6px) }
+.o-meta { display: flex; justify-content: space-between; gap: var(--s3); font-size: 13px; color: var(--muted); margin-top: calc(var(--s1) * -1) }
+.o-note { font-size: 13px; color: var(--muted) }
+.hist { background: var(--box); border-radius: var(--r-lg); padding: var(--s1) var(--pad) }
+.hist-row { display: flex; justify-content: space-between; gap: var(--s3); padding: var(--s3) 0; font-size: 14px; border-top: 1px solid var(--line) }
+.hist-row:first-child { border-top: 0 } .hist-row span:last-child { color: var(--muted); text-align: right }
+.confirm-all { background: var(--box); border-radius: var(--r-lg); padding: var(--s4) var(--pad); display: flex; flex-direction: column; gap: var(--s3) }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) }
+.pbadge, .badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--warn); color: #1A1206; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center }
+
+/* dock */
+.dock { --i: 0; position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 25;
+  width: min(400px, calc(100% - 32px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 6px; border-radius: 22px;
+  background: rgba(22,25,33,.8); -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%); border: 1px solid var(--line-2); box-shadow: 0 24px 50px -20px rgba(0,0,0,.95) }
+.dock::before { content: ""; position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 3); border-radius: 16px; background: rgba(255,255,255,.08); transform: translateX(calc(100% * var(--i))); transition: transform .5s var(--spring) }
+.dock button { position: relative; z-index: 1; min-height: 54px; border: 0; border-radius: 16px; background: transparent; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; font-weight: 600; letter-spacing: .01em; transition: color .2s }
+.dock button[aria-current="page"] { color: var(--fg) }
+.dock .badge { position: absolute; top: 5px; left: calc(50% + 7px) }
+@media (min-width: 860px) { .dock { display: none } }
+
+/* sheets */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); display: flex; align-items: flex-end; justify-content: center; opacity: 0; transition: opacity .3s var(--ease) }
+.scrim.open { opacity: 1 }
+.sheet { width: 100%; max-width: 460px; max-height: calc(100% - 16px - env(safe-area-inset-top, 0px)); overflow: auto; overscroll-behavior: contain; background: var(--card); border: 1px solid var(--line-2); border-bottom: 0; border-radius: 24px 24px 0 0;
+  padding-block: 10px calc(18px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: var(--s4); transform: translateY(70px); transition: transform .55s var(--spring); box-shadow: 0 -30px 80px -20px rgba(0,0,0,.85) }
+.scrim.open .sheet { transform: none }
+.grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line-3); margin: 0 auto }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) }
+.sheet-head h2 { font-size: 20px; line-height: 26px; font-weight: 650; letter-spacing: -.015em }
+.icon-btn { width: 44px; height: 44px; flex: none; border-radius: 14px; border: 1px solid var(--line-2); background: rgba(255,255,255,.04); color: var(--fg-2); display: grid; place-items: center; transition: background .2s }
+.icon-btn:hover { background: rgba(255,255,255,.08) } .icon-btn[disabled] { opacity: .4 }
+.sheet-body { display: flex; flex-direction: column; gap: var(--s4) }
+.cf-pair { background: var(--box); border-radius: var(--r-lg); padding: var(--s1) var(--pad) }
+.cf-row { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); padding: var(--s3) 0 }
+.cf-row + .cf-row { border-top: 1px solid var(--line) }
+.cf-l { font-size: 13px; color: var(--muted) }
+.cf-amt { font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -.03em } .cf-amt .dec { color: var(--muted) }
+.cf-amt.accent { color: var(--accent-ink) } .cf-amt.accent .dec { color: rgba(163,180,255,.65) }
+.cf-tok { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 600; flex: none }
+.contract { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-ink) }
+.appr-f { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2) }
+.appr-f legend { font-size: 13px; color: var(--muted); padding: 0 0 var(--s2) }
+.appr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) }
+.appr label { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 0 12px; border-radius: var(--r); border: 1px solid var(--line-2); background: rgba(255,255,255,.025); cursor: pointer; transition: border-color .2s, background .2s }
+.appr label:has(input:checked) { border-color: var(--accent-line); background: var(--accent-soft) }
+.appr input { accent-color: var(--accent); margin: 0 }
+.appr b { display: block; font-size: 14px; font-weight: 600 } .appr small { display: block; font-size: 12px; color: var(--muted) }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column }
+.step { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 2px }
+.st-ic { width: 34px; height: 34px; flex: none; border-radius: 11px; display: grid; place-items: center; background: rgba(255,255,255,.05); color: var(--muted); font-size: 13px; font-weight: 700; transition: background .3s, color .3s }
+.st-ic > * { grid-area: 1 / 1 } .st-ic .spin, .st-ic .ck { display: none }
+.step[data-s="busy"] .st-ic { background: var(--accent-soft); color: var(--accent-ink) } .step[data-s="done"] .st-ic { background: var(--accent); color: #FFFFFF }
+.step[data-s="busy"] .n, .step[data-s="done"] .n { display: none } .step[data-s="busy"] .spin, .step[data-s="done"] .ck { display: block }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .75s linear infinite }
+@keyframes spin { to { transform: rotate(360deg) } }
+.st-tx b { display: block; font-size: 14px; font-weight: 600 } .st-tx small { display: block; font-size: 12px; color: var(--muted) }
+.note { display: flex; gap: 10px; font-size: 13px; color: var(--muted) } .note .ic { color: var(--warn) }
+.done { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s2); padding-top: var(--s2) }
+.done-ic svg { width: 72px; height: 72px; fill: none; stroke-linecap: round; stroke-linejoin: round }
+.done-ic circle { stroke: var(--accent); stroke-width: 3; stroke-dasharray: 170; stroke-dashoffset: 170; animation: draw .7s var(--ease) forwards }
+.done-ic path { stroke: var(--accent-ink); stroke-width: 4; stroke-dasharray: 48; stroke-dashoffset: 48; animation: draw .45s .4s var(--ease) forwards }
+@keyframes draw { to { stroke-dashoffset: 0 } }
+.done h3 { font-size: 20px; font-weight: 650; margin-top: 6px }
+.done-amt { font-size: 34px; line-height: 42px; font-weight: 600; letter-spacing: -.03em; color: var(--accent-ink) }
+.done p { font-size: 14px; color: var(--muted); margin-bottom: 10px }
+.coin-list { display: flex; flex-direction: column; gap: 2px }
+.coin-item { display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: 64px; padding: var(--s2) var(--s3); border-radius: var(--r-lg); border: 1px solid transparent; background: transparent; text-align: left; transition: background .15s }
+.coin-item:hover:not([disabled]) { background: rgba(255,255,255,.045) }
+.coin-item[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-line) }
+.coin-item[disabled] { opacity: .45 }
+.coin-item .coin { width: 38px; height: 38px; font-size: 14px }
+.coin-item .grow { flex: 1; min-width: 0 } .coin-item b { display: block; font-weight: 600 } .coin-item small { display: block; font-size: 13px; color: var(--muted) }
+.coin-item .bal { text-align: right; font-size: 14px; font-weight: 550 }
+.toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 50; transform: translate(-50%, 18px); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: var(--s3); padding: 10px 16px 10px 10px; max-width: calc(100% - 32px); border-radius: 16px; background: var(--box-hi); border: 1px solid var(--line-3); box-shadow: 0 24px 50px -20px rgba(0,0,0,.95); transition: transform .45s var(--spring), opacity .25s var(--ease) }
+.toast.show { transform: translate(-50%, 0); opacity: 1 }
+.toast-ic { width: 32px; height: 32px; flex: none; border-radius: 10px; background: var(--accent); color: #FFFFFF; display: grid; place-items: center }
+.toast b { display: block; font-size: 14px; font-weight: 600 } .toast small { display: block; font-size: 13px; color: var(--muted) }
+@media (min-width: 860px) {
+  .toast { bottom: calc(28px + env(safe-area-inset-bottom, 0px)) }
+  .scrim { align-items: center }
+  .sheet { border-radius: 24px; border-bottom: 1px solid var(--line-2); max-height: calc(100% - 64px); padding-block: 20px }
+  .grab { display: none }
+}
+@media (min-width: 1180px) { .rail .screen-title { font-size: 16px; line-height: 22px } }
+@media (max-width: 400px) {
+  .amount { font-size: 34px } .amount.fit-m { font-size: 28px } .amount.fit-s { font-size: 22px }
+  .hchip .lbl, .demo { display: none } .sum { font-size: 13px; gap: var(--s2) } .zero { padding: 4px 8px } .choice small { font-size: 11px } .big { font-size: 34px; line-height: 40px }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important } }
+
+/* ===================== FONDACO theme =====================
+   Sharp geometry, monospace throughout, thin rules, uppercase labels, one rust action colour.
+   Overrides the base styles above (same selectors, later in the cascade). */
+:root {
+  --bg: #050505; --card: #0A0A0B; --box: #0A0A0B; --box-hi: #17171A;
+  --line: rgba(255,255,255,.09); --line-2: rgba(255,255,255,.2); --line-3: rgba(255,255,255,.4);
+  --fg: #F2F2EF; --fg-2: #CFCFCA; --muted: #9A9A94; --faint: #64645F;
+  --cta: #B34A2E; --cta-hi: #C9583A; --grad: var(--cta);
+  --f-ui: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r-sm: 0; --r: 0; --r-lg: 0; --r-xl: 0;
+}
+body { font-family: var(--f-ui); font-size: 15px; letter-spacing: -0.01em }
+.ambient { display: none }
+.top { background: rgba(5,5,5,.86); border-bottom-color: var(--line-2) }
+.brand-name { font-weight: 700; letter-spacing: .26em; font-size: 15px }
+.logo { width: 34px; height: 34px; border-radius: 0; background: transparent; box-shadow: none; border: 1px solid var(--line-2) }
+.demo { border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: 10px }
+.hchip { border-radius: 0; border-color: var(--line-2); background: transparent; text-transform: uppercase; font-size: 12px; letter-spacing: .06em }
+.avatar { border-radius: 0 }
+.hchip .mono { text-transform: none; letter-spacing: 0 }
+.you { border-radius: 0; background: var(--fg); border: 3px solid var(--bg); box-shadow: 0 0 0 1px var(--fg) }
+.appr input { accent-color: var(--fg) }
+
+.card { border-color: var(--line-2); border-radius: 0; background: var(--card) }
+.trade-card { box-shadow: none }
+.screen-title, .sec-head h2, .sec-title, .rail .screen-title { text-transform: uppercase; letter-spacing: .14em; font-size: 15px; line-height: 22px; font-weight: 600 }
+.sec-head p, .book-foot, .legs-t, .o-note, .fit-note { font-size: 12px }
+
+/* tabs: underlined text, like a rate switch */
+.seg { background: transparent; border-radius: 0; padding: 0; border-bottom: 1px solid var(--line-2) }
+.seg::before { top: auto; bottom: -1px; left: 0; height: 2px; width: calc(100% / var(--n)); border-radius: 0; background: var(--fg); box-shadow: none }
+.seg button { border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; font-weight: 600; min-height: 44px }
+.box .seg { border-bottom-color: var(--line) }
+
+/* boxes: framed, heavy bottom rule */
+.box { border: 1px solid var(--line-2); border-bottom: 3px solid var(--fg); border-radius: 0; background: var(--box) }
+.box:focus-within { box-shadow: none; border-color: var(--line-3); border-bottom-color: var(--fg) }
+.row-box { border-bottom-width: 1px; border-bottom-color: var(--line-2) }
+.pair { gap: var(--s2) }
+.box-top, .box-top label, .box-top > span:first-child, .cf-l, .kv dt, .bcol-t, .appr-f legend, .meter-scale, .depth-l, .stats dt, .recip-l {
+  text-transform: uppercase; letter-spacing: .12em; font-size: 11px }
+.kv dt { font-size: 12px; letter-spacing: .06em }
+.amount { font-family: var(--f-ui); font-weight: 500; letter-spacing: -0.04em }
+.cf-amt, .done-amt, .big, .kv.big dd { font-family: var(--f-ui); letter-spacing: -0.04em }
+.tok { border-radius: 0; background: transparent; border-color: var(--line-2); text-transform: uppercase; font-size: 14px; letter-spacing: .04em }
+.tok:hover { background: rgba(255,255,255,.05) }
+.qb { border-radius: 0; background: transparent; border: 1px solid var(--line-2); text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2) }
+.qb:hover { border-color: var(--line-3) }
+.tag, .zero, .qs, .chg, .status, .live, .you-tag, .pbadge, .badge { border-radius: 0; text-transform: uppercase; letter-spacing: .08em; font-size: 10px }
+.tag, .zero, .qs { background: transparent; border: 1px solid currentColor; padding: 2px 7px }
+.tag.ind { background: transparent }
+.flip { border-radius: 50%; width: 44px; height: 44px; border: 1px solid var(--line-3); background: var(--bg); color: var(--fg) }
+.flip:hover { background: var(--box-hi) }
+.sum { border-radius: 0; text-transform: uppercase; font-size: 12px; letter-spacing: .08em; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line) }
+.rate-top { display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 28px; padding: 0 var(--s1); font-size: 12px; color: var(--fg-2); letter-spacing: .02em }
+.rate-top .ic { color: var(--muted) }
+.recip { display: flex; flex-direction: column; gap: 6px }
+.recip-l { color: var(--muted); padding: 0 var(--s1) }
+.recip-f { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 var(--pad); border: 1px solid var(--line-2); border-bottom: 3px solid var(--fg); font-size: 14px }
+.recip-f .ic { color: var(--muted) }
+.recip-f small { margin-left: auto; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em }
+
+/* actions */
+.cta { border-radius: 0; background: var(--cta); box-shadow: none; text-transform: uppercase; letter-spacing: .16em; font-size: 14px; font-weight: 600; min-height: 56px }
+.cta:hover { filter: none; background: var(--cta-hi) }
+.cta[disabled] { background: #2B1610; color: #9C6A5C }
+.cta-sub { border-radius: 0; background: rgba(0,0,0,.25); letter-spacing: .08em }
+.btn { border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; border-color: var(--line-2); background: transparent }
+.btn.accent { background: var(--cta); box-shadow: none } .btn.accent:hover { filter: none; background: var(--cta-hi) }
+.chip { border-radius: 0; text-transform: uppercase; letter-spacing: .08em; font-size: 11px }
+.chip[aria-pressed="true"] { color: var(--fg); background: transparent; border-color: var(--fg) }
+.choice, .custom, .appr label, .search, .callout, .confirm-all, .offer, .hist, .olist, .cf-pair, .toast, .toast-ic, .st-ic, .coin-item { border-radius: 0 }
+.choice[aria-pressed="true"], .appr label:has(input:checked), .coin-item[aria-pressed="true"] { background: transparent; border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg) }
+.choice[aria-pressed="true"] small { color: var(--fg-2) }
+.search { border: 1px solid var(--line-2); background: transparent }
+.offer, .hist, .olist, .cf-pair, .confirm-all { background: transparent; border: 1px solid var(--line-2) }
+.offer.attn { box-shadow: none; border-color: var(--warn-line) }
+.switch, .switch::after { border-radius: 0 }
+.switch:checked { background: var(--cta) }
+.you { border-radius: 0 }
+.st-ic { background: transparent; border: 1px solid var(--line-2) }
+.step[data-s="done"] .st-ic { background: var(--fg); color: var(--bg); border-color: var(--fg) }
+.step[data-s="busy"] .st-ic { background: transparent; color: var(--fg); border-color: var(--fg) }
+
+/* markets & book */
+.mrow, .lvl, .tr { border-radius: 0 }
+.mrow.sel { background: transparent; box-shadow: inset 0 0 0 1px var(--line-3) }
+.lvl-bar, .depth-bar, .depth-bar span, .legs span, .segbar span, .parts span { border-radius: 0 }
+.pair-btn, .back, .live { border-radius: 0 }
+.pair-btn { background: transparent; border-color: var(--line-2) }
+.bh, .trh { letter-spacing: .12em }
+
+/* chrome */
+.dock { border-radius: 0; background: rgba(10,10,11,.92); border-color: var(--line-2) }
+.dock::before { border-radius: 0; background: transparent; border-bottom: 2px solid var(--fg); top: auto; height: 100% }
+.dock button { border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: 10px }
+.sheet { border-radius: 0; border-color: var(--line-2); background: var(--card) }
+.grab { border-radius: 0 }
+.sheet-head h2 { text-transform: uppercase; letter-spacing: .12em; font-size: 16px }
+.icon-btn { border-radius: 50%; background: transparent; border-color: var(--line-3) }
+.done h3 { text-transform: uppercase; letter-spacing: .1em; font-size: 16px }
+.done-ic circle { stroke: var(--fg) } .done-ic path { stroke: var(--fg) }
+@media (min-width: 860px) { .sheet { border-radius: 0 } }
+
+/* splash (avvio) */
+.splash { position: fixed; inset: 0; z-index: 100; background: #050505; color: var(--fg); display: flex; justify-content: center;
+  padding: max(48px, env(safe-area-inset-top, 0px)) max(32px, env(safe-area-inset-right, 0px)) max(32px, env(safe-area-inset-bottom, 0px)) max(32px, env(safe-area-inset-left, 0px));
+  transition: opacity .45s var(--ease), visibility .45s }
+.splash.gone { opacity: 0; visibility: hidden; pointer-events: none }
+.sp-in { width: 100%; max-width: 420px; display: flex; flex-direction: column; justify-content: space-between; align-items: center }
+.sp-top { width: 100%; display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .2em }
+.sp-mid { display: flex; flex-direction: column; align-items: center; gap: 40px }
+.sp-rows { display: flex; flex-direction: column; gap: 6px }
+.sp-row { display: flex; justify-content: center }
+.sp-row > span { width: 104px; display: flex }
+.sp-row > span:first-child { justify-content: flex-end }
+.sp-row i { display: block; height: 8px }
+.sp-row > span:first-child i { background: var(--ask) } .sp-row > span:last-child i { background: #7C93FF }
+.sp-word { display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0; transform: translateY(12px) }
+.sp-word h1 { margin: 0 -0.3em 0 0; font-family: Geist, system-ui, sans-serif; font-size: 34px; font-weight: 700; letter-spacing: .3em }
+.sp-word p { margin: 0; font-size: 11px; letter-spacing: .26em; color: var(--muted) }
+.sp-bot { width: 100%; display: flex; flex-direction: column; gap: 12px }
+.sp-bar { position: relative; height: 2px; background: #22262F }
+.sp-bar span { position: absolute; top: 0; bottom: 0; width: 0 }
+.sp-bar span:first-child { left: 0; background: var(--ask) } .sp-bar span:last-child { right: 0; background: #7C93FF }
+.sp-meta { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .16em; color: var(--muted) }
+.sp-skip { align-self: center; margin-top: 12px; min-height: 44px; padding: 0 18px; border: 1px solid var(--line-2); background: transparent; color: var(--fg-2); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; border-radius: 0 }
+.sp-skip:hover { border-color: var(--line-3) }
+
+/* ===================== usability & motion pass ===================== */
+/* flip: its own row between the boxes, never on top of their borders */
+.pair { gap: 0 }
+.flip-wrap { position: static; height: auto; display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0; z-index: auto }
+.flip-wrap::before, .flip-wrap::after { content: ""; flex: 1; height: 1px; background: var(--line) }
+.flip { position: relative; left: auto; top: auto; transform: rotate(var(--rot)); flex: none; border-width: 1px }
+
+/* phone: a docked bottom bar, not a floating panel over the content */
+@media (max-width: 859px) {
+  main.layout { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) }
+  .dock { left: 0; right: 0; bottom: 0; width: auto; transform: none; padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    border-width: 1px 0 0; background: rgba(5,5,5,.96); box-shadow: none }
+  .dock::before { top: 0; bottom: auto; left: env(safe-area-inset-left, 0px); height: 2px; width: calc((100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 3); background: var(--fg); border: 0 }
+  .dock button { min-height: 64px }
+  .dock .badge { top: 10px }
+  .toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)) }
+}
+/* narrow phones: header, choices and market rows get room */
+@media (max-width: 380px) {
+  .top-in { gap: var(--s2) }
+  .brand { gap: var(--s2) }
+  .brand-name { letter-spacing: .14em; font-size: 14px }
+  .hchip { padding: 0 10px; gap: 6px }
+  .avatar { width: 20px; height: 20px }
+  .choice b { font-size: clamp(11px, 3.4vw, 14px) }
+  .choice small { font-size: 10px }
+  .mrow { gap: 10px; padding: var(--s2) 10px }
+  .mrow .coin { width: 24px !important; height: 24px !important; font-size: 10px !important }
+  .mr-name b, .mr-p b { font-size: 14px }
+  .ph-row { flex-wrap: wrap }
+  .stats dd { font-size: 14px }
+}
+/* short screens: tighter boxes so the main button stays above the fold */
+@media (max-width: 859px) and (max-height: 720px) {
+  .box { padding: var(--s3) var(--pad); gap: var(--s2) }
+  .recip-l { display: none }
+  .recip-f { min-height: 42px }
+  .rate-top { min-height: 22px }
+  .flip-wrap { padding: var(--s1) 0 }
+}
+.amount { transition: font-size .2s var(--ease) }
+@media (max-width: 520px) { .demo, .hchip .lbl { display: none } }
+.rail .chip { padding: 0 9px; letter-spacing: .04em }
+@media (max-width: 400px) {
+  .seg button { font-size: 11px; letter-spacing: .04em; white-space: nowrap }
+  .chip { padding: 0 10px }
+  .chips { gap: 6px }
+}
+.box-top { flex-wrap: nowrap } .box-top > :first-child { min-width: 0 }
+.price-v, .box-top .tag, .box-top .quick { white-space: nowrap; flex: none }
+/* desktop: the ticket stays in view and scrolls inside itself when taller than the window */
+@media (min-width: 1180px) {
+  .ticket { top: 80px; max-height: calc(100vh - 124px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent }
+}
+
+/* motion: direction-aware view changes, press feedback, live ticks */
+@keyframes from-r { from { opacity: 0; transform: translateX(18px) } to { opacity: 1; transform: none } }
+@keyframes from-l { from { opacity: 0; transform: translateX(-18px) } to { opacity: 1; transform: none } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+.from-r { animation: from-r .38s var(--spring) both } .from-l { animation: from-l .38s var(--spring) both }
+.stagger > * { animation: rise .42s var(--spring) both; animation-delay: calc(var(--k, 0) * 28ms) }
+.btn, .chip, .tok, .qb, .choice, .mrow, .lvl, .cta, .sp-skip, .coin-item, .pair-btn, .seg button, .dock button, .sum, .callout {
+  transition: transform .12s var(--ease), background-color .2s, border-color .2s, color .2s }
+.btn:active:not([disabled]), .chip:active, .tok:active, .qb:active, .choice:active, .mrow:active, .lvl:active, .cta:active:not([disabled]),
+.coin-item:active:not([disabled]), .pair-btn:active, .seg button:active, .dock button:active, .sum:active, .callout:active { transform: scale(.98) }
+.rate-top { transition: color .6s }
+.rate-top.tick-up { color: var(--up); transition: none } .rate-top.tick-down { color: var(--down); transition: none }
+.cta { transition: background-color .25s, color .25s, transform .12s var(--ease) }
+@media (prefers-reduced-motion: reduce) { .stagger > *, .from-r, .from-l { animation: none } }
+
+/* ===================== pro-exchange layout pass ===================== */
+/* ticker strip */
+.ticker { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s6); padding: var(--s2) var(--pad) var(--s2) var(--s2) }
+.tk-price { display: flex; align-items: baseline; gap: 6px; min-width: 0 }
+.ticker .big { font-size: 28px; line-height: 34px }
+.ticker .u { font-size: 12px; color: var(--muted); margin: 0 }
+.tk-stats { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0 }
+.tk-stats dt { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted) }
+.tk-stats dd { margin: 2px 0 0; font-size: 13px; font-weight: 600; white-space: nowrap }
+.tk-stats .chg { padding: 0; border: 0; background: transparent; font-size: 13px; letter-spacing: 0 }
+.ticker .live { margin-left: auto }
+.ticker .ph-actions { width: 100%; padding-left: var(--s1) }
+@media (min-width: 860px) { .ticker .ph-actions { display: none } }
+@media (max-width: 859px) {
+  .ticker { padding: var(--s2) }
+  .ticker .pair-btn { order: 1 } .ticker .live { order: 2 } .ticker .tk-price { order: 3; width: 100%; padding: 0 var(--s2) }
+  .ticker .tk-stats { order: 4; width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 var(--s2) var(--s2) }
+  .ticker .ph-actions { order: 5; padding: 0 }
+  .ticker .big { font-size: 32px; line-height: 38px }
+}
+
+/* chart */
+.chart-card { gap: 0 }
+.chart-card .sec-head { align-items: center; padding-bottom: var(--s2) }
+.tf { padding: 0 }
+.tf .chip { height: 28px; padding: 0 10px }
+.chart { position: relative; height: 230px; margin: 0 var(--s2) var(--s2); touch-action: pan-y; cursor: crosshair; user-select: none }
+.chart svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible }
+.ch-y { position: absolute; right: 0; transform: translateY(-50%); font-size: 10px; color: var(--faint); padding-left: 6px; background: var(--card) }
+.ch-x { position: absolute; bottom: 0; transform: translateX(-50%); font-size: 10px; color: var(--faint) }
+.ch-last { position: absolute; right: 0; transform: translateY(-50%); font-size: 11px; font-weight: 600; padding: 2px 6px; color: #050505; transition: top .4s var(--spring) }
+.ch-tip { position: absolute; top: 0; pointer-events: none; font-size: 11px; background: var(--box-hi); border: 1px solid var(--line-2); padding: 4px 8px; white-space: nowrap; color: var(--fg) }
+@media (max-width: 859px) { .chart { height: 180px } }
+
+/* order book: one vertical ladder (asks above, best prices meet at the middle), trades beside it when there is room */
+.market-card { container-type: inline-size }
+.bt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 }
+.ob, .tw { min-width: 0; display: flex; flex-direction: column }
+.ob .lvls, .tw .trades { gap: 1px }
+.lvl { min-height: 32px; font-size: 13px }
+.tr { min-height: 30px; font-size: 13px }
+.bh i { font-style: normal }
+.ob-mid { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding: 10px var(--pad); margin: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line) }
+.ob-midp { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; transition: color .6s }
+.ob-midp.up { color: var(--up); transition: none } .ob-midp.down { color: var(--down); transition: none }
+.ob-spr { font-size: 11px; color: var(--muted); letter-spacing: .04em; text-align: right }
+.ob .depth { padding: var(--s3) var(--pad) var(--s1) }
+.ob .depth-l { font-size: 11px; flex-wrap: wrap }
+@container (min-width: 620px) { .ob .depth-l span { white-space: nowrap } }
+@container (min-width: 620px) {
+  #bt-seg { display: none }
+  .bt { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) }
+  .tw { border-left: 1px solid var(--line) }
+}
+@container (max-width: 619.98px) {
+  .bt[data-show="book"] .tw, .bt[data-show="trades"] .ob { display: none }
+  .bt .sec-head h2 { display: none }
+}
+@media (max-width: 859px) { .lvl { min-height: 36px } }
+
+/* ===================== MEV protection (client side) ===================== */
+.guard { display: flex; gap: var(--s2); align-items: flex-start; font-size: 12px; line-height: 1.45; padding: var(--s2) var(--s3); border: 1px solid var(--warn-line); color: var(--warn) }
+.guard.danger { border-color: #E0664A; color: #F08A70 }
+.guard .ic { flex: none; margin-top: 1px }
+.guard-ok { display: flex; align-items: center; gap: var(--s2); min-height: 44px; font-size: 13px; color: var(--fg-2); cursor: pointer }
+.guard-ok input { width: 18px; height: 18px; accent-color: var(--fg); margin: 0 }
+.mev { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-ink) }
+.mev.off { color: var(--warn) }
+.o-stale { font-size: 12px; color: var(--warn); border: 1px solid var(--warn-line); padding: var(--s2) var(--s3) }
+
+/* wallet & protection */
+button.hchip { cursor: pointer; transition: border-color .2s, background-color .2s }
+button.hchip:hover { border-color: var(--line-3); background: rgba(255,255,255,.04) }
+.wdot { width: 8px; height: 8px; flex: none; background: var(--accent-ink) }
+.wdot.off { background: var(--warn) }
+.wstat { border: 1px solid var(--line-2); padding: var(--s4) var(--pad); display: flex; flex-direction: column; gap: var(--s3) }
+.wstat.off { border-color: var(--warn-line) }
+.wstat-h { display: flex; align-items: center; gap: var(--s2); font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--accent-ink) }
+.wstat.off .wstat-h { color: var(--warn) }
+.wstat p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg-2) }
+.wsteps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--fg-2) }
+.rpc-row { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-top: 1px solid var(--line) }
+.rpc-row > div { flex: 1; min-width: 0 }
+.rpc-row b { display: block; font-size: 13px }
+.rpc-row code { display: block; font-family: var(--f-ui); font-size: 12px; color: var(--muted); overflow-wrap: anywhere }
+.rpc-row .btn { flex: none; min-height: 40px }
+.mev-row { display: inline-flex; align-items: center; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end }
+.linkbtn { border: 0; background: transparent; color: var(--fg-2); text-decoration: underline; text-underline-offset: 3px; font-size: 12px; padding: 6px 2px; min-height: 32px; cursor: pointer }
+</style>
+
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 19V10M10 19V5M15 19v-6M20 19V8"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 9.5h8M8 14.5h5"/></symbol>
+  <symbol id="i-flip" viewBox="0 0 24 24"><path d="M12 4v16M6.5 14.5 12 20l5.5-5.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 19 6v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><path d="M12 3 5 12l7 9 7-9z"/><path d="M5 12h14"/></symbol>
+</svg>
+
+<div class="splash" id="splash" role="status" aria-live="polite" aria-label="Avvio di FONDACO">
+  <div class="sp-in">
+    <div class="sp-top"><span class="ask-t">VENDO</span><span class="bid-t">COMPRO</span></div>
+    <div class="sp-mid">
+      <div class="sp-rows" id="sp-rows" aria-hidden="true"></div>
+      <div class="sp-word" id="sp-word"><h1>FONDACO</h1><p>IL PREZZO LO FATE VOI</p></div>
+    </div>
+    <div class="sp-bot">
+      <div class="sp-bar" aria-hidden="true"><span id="sp-l"></span><span id="sp-r"></span></div>
+      <div class="sp-meta"><span id="sp-step">RACCOLGO LE OFFERTE</span><span id="sp-pct">000%</span></div>
+      <button type="button" class="sp-skip" id="sp-skip">Salta</button>
+    </div>
+  </div>
+</div>
+<div class="ambient" aria-hidden="true"></div>
+<div class="app">
+  <header class="top">
+    <div class="shell top-in">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"><svg width="20" height="14" viewBox="0 0 20 14"><rect x="1" y="0" width="8" height="3" fill="#F4AE52"/><rect x="11" y="0" width="6" height="3" fill="#7C93FF"/><rect x="3" y="5.5" width="6" height="3" fill="#F4AE52"/><rect x="11" y="5.5" width="8" height="3" fill="#7C93FF"/><rect x="0" y="11" width="9" height="3" fill="#F4AE52"/><rect x="11" y="11" width="5" height="3" fill="#7C93FF"/></svg></span>
+        <span class="brand-name">FONDACO</span>
+        <span class="demo" title="Dati di esempio">Demo</span>
+      </div>
+      <div class="hchips">
+        <button type="button" class="hchip" id="net-chip" aria-haspopup="dialog" aria-label="Rete e protezione MEV"><svg class="ic sm net" aria-hidden="true"><use href="#i-net"/></svg><span class="lbl" id="net-lbl">Ethereum</span></button>
+        <button type="button" class="hchip" id="wal-chip" aria-haspopup="dialog" aria-label="Wallet e protezione MEV"><span class="avatar" aria-hidden="true"></span><span class="mono">0x3f…a91c</span><span class="wdot" id="wal-dot" aria-hidden="true"></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell layout">
+    <!-- MERCATI -->
+    <aside class="card rail area" id="rail" aria-labelledby="rail-t">
+      <div class="rail-head"><h2 class="screen-title" id="rail-t">Mercati</h2><span class="muted" style="font-size: 13px" id="m-count"></span></div>
+      <label class="search"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="m-search" type="search" placeholder="Cerca una moneta" aria-label="Cerca un mercato" autocomplete="off"></label>
+      <div class="chips" id="m-chips" role="group" aria-label="Filtra mercati">
+        <button type="button" class="chip" data-filter="all" aria-pressed="true">Tutti</button>
+        <button type="button" class="chip" data-filter="USDC" aria-pressed="false">USDC</button>
+        <button type="button" class="chip" data-filter="WETH" aria-pressed="false">WETH</button>
+        <button type="button" class="chip" data-filter="stable" aria-pressed="false">Stable</button>
+      </div>
+      <div class="mlist" id="m-list"></div>
+    </aside>
+
+    <!-- COPPIA -->
+    <section class="center area" id="center" aria-label="Coppia selezionata">
+      <button type="button" class="back" id="back" hidden><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg>Mercati</button>
+
+      <div class="card ticker">
+        <button type="button" class="pair-btn" id="pair-btn" aria-haspopup="dialog" aria-label="Cambia mercato">
+          <span class="coins2" id="ph-coins"></span><span><b id="ph-name"></b><small id="ph-desc"></small></span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
+        </button>
+        <div class="tk-price"><span class="big" id="ph-mid"></span><span class="u" id="ph-unit"></span></div>
+        <dl class="tk-stats">
+          <div><dt>24 h</dt><dd><span class="chg" id="ph-chg"></span></dd></div>
+          <div><dt>Massimo 24 h</dt><dd id="st-hi"></dd></div>
+          <div><dt>Minimo 24 h</dt><dd id="st-lo"></dd></div>
+          <div><dt>Volume 24 h</dt><dd id="st-vol"></dd></div>
+          <div><dt>Differenza</dt><dd id="st-spr"></dd></div>
+          <div><dt>Liquidità</dt><dd id="st-liq"></dd></div>
+        </dl>
+        <span class="live"><span class="pulse" aria-hidden="true"></span>Live</span>
+        <div class="ph-actions">
+          <button type="button" class="btn accent lg" id="ph-buy"></button>
+          <button type="button" class="btn lg" id="ph-sell"></button>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <div class="sec-head"><h2>Prezzo</h2>
+          <div class="chips tf" id="tf" role="group" aria-label="Intervallo del grafico">
+            <button type="button" class="chip" data-tf="12" aria-pressed="false">1 h</button>
+            <button type="button" class="chip" data-tf="48" aria-pressed="false">4 h</button>
+            <button type="button" class="chip" data-tf="288" aria-pressed="true">24 h</button>
+          </div>
+        </div>
+        <div class="chart" id="chart" role="img" aria-label="Andamento del prezzo">
+          <svg id="ch-svg" aria-hidden="true"></svg>
+          <div id="ch-labels" aria-hidden="true"></div>
+          <div class="ch-tip" id="ch-tip" hidden></div>
+        </div>
+      </div>
+
+      <div class="card market-card">
+        <div class="seg" id="bt-seg" style="--n: 2" role="group" aria-label="Vista">
+          <button type="button" data-at="book" aria-pressed="true">Libro offerte</button>
+          <button type="button" data-at="trades" aria-pressed="false">Ultimi scambi</button>
+        </div>
+        <div class="bt" id="bt" data-show="book">
+          <section class="ob" aria-labelledby="ob-t">
+            <div class="sec-head"><h2 id="ob-t">Libro offerte</h2><p>Tocca un prezzo per scambiare fino a lì</p></div>
+            <div class="bh" aria-hidden="true"><span>Prezzo <i class="bh-quote"></i></span><span class="bh-base"></span><span>Totale</span></div>
+            <div class="lvls" id="asks"></div>
+            <div class="ob-mid"><span class="ob-midp" id="ob-midp"></span><span class="ob-spr" id="ob-spr"></span></div>
+            <div class="lvls" id="bids"></div>
+            <div class="depth">
+              <div class="depth-bar" aria-hidden="true"><span class="da" id="depth-a"></span><span class="db" id="depth-b"></span></div>
+              <div class="depth-l"><span><b class="ask-t" id="liq-a"></b> in vendita</span><span><b class="bid-t" id="liq-b"></b> richiesti</span></div>
+            </div>
+          </section>
+          <section class="tw" aria-labelledby="tw-t">
+            <div class="sec-head"><h2 id="tw-t">Ultimi scambi</h2></div>
+            <div class="trh" aria-hidden="true"><span>Prezzo</span><span class="bh-base"></span><span>Quando</span></div>
+            <div class="trades" id="trades"></div>
+          </section>
+        </div>
+        <p class="book-foot">Per chi accetta un’offerta la commissione è zero: la paga chi l’ha proposta.</p>
+      </div>
+
+      <div class="card" id="act-card">
+        <div class="sec-head"><h2>Le mie offerte <span class="pbadge" id="act-badge" hidden></span></h2></div>
+        <div id="offers-d"></div>
+      </div>
+    </section>
+
+    <!-- SCHEDA -->
+    <section class="ticket area" id="ticket" aria-label="Scambio">
+      <div class="card trade-card" id="trade-card">
+        <div class="seg" id="mode-seg" style="--n: 2" role="group" aria-label="Modalità">
+          <button type="button" data-m="swap" aria-pressed="true">Scambia subito</button>
+          <button type="button" data-m="make" aria-pressed="false">Proponi un prezzo</button>
+        </div>
+
+        <div class="mode" id="m-swap">
+          <p class="rate-top"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg><span id="rate"></span></p>
+          <div class="pair">
+            <div class="box">
+              <div class="box-top">
+                <label for="pay-in">Paghi</label>
+                <div class="quick" role="group" aria-label="Importo rapido">
+                  <button type="button" class="qb" data-q="0.25">25%</button>
+                  <button type="button" class="qb" data-q="0.5">50%</button>
+                  <button type="button" class="qb" data-q="1">Max</button>
+                </div>
+              </div>
+              <div class="box-main">
+                <input id="pay-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="pay-usd">
+                <button type="button" class="tok" id="pay-tok" aria-label="Scegli la moneta da pagare"></button>
+              </div>
+              <div class="box-foot"><span id="pay-usd"></span><span>Saldo <b id="pay-bal"></b></span></div>
+            </div>
+            <div class="flip-wrap"><button type="button" class="flip" id="flip" aria-label="Inverti le monete"><svg class="ic"><use href="#i-flip"/></svg></button></div>
+            <div class="box">
+              <div class="box-top"><span>Ricevi</span><span class="tag ind" title="Calcolato dal libro offerte: diventa definitivo dopo la verifica on-chain">Indicativo</span></div>
+              <div class="box-main">
+                <output id="recv-out" class="amount" for="pay-in" aria-live="polite">0</output>
+                <button type="button" class="tok" id="recv-tok" aria-label="Scegli la moneta da ricevere"></button>
+              </div>
+              <div class="box-foot"><span id="recv-usd"></span><span>Saldo <b id="recv-bal"></b></span></div>
+            </div>
+          </div>
+          <div class="recip">
+            <span class="recip-l" id="recip-l">Ricevi su</span>
+            <div class="recip-f" aria-labelledby="recip-l"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg><span>0x3f…a91c</span><small>il tuo wallet</small></div>
+          </div>
+          <p class="fit-note" id="fit-note" hidden></p>
+          <button type="button" class="sum" id="sum-btn" aria-expanded="false" aria-controls="details">
+            <span class="rate">Dettagli</span><span class="zero">0 commissioni</span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
+          </button>
+          <div class="details" id="details"><div><div class="details-in">
+            <div class="legs" id="legs" aria-hidden="true"></div>
+            <p class="legs-t" id="legs-text"></p>
+            <dl class="kvs">
+              <div class="kv"><dt>Prezzo medio</dt><dd id="d-avg"></dd></div>
+              <div class="kv"><dt>Esecuzione</dt><dd id="d-exec"></dd></div>
+              <div class="kv"><dt>Commissione per te</dt><dd class="accent">Zero, la paga chi propone</dd></div>
+              <div class="kv"><dt>Ricevi su</dt><dd><span class="contract"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg>Il tuo wallet</span></dd></div>
+              <div class="kv"><dt>Costo di rete</dt><dd>[stima gas]</dd></div>
+            </dl>
+          </div></div></div>
+          <button type="button" class="callout" id="over" hidden>
+            <svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>
+            <span><b id="over-title"></b>Proponi tu un prezzo per il resto</span>
+            <svg class="ic sm" aria-hidden="true"><use href="#i-right"/></svg>
+          </button>
+          <button type="button" class="cta" id="review"><span id="review-t">Rivedi lo scambio</span></button>
+        </div>
+
+        <div class="mode" id="m-make" hidden>
+          <div class="box">
+            <div class="box-top"><label for="mk-in" id="mk-label">Vendi</label><span class="tag">Pubblicare è gratis</span></div>
+            <div class="box-main">
+              <input id="mk-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="mk-usd">
+              <button type="button" class="tok" id="mk-give" aria-label="Scegli la moneta che dai"></button>
+            </div>
+            <div class="box-foot"><span id="mk-usd"></span><span>Saldo <b id="mk-bal"></b></span></div>
+          </div>
+          <div class="box row-box"><span class="muted">In cambio di</span><button type="button" class="tok" id="mk-get" aria-label="Scegli la moneta che ricevi"></button></div>
+          <div class="box">
+            <div class="box-top"><span id="mk-plabel">Prezzo</span><b class="price-v" id="mk-price"></b></div>
+            <div class="choices" id="modes" role="group" aria-label="Scegli il prezzo"></div>
+            <div class="custom" id="custom-wrap" hidden>
+              <label for="custom-in">Il tuo prezzo</label>
+              <input id="custom-in" type="text" inputmode="decimal" autocomplete="off">
+              <span id="custom-unit"></span>
+            </div>
+            <div class="meter">
+              <div class="track" aria-hidden="true"><div id="ticks"></div><span class="you" id="you"></span></div>
+              <div class="meter-scale" aria-hidden="true"><span>Davanti in coda</span><span>In fondo</span></div>
+              <p class="pos" id="pos-text" aria-live="polite"></p>
+              <p class="guard" id="mk-guard" role="alert" hidden></p>
+              <label class="guard-ok" id="mk-guard-ok-wrap" hidden><input type="checkbox" id="mk-guard-ok">Ho capito, pubblica comunque</label>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-top"><span id="exp-l">Valida per</span></div>
+            <div class="seg" id="exp-seg" style="--n: 3" role="group" aria-labelledby="exp-l">
+              <button type="button" data-exp="1h" aria-pressed="true">1 ora</button>
+              <button type="button" data-exp="24h" aria-pressed="false">24 ore</button>
+              <button type="button" data-exp="7d" aria-pressed="false">7 giorni</button>
+            </div>
+            <p class="o-note" id="exp-note" hidden>Un prezzo fisso che resta aperto a lungo è un regalo per i bot se il mercato si muove: controllalo o scegli una durata più breve.</p>
+            <div class="hr" aria-hidden="true"></div>
+            <label class="toggle" for="partial">
+              <span><b>Accetta acquisti parziali</b><small id="partial-note"></small><span class="parts" id="parts" aria-hidden="true"></span></span>
+              <input type="checkbox" class="switch" id="partial" role="switch" checked>
+            </label>
+          </div>
+          <dl class="summary">
+            <div class="kv big"><dt>Riceverai</dt><dd id="mk-recv"></dd></div>
+            <div class="kv"><dt>Commissione 0,30% (se accettata)</dt><dd id="mk-fee"></dd></div>
+            <div class="kv"><dt>Da autorizzare</dt><dd id="mk-need"></dd></div>
+          </dl>
+          <p class="err" id="mk-error" role="alert" hidden></p>
+          <button type="button" class="cta" id="publish"><span>Pubblica l’offerta</span><span class="cta-sub">gratis</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- OFFERTE (telefono) -->
+    <section class="card area" id="offers-m" aria-labelledby="om-t" hidden>
+      <div class="rail-head"><h2 class="screen-title" id="om-t">Le mie offerte</h2></div>
+      <div id="offers-m-list"></div>
+    </section>
+  </main>
+
+  <nav class="dock" id="dock" aria-label="Sezioni">
+    <button type="button" data-tab="swap"><svg class="ic lg" aria-hidden="true"><use href="#i-swap"/></svg>Scambia</button>
+    <button type="button" data-tab="markets"><svg class="ic lg" aria-hidden="true"><use href="#i-book"/></svg>Mercati</button>
+    <button type="button" data-tab="offers"><svg class="ic lg" aria-hidden="true"><use href="#i-list"/></svg>Offerte<span class="badge" id="badge" hidden></span></button>
+  </nav>
+</div>
+
+<!-- conferma -->
+<div class="scrim" id="confirm" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="c-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="c-title">Conferma lo scambio</h2><button type="button" class="icon-btn" id="c-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <div class="sheet-body" id="c-main">
+      <div class="cf-pair">
+        <div class="cf-row"><div><div class="cf-l">Paghi</div><div class="cf-amt" id="c-pay"></div></div><span class="cf-tok" id="c-pay-tok"></span></div>
+        <div class="cf-row"><div><div class="cf-l">Ricevi</div><div class="cf-amt accent" id="c-recv"></div></div><span class="cf-tok" id="c-recv-tok"></span></div>
+      </div>
+      <div class="qline" aria-live="polite"><span class="qs ind" id="c-qs">Indicativo</span><span id="c-qs-t"></span></div>
+      <dl class="kvs" style="padding: 0 var(--s1)">
+        <div class="kv"><dt>Prezzo medio</dt><dd id="c-avg"></dd></div>
+        <div class="kv"><dt>Offerte</dt><dd id="c-legs"></dd></div>
+        <div class="kv"><dt>Ricevi su</dt><dd><span class="contract" title="Il destinatario non è modificabile"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg><span class="mono">0x3f…a91c</span>&nbsp;· il tuo wallet</span></dd></div>
+        <div class="kv"><dt>Commissione per te</dt><dd class="accent">Zero</dd></div>
+        <div class="kv"><dt>Protezione MEV</dt><dd id="c-mev"></dd></div>
+        <div class="kv"><dt>Costo di rete</dt><dd>[stima gas]</dd></div>
+        <div class="kv"><dt>Contratto</dt><dd><span class="contract"><svg class="ic sm" aria-hidden="true"><use href="#i-shield"/></svg><span class="mono">SwapERC20 0x[indirizzo]</span></span></dd></div>
+      </dl>
+      <div class="olist" id="c-olist"></div>
+      <fieldset class="appr-f" id="c-appr">
+        <legend>Quanto autorizzare</legend>
+        <div class="appr">
+          <label><input type="radio" name="appr" value="exact" checked><span><b>Solo questo importo</b><small>consigliato</small></span></label>
+          <label><input type="radio" name="appr" value="max"><span><b>Illimitato</b><small>meno passaggi in futuro</small></span></label>
+        </div>
+      </fieldset>
+      <ol class="steps" aria-label="Passaggi">
+        <li class="step" id="st0" data-s="idle"><span class="st-ic"><span class="n">1</span><span class="spin" aria-hidden="true"></span><svg class="ic sm ck" aria-hidden="true"><use href="#i-check"/></svg></span><span class="st-tx"><b>Verifica on-chain</b><small></small></span></li>
+        <li class="step" id="st1" data-s="idle"><span class="st-ic"><span class="n">2</span><span class="spin" aria-hidden="true"></span><svg class="ic sm ck" aria-hidden="true"><use href="#i-check"/></svg></span><span class="st-tx"><b id="st1-t">Autorizza</b><small></small></span></li>
+        <li class="step" id="st2" data-s="idle"><span class="st-ic"><span class="n">3</span><span class="spin" aria-hidden="true"></span><svg class="ic sm ck" aria-hidden="true"><use href="#i-check"/></svg></span><span class="st-tx"><b>Scambia</b><small></small></span></li>
+      </ol>
+      <p class="note"><svg class="ic sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Il wallet ti mostrerà esattamente questi importi e il tuo indirizzo come destinatario. Se vedi cifre o indirizzi diversi, rifiuta.</span></p>
+      <label class="toggle demo-t" for="c-race"><span><b>Demo · compratore concorrente</b><small>Simula offerte prese da altri durante lo scambio</small></span><input type="checkbox" class="switch" id="c-race" role="switch"></label>
+      <button type="button" class="cta" id="c-go"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg><span id="c-go-t">Autorizza e scambia</span></button>
+    </div>
+    <div class="done" id="c-done" hidden>
+      <span class="done-ic" aria-hidden="true"><svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="26"/><path d="M17 29l7 7 15-15"/></svg></span>
+      <h3 id="c-done-h">Scambio completato</h3>
+      <div class="done-amt" id="c-done-amt"></div>
+      <p id="c-done-sub"></p>
+      <div class="done-list" id="c-done-list"></div>
+      <button type="button" class="cta" id="c-done-btn">Fatto</button>
+    </div>
+  </div>
+</div>
+
+<!-- scelta moneta -->
+<div class="scrim" id="picker" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="p-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="p-title">Scegli la moneta</h2><button type="button" class="icon-btn" id="p-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <label class="search"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="p-search" type="search" placeholder="Cerca per nome o simbolo" aria-label="Cerca una moneta" autocomplete="off"></label>
+    <div class="coin-list" id="p-list"></div>
+  </div>
+</div>
+
+<!-- wallet e protezione -->
+<div class="scrim" id="wsheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="w-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="w-title">Wallet e protezione</h2><button type="button" class="icon-btn" id="w-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <div class="sheet-body">
+      <fieldset class="appr-f"><legend id="w-list-l">Wallet collegato</legend><div class="appr" id="w-list"></div></fieldset>
+      <fieldset class="appr-f"><legend>Rete</legend><div class="appr" id="w-net">
+        <label><input type="radio" name="wnet" value="1"><span><b>Ethereum</b><small>mempool pubblica</small></span></label>
+        <label><input type="radio" name="wnet" value="8453"><span><b>Base</b><small>sequencer L2</small></span></label>
+      </div></fieldset>
+      <div class="wstat" id="w-stat" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
+<!-- scelta mercato -->
+<div class="scrim" id="mpicker" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mp-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="mp-title">Mercati</h2><button type="button" class="icon-btn" id="mp-close" aria-label="Chiudi"><svg class="ic"><use href="#i-close"/></svg></button></div>
+    <label class="search"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="mp-search" type="search" placeholder="Cerca una moneta" aria-label="Cerca un mercato" autocomplete="off"></label>
+    <div class="mlist" id="mp-list"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <span class="toast-ic" aria-hidden="true"><svg class="ic sm"><use href="#i-check"/></svg></span>
+  <span><b id="toast-t"></b><small id="toast-s"></small></span>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const RM = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const MQ2 = window.matchMedia('(min-width: 860px)');
+  const MQ3 = window.matchMedia('(min-width: 1180px)');
+  const FEE = 0.003;
+
+  // seeded randomness so the first frame is always the same
+  let seed = 20261030;
+  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+
+  const TOK = {
+    WETH: { name: 'Wrapped Ether', d: 4, usd: 2490, g: 'E', c: ['#7C93FF', '#3149E2'] },
+    WBTC: { name: 'Wrapped Bitcoin', d: 6, usd: 67400, g: 'B', c: ['#F6B466', '#C9741F'] },
+    USDC: { name: 'USD Coin', d: 2, usd: 1, g: 'C', c: ['#4CC3BC', '#1C7F86'] },
+    USDT: { name: 'Tether USD', d: 2, usd: 1, g: 'T', c: ['#8BCB9B', '#3A7F55'] },
+    DAI: { name: 'Dai', d: 2, usd: 1, g: 'D', c: ['#E2BC5C', '#A8831B'] },
+    LINK: { name: 'Chainlink', d: 3, usd: 14.2, g: 'L', c: ['#8FA8FF', '#4561D6'] },
+    UNI: { name: 'Uniswap', d: 3, usd: 8.1, g: 'U', c: ['#E58FC0', '#A9437A'] },
+    ARB: { name: 'Arbitrum', d: 2, usd: 0.82, g: 'A', c: ['#86C9F2', '#2F78B5'] }
+  };
+  const PAIRS = [['WETH', 'USDC', 4.8e6], ['WETH', 'USDT', 1.9e6], ['WBTC', 'USDC', 3.1e6], ['WBTC', 'WETH', 9.2e5], ['LINK', 'USDC', 6.4e5],
+    ['LINK', 'WETH', 2.1e5], ['UNI', 'USDC', 3.8e5], ['ARB', 'USDC', 5.2e5], ['DAI', 'USDC', 1.1e6], ['USDT', 'USDC', 2.4e6]];
+  const isStable = (t) => t === 'USDC' || t === 'USDT' || t === 'DAI';
+  const pdec = (p) => Math.min(8, Math.max(2, 5 - Math.floor(Math.log10(Math.max(p, 1e-9))) - 1));
+  const roundP = (p) => { const k = 10 ** pdec(p); return Math.round(p * k) / k; };
+  const qdec = (t) => Math.min(TOK[t].d, 4);
+  const roundQ = (t, q) => { const k = 10 ** qdec(t); return Math.max(1 / k, Math.round(q * k) / k); };
+  let lid = 1;
+  // a price level = a stack of signed orders of size `unit` (each all-or-nothing, like a 2–4 part ladder)
+  const lvl = (base, p, q) => ({ id: lid++, p, q, unit: roundQ(base, q / (2 + Math.floor(rnd() * 3))) });
+
+  function makeMarket([base, quote, vol]) {
+    const ref = TOK[base].usd / TOK[quote].usd, st = isStable(base) && isStable(quote);
+    const half = ref * (st ? 0.00015 : 0.0015 + rnd() * 0.002), step = ref * (st ? 0.0001 : 0.0012), k = 10 ** pdec(ref);
+    const asks = [], bids = [];
+    let pa = ref + half, pb = ref - half;
+    for (let i = 0; i < 6; i++) {
+      let a = roundP(pa), b = roundP(pb);
+      if (asks.length && a <= asks[asks.length - 1].p) a = asks[asks.length - 1].p + 1 / k;
+      if (bids.length && b >= bids[bids.length - 1].p) b = bids[bids.length - 1].p - 1 / k;
+      asks.push(lvl(base, roundP(a), roundQ(base, (300 + rnd() * 6500) / TOK[base].usd)));
+      bids.push(lvl(base, roundP(b), roundQ(base, (300 + rnd() * 6500) / TOK[base].usd)));
+      pa += step * (0.6 + rnd()); pb -= step * (0.6 + rnd());
+    }
+    const chg = st ? (rnd() - 0.5) * 0.001 : (rnd() - 0.42) * 0.08;
+    const m = { id: base + '-' + quote, base, quote, vol, asks, bids, trades: [], open: ref / (1 + chg), flash: 0, dir: 0, hist: [] };
+    {
+      const N = 288, sig = ref * (st ? 0.0001 : 0.0016), w = [0];
+      // correlated steps (momentum) read like real price action, not white noise
+      let v = 0;
+      for (let i = 1; i <= N; i++) { v = 0.82 * v + (rnd() - 0.5) * 1.1; w.push(w[i - 1] + v); }
+      const now0 = Date.now();
+      for (let i = 0; i <= N; i++) m.hist.push({ t: now0 - (N - i) * 300_000, p: m.open + (ref - m.open) * (i / N) + (w[i] - (w[N] * i) / N) * sig });
+    }
+    let t = Date.now();
+    for (let i = 0; i < 14; i++) {
+      t -= (4 + rnd() * 70) * 1000;
+      const buy = rnd() > 0.5;
+      m.trades.push({ id: lid++, buy, p: roundP((buy ? asks[0].p : bids[0].p) * (1 + (rnd() - 0.5) * 0.001)), q: roundQ(base, (50 + rnd() * 2500) / TOK[base].usd), t });
+    }
+    return m;
+  }
+  const M = PAIRS.map(makeMarket);
+  const byId = (id) => M.find((m) => m.id === id);
+  const findMarket = (a, b) => (a === b ? null : M.find((m) => (m.base === a && m.quote === b) || (m.base === b && m.quote === a)) || null);
+  const mid = (m) => { const a = m.asks[0] && m.asks[0].p, b = m.bids[0] && m.bids[0].p; return a && b ? (a + b) / 2 : (a || b || 0); };
+
+  const wm = byId('WETH-USDC'), lm = byId('LINK-USDC');
+  const S = {
+    tab: 'swap', tabDir: 0, mode: 'swap', mkt: 'WETH-USDC', detail: false, at: 'book', tf: 288, filter: 'all', search: '', msearch: '', psearch: '', ofilter: 'attive', details: false,
+    bal: { WETH: 3.2, WBTC: 0.15, USDC: 12400, USDT: 3000, DAI: 800, LINK: 120, UNI: 60, ARB: 2500 },
+    pay: 'USDC', recv: 'WETH', amount: '',
+    mk: { give: 'WETH', get: 'USDC', amount: '0,4', mode: 'fast', custom: '', exp: '1h', partial: true, ack: false },
+    offers: [
+      { id: 1, mkt: 'WETH-USDC', side: 'sell', baseAmt: 0.4, price: roundP(mid(wm) * 1.004), parts: 4, filled: 2, funded: 4, status: 'active', exp: 'tra 23 h', levelId: null },
+      { id: 2, mkt: 'WETH-USDC', side: 'buy', baseAmt: 0.6, price: roundP(mid(wm) * 0.995), parts: 3, filled: 0, funded: 2, status: 'paused', exp: 'tra 6 giorni', levelId: null },
+      { id: 3, mkt: 'LINK-USDC', side: 'buy', baseAmt: 40, price: roundP(mid(lm) * 0.99), parts: 1, filled: 0, funded: 1, status: 'resign', exp: 'tra 2 giorni', levelId: null }
+    ],
+    history: [{ t: 'Venduti 0,2 WETH', s: 'per 497,50 USDC · ieri' }],
+    nextOffer: 4, confirmAll: false, flash: {}, pending: null, rot: 0
+  };
+  try {
+    const p = JSON.parse(localStorage.getItem('mx-ui2') || '{}');
+    if (['swap', 'markets', 'offers'].includes(p.tab)) S.tab = p.tab;
+    if (['swap', 'make'].includes(p.mode)) S.mode = p.mode;
+    if (['book', 'trades'].includes(p.at)) S.at = p.at;
+    if (p.mkt && byId(p.mkt)) { const m = byId(p.mkt); S.mkt = m.id; S.pay = m.quote; S.recv = m.base; S.mk.give = m.base; S.mk.get = m.quote; if (m.id !== 'WETH-USDC') { S.amount = ''; S.mk.amount = ''; } }
+  } catch (e) { /* storage unavailable */ }
+  const save = () => { try { localStorage.setItem('mx-ui2', JSON.stringify({ tab: S.tab, mode: S.mode, at: S.at, mkt: S.mkt })); } catch (e) { /* ignore */ } };
+
+  // ---------- formatting ----------
+  const num = (s) => { const n = parseFloat(String(s == null ? '' : s).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
+  const fmt = (n, max, min = 0) => (Number.isFinite(n) ? n : 0).toLocaleString('it-IT', { minimumFractionDigits: Math.min(min, max), maximumFractionDigits: max, useGrouping: 'always' });
+  const fp = (p) => fmt(p, pdec(p), pdec(p));
+  const fq = (t, q) => fmt(q, qdec(t));
+  const fa = (t, a) => fmt(a, TOK[t].d);
+  const usd = (t, a) => a * TOK[t].usd;
+  const fusd = (v) => '≈ ' + fmt(v, v >= 100 ? 0 : 2, v >= 100 ? 0 : 2) + ' $';
+  const short$ = (v) => (v >= 1e6 ? fmt(v / 1e6, 1, 1) + ' M$' : v >= 1e3 ? fmt(v / 1e3, 0) + ' k$' : fmt(v, 0) + ' $');
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const amtHTML = (n, d) => { const s = fmt(n, d), i = s.indexOf(','); return i < 0 ? esc(s) : esc(s.slice(0, i)) + '<span class="dec">' + esc(s.slice(i)) + '</span>'; };
+  const coin = (t, size) => `<span class="coin" style="--c1:${TOK[t].c[0]};--c2:${TOK[t].c[1]}${size ? `;width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px` : ''}" aria-hidden="true">${TOK[t].g}</span>`;
+  const coins2 = (a, b, size) => `<span class="coins2">${coin(a, size)}${coin(b, size)}</span>`;
+  const tokBtn = (t) => `${coin(t)}<span>${t}</span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>`;
+  const clean = (v) => v.replace(/[^\d.,]/g, '');
+  const ago = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 5 ? 'ora' : s < 60 ? s + ' s fa' : Math.round(s / 60) + ' min fa'; };
+  const setSeg = (el, i) => el.style.setProperty('--i', i);
+  const pressed = (el, attr, val) => el.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset[attr] === val));
+  const fit = (el, text) => {
+    el.classList.remove('fit-m', 'fit-s');
+    const W = el.clientWidth, L = Math.max(1, String(text).length);
+    if (!W) return;
+    const base = innerWidth <= 400 ? 34 : 40, size = Math.max(18, Math.min(base, Math.floor(W / (L * 0.58))));
+    el.style.fontSize = size === base ? '' : size + 'px';
+  };
+  const preferred = ['USDC', 'WETH', 'USDT', 'DAI', 'WBTC', 'LINK', 'UNI', 'ARB'];
+  const counterpart = (t) => preferred.find((x) => x !== t && findMarket(t, x));
+
+  const tw = new WeakMap();
+  function tween(el, to, render) {
+    const prev = tw.get(el);
+    if (prev && prev.raf) cancelAnimationFrame(prev.raf);
+    const from = prev ? prev.v : to, rec = { v: from, raf: 0 };
+    tw.set(el, rec);
+    if (RM.matches || !prev || Math.abs(to - from) < 1e-12 || document.hidden) { rec.v = to; el.innerHTML = render(to); return; }
+    const t0 = performance.now(), D = 340;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
+      rec.v = from + (to - from) * e; el.innerHTML = render(rec.v);
+      if (k < 1) rec.raf = requestAnimationFrame(step); else { rec.v = to; rec.raf = 0; }
+    };
+    rec.raf = requestAnimationFrame(step);
+  }
+  const ENTER = ['enter', 'from-l', 'from-r'];
+  function reveal(el, show, animate, cls = 'enter') {
+    const was = !el.hidden; el.hidden = !show;
+    if (show && !was && animate && !RM.matches) { el.classList.remove(...ENTER); void el.offsetWidth; el.classList.add(cls); }
+  }
+  // lists cascade in when their view opens (not on every live re-render)
+  function cascade(el) {
+    if (RM.matches || !el) return;
+    el.classList.remove('stagger'); void el.offsetWidth; el.classList.add('stagger');
+    [...el.children].forEach((c, i) => c.style.setProperty('--k', Math.min(i, 12)));
+    clearTimeout(el._st); el._st = setTimeout(() => el.classList.remove('stagger'), 900);
+  }
+
+  // ---------- trade math ----------
+  function quote() {
+    const m = findMarket(S.pay, S.recv);
+    if (!m) return { ok: false };
+    const buy = S.pay === m.quote, levels = (buy ? m.asks : m.bids).filter((l) => !l.you), amount = num(S.amount);
+    let left = amount, got = 0, smallest = Infinity;
+    const legs = [];
+    // orders are all-or-nothing: take whole ones best-first while they fit (a smaller one further down may still fit)
+    for (const l of levels) {
+      let rem = l.q;
+      const parts = [];
+      smallest = Math.min(smallest, buy ? Math.min(l.unit || l.q, l.q) * l.p : Math.min(l.unit || l.q, l.q));
+      while (rem > 1e-12) {
+        const u = l.unit || l.q, base = rem - u < u * 0.25 ? rem : u, pay = buy ? base * l.p : base, out = buy ? base : base * l.p;
+        if (pay > left + 1e-9) break;
+        parts.push({ base, pay, out }); left -= pay; got += out; rem -= base;
+      }
+      if (parts.length) legs.push({ id: l.id, p: l.p, take: parts.reduce((s, x) => s + x.pay, 0), parts });
+    }
+    const liq = levels.reduce((s, l) => s + (buy ? l.q * l.p : l.q), 0), spent = amount - Math.max(0, left);
+    const orders = legs.reduce((s, l) => s + l.parts.length, 0);
+    return { ok: true, m, buy, amount, got, left: Math.max(0, left), legs, orders, liq, spent, smallest, avg: got > 0 ? (buy ? spent / got : got / spent) : (levels[0] ? levels[0].p : mid(m)) };
+  }
+  function mkInfo() {
+    const k = S.mk, m = findMarket(k.give, k.get);
+    if (!m) return null;
+    const sell = k.give === m.base, comp = (sell ? m.asks : m.bids).filter((l) => !l.you).map((l) => l.p);
+    const market = comp.length ? comp[0] : mid(m), fast = roundP(sell ? market * 0.995 : market * 1.005);
+    if (!k.custom) k.custom = fp(roundP(sell ? market * 1.01 : market * 0.99));
+    return { m, sell, comp, market, fast, price: k.mode === 'market' ? market : k.mode === 'fast' ? fast : num(k.custom) };
+  }
+  function syncMarket() {
+    const m = S.mode === 'swap' ? findMarket(S.pay, S.recv) : findMarket(S.mk.give, S.mk.get);
+    if (m) S.mkt = m.id;
+  }
+
+  // ---------- render: ticket ----------
+  function renderSwap() {
+    $('pay-tok').innerHTML = tokBtn(S.pay); $('recv-tok').innerHTML = tokBtn(S.recv);
+    $('pay-bal').textContent = fa(S.pay, S.bal[S.pay]); $('recv-bal').textContent = fa(S.recv, S.bal[S.recv]);
+    const pin = $('pay-in');
+    if (document.activeElement !== pin) pin.value = S.amount;
+    fit(pin, pin.value || '0');
+    const amount = num(S.amount), q = quote(), cta = $('review'), t = $('review-t');
+    tween($('pay-usd'), usd(S.pay, amount), fusd);
+    if (!q.ok) {
+      tween($('recv-out'), 0, () => '0'); $('recv-usd').textContent = '—';
+      $('rate').textContent = 'Nessun mercato per questa coppia';
+      $('legs').innerHTML = ''; $('legs-text').textContent = 'Scegli una moneta che abbia un mercato con l’altra.';
+      $('d-avg').textContent = '—'; $('d-exec').textContent = '—';
+      $('over').hidden = true; cta.disabled = true; t.textContent = 'Coppia non disponibile';
+      return;
+    }
+    const { m } = q, d = TOK[S.recv].d;
+    tween($('recv-out'), q.got, (v) => (v > 0 ? amtHTML(v, d) : '0'));
+    fit($('recv-out'), q.got > 0 ? fmt(q.got, d) : '0');
+    tween($('recv-usd'), usd(S.recv, q.got), fusd);
+    tween($('rate'), q.avg, (v) => `1 ${m.base} ≈ ${fp(v)} ${m.quote}`);
+    const rkey = m.id + (q.buy ? 'b' : 's'), rt = $('rate').parentElement;
+    if (S._rk === rkey && S._ra && Math.abs(q.avg - S._ra) > 1e-12 && !RM.matches) {
+      rt.classList.remove('tick-up', 'tick-down'); void rt.offsetWidth; rt.classList.add(q.avg > S._ra ? 'tick-up' : 'tick-down');
+      clearTimeout(rt._t); rt._t = setTimeout(() => rt.classList.remove('tick-up', 'tick-down'), 700);
+    }
+    S._rk = rkey; S._ra = q.avg;
+    const alphas = [1, 0.68, 0.45, 0.3, 0.2, 0.14];
+    $('legs').innerHTML = q.legs.map((l, i) => `<span style="flex:${Math.max(l.take, 1e-12)} 1 0;background:rgba(74,103,247,${alphas[i] || 0.12})"></span>`).join('');
+    const nOff = (n) => (n === 1 ? '1 offerta' : n + ' offerte');
+    $('legs-text').textContent = q.legs.length === 0 ? 'Scrivi un importo per vedere da quali offerte arriva.'
+      : `Da ${nOff(q.orders)} intere a ${q.legs.map((l) => fp(l.p)).join(' · ')} ${m.quote}. Stima dal libro: diventa definitiva dopo la verifica on-chain.`;
+    $('d-avg').textContent = fp(q.avg) + ' ' + m.quote;
+    $('d-exec').textContent = q.orders ? (q.orders === 1 ? '1 transazione' : q.orders + ' transazioni, una per offerta') : '—';
+    const short = q.liq + 1e-9 < amount && amount > 0;
+    const unused = !short && amount > 0 && q.left > Math.max(1e-9, amount * 1e-6, 10 ** -TOK[S.pay].d);
+    $('fit-note').hidden = !unused;
+    $('fit-note').textContent = q.got <= 0 ? `Importo sotto l’offerta più piccola disponibile (${fa(S.pay, q.smallest)} ${S.pay}).`
+      : `Le offerte si prendono intere: userai ${fa(S.pay, q.spent)} di ${fa(S.pay, amount)} ${S.pay}.`;
+    $('over').hidden = !short;
+    $('over-title').textContent = 'Disponibili ora solo ' + fa(S.pay, q.liq) + ' ' + S.pay;
+    const noFunds = amount > S.bal[S.pay] + 1e-12;
+    cta.disabled = amount <= 0 || noFunds || q.got <= 0;
+    if (q.got <= 0 && amount > 0 && !noFunds) { t.textContent = short ? 'Nessuna offerta disponibile' : 'Importo troppo piccolo'; return; }
+    t.textContent = amount <= 0 ? 'Scrivi un importo' : noFunds ? 'Saldo ' + S.pay + ' insufficiente' : short ? 'Rivedi lo scambio parziale' : 'Rivedi lo scambio';
+  }
+
+  function renderMake() {
+    const k = S.mk, I = mkInfo(), amount = num(k.amount);
+    $('mk-give').innerHTML = tokBtn(k.give); $('mk-get').innerHTML = tokBtn(k.get);
+    $('mk-bal').textContent = fa(k.give, S.bal[k.give]);
+    const min = $('mk-in');
+    if (document.activeElement !== min) min.value = k.amount;
+    fit(min, min.value || '0');
+    tween($('mk-usd'), usd(k.give, amount), fusd);
+    if (!I) {
+      $('mk-label').textContent = 'Dai'; $('mk-plabel').textContent = 'Prezzo'; $('mk-price').textContent = '—';
+      $('modes').innerHTML = ''; $('ticks').innerHTML = ''; $('you').hidden = true; $('custom-wrap').hidden = true;
+      $('pos-text').textContent = 'Nessun mercato per questa coppia'; $('pos-text').className = 'pos warn';
+      $('mk-recv').textContent = '—'; $('mk-fee').textContent = '—'; $('mk-need').textContent = '—';
+      $('mk-error').hidden = false; $('mk-error').textContent = 'Scegli due monete che abbiano un mercato.'; $('publish').disabled = true;
+      return;
+    }
+    const { m, sell, price } = I;
+    $('mk-label').textContent = sell ? 'Vendi' : 'Spendi';
+    if (document.activeElement !== $('custom-in')) $('custom-in').value = k.custom;
+    $('custom-unit').textContent = m.quote;
+    $('mk-plabel').textContent = 'Prezzo per 1 ' + m.base;
+    tween($('mk-price'), price, (v) => (v > 0 ? fp(v) + ' ' + m.quote : '—'));
+    const defs = [['market', fp(I.market), 'Al mercato'], ['fast', fp(I.fast), sell ? 'Vendi prima' : 'Compra prima'], ['custom', 'Altro', 'Scegli tu']];
+    $('modes').innerHTML = defs.map(([id, b, s]) => `<button type="button" class="choice" data-mode="${id}" aria-pressed="${k.mode === id}"><b>${esc(b)}</b><small>${esc(s)}</small></button>`).join('');
+    $('custom-wrap').hidden = k.mode !== 'custom';
+    const all = I.comp.concat(price > 0 ? [price] : []);
+    let lo = all.length ? Math.min(...all) : 0, hi = all.length ? Math.max(...all) : 1;
+    const padv = (hi - lo) * 0.12 || hi * 0.01 || 1; lo -= padv; hi += padv;
+    const pos = (p) => Math.max(0, Math.min(100, (sell ? p - lo : hi - p) / (hi - lo) * 100));
+    const ahead = (p) => (sell ? p < price : p > price);
+    $('ticks').innerHTML = I.comp.map((p) => `<span class="tick${ahead(p) ? ' ahead' : ''}" style="left:${pos(p).toFixed(2)}%"></span>`).join('');
+    $('you').hidden = !(price > 0);
+    if (price > 0) $('you').style.left = pos(price).toFixed(2) + '%';
+    const better = I.comp.filter(ahead).length, tie = I.comp.some((p) => Math.abs(p - price) < 1e-12), pt = $('pos-text');
+    if (price <= 0) { pt.textContent = 'Scrivi un prezzo'; pt.className = 'pos'; }
+    else if (better === 0) { pt.textContent = tie ? 'Alla pari con la migliore offerta' : 'Sarai la migliore offerta: prima in coda'; pt.className = 'pos good'; }
+    else { pt.textContent = better === 1 ? '1 offerta è più conveniente della tua' : better + ' offerte sono più convenienti della tua'; pt.className = 'pos warn'; }
+    setSeg($('exp-seg'), ['1h', '24h', '7d'].indexOf(k.exp)); pressed($('exp-seg'), 'exp', k.exp);
+    $('partial').checked = k.partial;
+    $('partial-note').textContent = k.partial ? `In 4 parti da ${fa(k.give, amount / 4)} ${k.give}` : 'Solo in un’unica soluzione';
+    $('parts').innerHTML = '<span></span>'.repeat(k.partial ? 4 : 1);
+    const recv = price > 0 ? (sell ? amount * price : amount / price) : 0;
+    tween($('mk-recv'), recv, (v) => fa(k.get, v) + ' ' + k.get);
+    $('mk-fee').textContent = fa(k.give, amount * FEE) + ' ' + k.give;
+    $('mk-need').textContent = fa(k.give, amount * (1 + FEE)) + ' ' + k.give;
+    // price guard (same rule as client/protect.js priceCheck): how much better than the book mid it is for a taker
+    const mm = mid(m), dev = price > 0 && mm > 0 ? (sell ? (mm - price) / mm : (price - mm) / mm) : 0;
+    const level = dev >= 0.10 ? 'danger' : dev >= 0.02 ? 'warn' : 'ok';
+    const g = $('mk-guard');
+    g.hidden = level === 'ok'; g.classList.toggle('danger', level === 'danger');
+    if (level !== 'ok') g.innerHTML = `<svg class="ic sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Il tuo prezzo è ${fmt(dev * 100, 1, 1)}% ${sell ? 'sotto' : 'sopra'} il mercato (${fp(mm)} ${m.quote}). I bot prendono subito le offerte così: ${level === 'danger' ? 'controlla bene la cifra.' : 'è voluto?'}</span>`;
+    $('mk-guard-ok-wrap').hidden = level !== 'danger';
+    if (level !== 'ok') $('pos-text').className = 'pos';
+    if (level !== 'danger') k.ack = false;
+    $('mk-guard-ok').checked = k.ack;
+    $('exp-note').hidden = k.exp !== '7d';
+    const err = amount <= 0 ? 'Scrivi quanto vuoi ' + (sell ? 'vendere.' : 'spendere.') : price <= 0 ? 'Scrivi un prezzo valido.'
+      : amount * (1 + FEE) > S.bal[k.give] + 1e-12 ? `Saldo insufficiente: servono ${fa(k.give, amount * (1 + FEE))} ${k.give}, commissione inclusa.` : '';
+    $('mk-error').hidden = !err; $('mk-error').textContent = err; $('publish').disabled = !!err || (level === 'danger' && !k.ack);
+  }
+
+  // ---------- render: markets ----------
+  function marketsFiltered(term, useFilter) {
+    const q = term.trim().toLowerCase();
+    return M.filter((m) => {
+      if (useFilter) {
+        if (S.filter === 'USDC' && m.quote !== 'USDC') return false;
+        if (S.filter === 'WETH' && m.base !== 'WETH' && m.quote !== 'WETH') return false;
+        if (S.filter === 'stable' && !(isStable(m.base) && isStable(m.quote))) return false;
+      }
+      if (!q) return true;
+      return [m.base, m.quote, TOK[m.base].name, TOK[m.quote].name].some((s) => s.toLowerCase().includes(q));
+    });
+  }
+  function mrow(m) {
+    const p = mid(m), ch = p / m.open - 1, up = ch >= 0, sel = m.id === S.mkt, now = Date.now();
+    const tick = m.flash && now - m.flash < 700 ? (m.dir > 0 ? ' tick-up' : ' tick-down') : '';
+    return `<button type="button" class="mrow${sel ? ' sel' : ''}${tick}" data-mkt="${m.id}"${sel ? ' aria-current="true"' : ''}>${coins2(m.base, m.quote, 28)}` +
+      `<span class="mr-name"><b>${m.base}<span> / ${m.quote}</span></b><small>Vol. ${short$(m.vol)}</small></span>` +
+      `<span class="mr-p"><b>${fp(p)}</b><small class="${up ? 'up' : 'down'}">${up ? '+' : ''}${fmt(ch * 100, 2, 2)}%</small></span></button>`;
+  }
+  function renderRail() {
+    const list = marketsFiltered(S.search, true);
+    $('m-list').innerHTML = list.length ? list.map(mrow).join('') : '<p class="empty">Nessun mercato trovato</p>';
+    $('m-count').textContent = list.length + (list.length === 1 ? ' coppia' : ' coppie');
+    pressed($('m-chips'), 'filter', S.filter);
+  }
+  function renderMPicker() {
+    const list = marketsFiltered(S.msearch, false);
+    $('mp-list').innerHTML = list.length ? list.map(mrow).join('') : '<p class="empty">Nessun mercato trovato</p>';
+  }
+
+  // ---------- render: pair ----------
+  function renderPair() {
+    const m = byId(S.mkt), p = mid(m), ch = p / m.open - 1, now = Date.now();
+    if (m.hist.length) m.hist[m.hist.length - 1] = { t: now, p }; // live last point
+    $('ph-coins').innerHTML = coins2(m.base, m.quote, 32);
+    $('ph-name').textContent = `${m.base} / ${m.quote}`;
+    $('ph-desc').textContent = TOK[m.base].name;
+    tween($('ph-mid'), p, (v) => fp(v));
+    $('ph-unit').textContent = m.quote;
+    const c = $('ph-chg'); c.className = 'chg ' + (ch >= 0 ? 'up' : 'down'); c.textContent = (ch >= 0 ? '+' : '') + fmt(ch * 100, 2, 2) + '%';
+    const day = m.hist.map((h) => h.p);
+    $('st-hi').textContent = fp(Math.max(...day)); $('st-lo').textContent = fp(Math.min(...day));
+    $('st-vol').textContent = short$(m.vol);
+    const a = m.asks[0] && m.asks[0].p, b = m.bids[0] && m.bids[0].p;
+    $('st-spr').textContent = a && b ? fmt((a - b) / p * 100, 2, 2) + '%' : '—';
+    $('st-liq').textContent = short$(m.asks.concat(m.bids).reduce((s, l) => s + l.q * l.p * TOK[m.quote].usd, 0));
+    const qa = m.asks.reduce((s, l) => s + l.q, 0), qb = m.bids.reduce((s, l) => s + l.q, 0);
+    $('depth-a').style.flexGrow = Math.max(qa, 1e-9); $('depth-b').style.flexGrow = Math.max(qb, 1e-9);
+    $('liq-a').textContent = fq(m.base, qa) + ' ' + m.base; $('liq-b').textContent = fq(m.base, qb) + ' ' + m.base;
+    $('ph-buy').textContent = 'Compra ' + m.base; $('ph-sell').textContent = 'Vendi ' + m.base;
+    document.querySelectorAll('.bh-base').forEach((e) => { e.textContent = m.base; });
+    document.querySelectorAll('.bh-quote').forEach((e) => { e.textContent = m.quote; });
+    // cumulative depth from the best price outward; bars share one scale across both sides
+    const cum = (list) => { let t = 0; return list.map((l) => (t += l.q)); };
+    const ca = cum(m.asks), cb = cum(m.bids), max = Math.max(1e-12, ca[ca.length - 1] || 0, cb[cb.length - 1] || 0), tdec = isStable(m.quote) ? 0 : qdec(m.quote);
+    const row = (l, side, depth) => {
+      const fl = S.flash[l.id] && now - S.flash[l.id] < 1200 ? ' flash' : '';
+      return `<button type="button" class="lvl ${side}${fl}" data-side="${side}" data-id="${l.id}" aria-label="${side === 'ask' ? 'Compra' : 'Vendi'} fino a ${fq(m.base, l.q)} ${m.base} a ${fp(l.p)} ${m.quote}">` +
+        `<span class="lvl-bar" style="width:${Math.round(depth / max * 100)}%"></span><span class="p">${fp(l.p)}${l.you ? '<span class="you-tag">TU</span>' : ''}</span>` +
+        `<span class="r">${fq(m.base, l.q)}</span><span class="r t">${fmt(l.p * l.q, tdec)}</span></button>`;
+    };
+    // asks: highest at the top, best ask just above the middle row
+    $('asks').innerHTML = m.asks.length ? m.asks.map((l, i) => row(l, 'ask', ca[i])).reverse().join('') : '<p class="empty">Nessuna offerta di vendita</p>';
+    $('bids').innerHTML = m.bids.length ? m.bids.map((l, i) => row(l, 'bid', cb[i])).join('') : '<p class="empty">Nessuna offerta di acquisto</p>';
+    const mp = $('ob-midp');
+    if (S._mm === m.id && S._mp && Math.abs(p - S._mp) > 1e-12 && !RM.matches) {
+      mp.classList.remove('up', 'down'); void mp.offsetWidth; mp.classList.add(p > S._mp ? 'up' : 'down');
+      clearTimeout(mp._t); mp._t = setTimeout(() => mp.classList.remove('up', 'down'), 700);
+    }
+    S._mm = m.id; S._mp = p;
+    tween(mp, p, (v) => fp(v));
+    $('ob-spr').textContent = a && b ? `Differenza ${fp(a - b)} · ${fmt((a - b) / p * 100, 2, 2)}%` : '';
+    $('trades').innerHTML = m.trades.slice(0, 14).map((t) =>
+      `<div class="tr${now - t.t < 1500 ? ' flash' : ''}"><span class="p ${t.buy ? 'ask-t' : 'bid-t'}">${fp(t.p)}</span><span class="r">${fq(m.base, t.q)}</span><span class="when">${ago(t.t)}</span></div>`).join('');
+    setSeg($('bt-seg'), S.at === 'book' ? 0 : 1); pressed($('bt-seg'), 'at', S.at); $('bt').dataset.show = S.at;
+    pressed($('tf'), 'tf', String(S.tf));
+    renderChart();
+  }
+
+  // ---------- chart: line of the mid price, right price axis, last-price tag, crosshair on hover/touch ----------
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  function chartGeom() {
+    const m = byId(S.mkt), pts = m.hist.slice(-S.tf - 1), el = $('chart');
+    const W = el.clientWidth, H = el.clientHeight, padR = 72, padB = 18, padT = 8;
+    const ps = pts.map((x) => x.p), lo = Math.min(...ps), hi = Math.max(...ps), span = hi - lo || hi * 0.001 || 1;
+    const x = (i) => (i / Math.max(1, pts.length - 1)) * (W - padR);
+    const y = (v) => padT + (1 - (v - lo + span * 0.08) / (span * 1.16)) * (H - padT - padB);
+    return { m, pts, W, H, padR, padB, lo, hi, span, x, y };
+  }
+  function renderChart() {
+    const el = $('chart');
+    if (!el.clientWidth || el.offsetParent === null) return;
+    const g = chartGeom(), { pts, W, H, padR, padB, x, y, lo, span, m } = g;
+    const up = pts[pts.length - 1].p >= pts[0].p, col = up ? 'var(--up)' : 'var(--down)';
+    let d = '';
+    pts.forEach((pt, i) => { d += (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(pt.p).toFixed(1); });
+    const ticks = [0, 1, 2, 3].map((k) => lo - span * 0.08 + (span * 1.16 * (k + 0.5)) / 4);
+    const last = pts[pts.length - 1].p;
+    const svg = $('ch-svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML = ticks.map((v) => `<line x1="0" x2="${W - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`).join('') +
+      `<line x1="0" x2="${W - padR}" y1="${y(last).toFixed(1)}" y2="${y(last).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="2 4" opacity=".6"/>` +
+      `<path d="${d}" fill="none" stroke="var(--fg)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` +
+      `<circle cx="${x(pts.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="3" fill="${col}"/>` +
+      `<g id="ch-cross" visibility="hidden"><line id="ch-vx" y1="0" y2="${H - padB}" stroke="rgba(255,255,255,.35)" stroke-width="1"/><circle id="ch-dot" r="3.5" fill="var(--fg)"/></g>`;
+    const tf = S.tf, labelsX = [0, 0.5, 1].map((f) => { const i = Math.round(f * (pts.length - 1)); const dt = new Date(pts[i].t); return { left: x(i), text: tf <= 48 ? dt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : dt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) }; });
+    $('ch-labels').innerHTML = ticks.filter((v) => Math.abs(y(v) - y(last)) > 16).map((v) => `<span class="ch-y" style="top:${y(v).toFixed(1)}px">${fp(v)}</span>`).join('') +
+      labelsX.map((l, i) => `<span class="ch-x" style="left:${Math.min(W - padR - 20, Math.max(20, l.left)).toFixed(0)}px">${i === 2 ? 'ora' : esc(l.text)}</span>`).join('') +
+      `<span class="ch-last" style="top:${y(last).toFixed(1)}px;background:${col}">${fp(last)}</span>`;
+    el.setAttribute('aria-label', `Andamento ${m.base}/${m.quote}: da ${fp(pts[0].p)} a ${fp(last)} ${m.quote}`);
+  }
+  function chartHover(e) {
+    const el = $('chart'), r = el.getBoundingClientRect(), g = chartGeom();
+    const px = Math.max(0, Math.min(g.W - g.padR, e.clientX - r.left)), i = Math.round((px / (g.W - g.padR)) * (g.pts.length - 1)), pt = g.pts[i];
+    const cx = g.x(i), cy = g.y(pt.p), cross = $('ch-cross');
+    if (!cross) return;
+    cross.setAttribute('visibility', 'visible');
+    $('ch-vx').setAttribute('x1', cx); $('ch-vx').setAttribute('x2', cx);
+    $('ch-dot').setAttribute('cx', cx); $('ch-dot').setAttribute('cy', cy);
+    const tip = $('ch-tip'); tip.hidden = false;
+    tip.textContent = `${fp(pt.p)} ${g.m.quote} · ${new Date(pt.t).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+    tip.style.left = Math.min(g.W - g.padR - tip.offsetWidth, Math.max(0, cx - tip.offsetWidth / 2)) + 'px';
+  }
+  function chartLeave() { const c = $('ch-cross'); if (c) c.setAttribute('visibility', 'hidden'); $('ch-tip').hidden = true; }
+
+  // ---------- render: offers ----------
+  function segbar(o) {
+    let h = '';
+    for (let i = 0; i < o.parts; i++) h += `<span class="${i < o.filled ? 'done' : o.status === 'paused' ? (i < o.funded ? 'wait' : 'pause') : ''}"></span>`;
+    return `<div class="segbar" style="grid-template-columns:repeat(${o.parts},minmax(0,1fr))" aria-hidden="true">${h}</div>`;
+  }
+  function offersHTML() {
+    const live = S.offers.filter((o) => ['active', 'paused', 'resign'].includes(o.status));
+    let h = `<div class="chips" role="group" aria-label="Filtro offerte" style="padding: var(--s1) var(--s2) var(--s2)"><button type="button" class="chip" data-of="attive" aria-pressed="${S.ofilter === 'attive'}">Attive · ${live.length}</button><button type="button" class="chip" data-of="storico" aria-pressed="${S.ofilter === 'storico'}">Storico</button></div>`;
+    if (S.ofilter === 'storico') {
+      return h + (S.history.length ? `<div class="hist">${S.history.map((x) => `<div class="hist-row"><span>${esc(x.t)}</span><span>${esc(x.s)}</span></div>`).join('')}</div>` : '<p class="empty">Ancora nessuno scambio concluso.</p>');
+    }
+    if (!live.length) return h + '<div class="empty">Nessuna offerta attiva.<br><button type="button" class="btn" data-go="make" style="margin-top: var(--s3)">Proponi un prezzo</button></div>';
+    h += '<div class="offers">' + live.map((o) => {
+      const m = byId(o.mkt), quoteAmt = o.baseAmt * o.price;
+      const title = o.side === 'sell' ? `Vendi ${fq(m.base, o.baseAmt)} ${m.base}` : `Compra ${fq(m.base, o.baseAmt)} ${m.base}`;
+      const sub = `${o.side === 'sell' ? 'per' : 'con'} ${fa(m.quote, quoteAmt)} ${m.quote} · ${fp(o.price)} l’uno`;
+      const status = o.status === 'active' ? '<span class="status ok">Attiva</span>' : o.status === 'paused' ? '<span class="status warn">In pausa</span>' : '<span class="status warn">Da rifirmare</span>';
+      const mm = mid(m), stale = o.status === 'active' && mm > 0 && (o.side === 'sell' ? o.price < mm * 0.99 : o.price > mm * 1.01);
+      const staleNote = stale ? `<p class="o-stale">Il mercato si è spostato: ora ${fp(mm)} ${m.quote}. Chi accetta guadagna ${fmt(Math.abs(mm - o.price) / mm * 100, 1, 1)}% su di te. Valuta di annullarla e rifarla.</p>` : '';
+      const info = staleNote + (o.status === 'active' ? `<div class="o-meta"><span>${o.parts > 1 ? `Eseguite ${o.filled} parti su ${o.parts}` : 'In attesa di chi accetta'}</span><span>Scade ${esc(o.exp)}</span></div>`
+        : o.status === 'paused' ? `<p class="o-note">Il saldo copre ${o.funded} parti su ${o.parts}: le altre restano nascoste finché non aggiungi fondi.</p>`
+        : '<p class="o-note">La commissione della piattaforma è cambiata. Rifirma per rimetterla in vendita, senza costi.</p>');
+      const act = o.status === 'active' ? `<button type="button" class="btn block" data-act="cancel" data-id="${o.id}"><svg class="ic sm" aria-hidden="true"><use href="#i-shield"/></svg>${o.filled > 0 ? 'Annulla il resto' : 'Annulla'}</button>`
+        : o.status === 'paused' ? `<button type="button" class="btn accent block" data-act="fund" data-id="${o.id}">Aggiungi fondi</button>`
+        : `<button type="button" class="btn accent block" data-act="resign" data-id="${o.id}">Rifirma · gratis</button>`;
+      return `<article class="offer${o.status !== 'active' ? ' attn' : ''}"><div class="o-top"><div><div class="o-mkt">${coins2(m.base, m.quote, 18)}${m.base} / ${m.quote}</div><div class="o-title">${esc(title)}</div><div class="o-sub">${esc(sub)}</div></div>${status}</div>${o.parts > 1 ? segbar(o) : ''}${info}${act}</article>`;
+    }).join('') + '</div>';
+    h += S.confirmAll
+      ? `<div class="confirm-all"><b>Annullare tutte le ${live.length} offerte?</b><span class="o-note">Una sola transazione, inviata in privato, le invalida sulla blockchain prima che un bot possa prenderle.</span><div class="two"><button type="button" class="btn" data-ca="no">Tieni</button><button type="button" class="btn accent" data-ca="yes">Annulla tutte</button></div></div>`
+      : '<button type="button" class="btn ghost block" data-ca="ask"><svg class="ic sm" aria-hidden="true"><use href="#i-shield"/></svg>Annulla tutte · 1 transazione</button>';
+    return h;
+  }
+  function renderOffers() {
+    const html = offersHTML();
+    $('offers-d').innerHTML = html; $('offers-m-list').innerHTML = html;
+    const attn = S.offers.filter((o) => o.status === 'paused' || o.status === 'resign').length;
+    for (const id of ['badge', 'act-badge']) { $(id).hidden = attn === 0; $(id).textContent = attn; }
+  }
+
+  // ---------- nav ----------
+  function renderNav(animate) {
+    const w2 = MQ2.matches, w3 = MQ3.matches;
+    const tabCls = S.tabDir > 0 ? 'from-r' : S.tabDir < 0 ? 'from-l' : 'enter';
+    reveal($('rail'), w3 || (!w2 && S.tab === 'markets' && !S.detail), animate && !w2, S.detail === false && S.tab === 'markets' && S.tabDir === 0 ? 'from-l' : tabCls);
+    reveal($('center'), w2 || (S.tab === 'markets' && S.detail), animate && !w2, 'from-r');
+    reveal($('ticket'), w2 || S.tab === 'swap', animate && !w2, tabCls);
+    reveal($('offers-m'), !w2 && S.tab === 'offers', animate && !w2, tabCls);
+    $('back').hidden = w2;
+    $('act-card').hidden = !w2;
+    const dock = $('dock');
+    setSeg(dock, ['swap', 'markets', 'offers'].indexOf(S.tab));
+    dock.querySelectorAll('button').forEach((b) => (b.dataset.tab === S.tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
+    setSeg($('mode-seg'), S.mode === 'swap' ? 0 : 1); pressed($('mode-seg'), 'm', S.mode);
+    reveal($('m-swap'), S.mode === 'swap', animate, 'from-l');
+    reveal($('m-make'), S.mode === 'make', animate, 'from-r');
+  }
+  function render(animate = true) { renderNav(animate); renderSwap(); renderMake(); renderRail(); renderPair(); renderOffers(); }
+
+  const top = () => window.scrollTo({ top: 0, behavior: RM.matches ? 'auto' : 'smooth' });
+  const TABS = ['swap', 'markets', 'offers'];
+  function goTab(tab) {
+    S.tabDir = Math.sign(TABS.indexOf(tab) - TABS.indexOf(S.tab));
+    if (tab === 'markets' && S.tab === 'markets') S.detail = false;
+    S.tab = tab; save(); render(); top();
+    if (tab === 'markets' && !S.detail) cascade($('m-list'));
+    if (tab === 'offers') cascade($('offers-m-list').querySelector('.offers'));
+    S.tabDir = 0;
+  }
+  function setMode(mode) { S.mode = mode; syncMarket(); save(); render(); }
+  let tt;
+  function toast(t, s) { $('toast-t').textContent = t; $('toast-s').textContent = s || ''; const el = $('toast'); el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 3200); }
+  function ping() { const c = $('trade-card'); c.classList.remove('ping'); void c.offsetWidth; c.classList.add('ping'); }
+
+  function selectMarket(id, openDetail) {
+    const m = byId(id); if (!m) return;
+    S.mkt = id;
+    if (findMarket(S.pay, S.recv) !== m) { S.pay = m.quote; S.recv = m.base; S.amount = ''; }
+    if (findMarket(S.mk.give, S.mk.get) !== m) { S.mk.give = m.base; S.mk.get = m.quote; S.mk.amount = ''; S.mk.custom = ''; S.mk.mode = 'market'; }
+    if (!MQ2.matches && openDetail) { S.detail = true; S.tab = 'markets'; }
+    save(); render();
+    if (!MQ2.matches && openDetail) top();
+  }
+
+  // ---------- sheets ----------
+  const openSheets = new Set();
+  let lastFocus = null;
+  function openSheet(id, focusEl) {
+    const s = $(id); lastFocus = document.activeElement; s.hidden = false; openSheets.add(id);
+    requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add('open')));
+    (focusEl || s.querySelector('button')).focus({ preventScroll: true });
+  }
+  function closeSheet(id) {
+    if (!openSheets.has(id)) return;
+    const s = $(id); openSheets.delete(id); s.classList.remove('open');
+    setTimeout(() => { if (!openSheets.has(id)) s.hidden = true; }, RM.matches ? 0 : 340);
+    if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+  }
+
+  // ---------- events: navigation & markets ----------
+  $('dock').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) goTab(b.dataset.tab); });
+  $('back').addEventListener('click', () => { S.detail = false; S.tabDir = -1; render(); top(); S.tabDir = 0; cascade($('m-list')); });
+  $('mode-seg').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) setMode(b.dataset.m); });
+  $('bt-seg').addEventListener('click', (e) => { const b = e.target.closest('[data-at]'); if (b) { S.at = b.dataset.at; save(); renderPair(); const pane = $('bt').querySelector(S.at === 'book' ? '.ob' : '.tw'); pane.classList.remove('from-l', 'from-r'); void pane.offsetWidth; pane.classList.add(S.at === 'book' ? 'from-l' : 'from-r'); } });
+  $('tf').addEventListener('click', (e) => { const b = e.target.closest('[data-tf]'); if (b) { S.tf = +b.dataset.tf; renderPair(); } });
+  $('chart').addEventListener('pointermove', chartHover);
+  $('chart').addEventListener('pointerdown', chartHover);
+  $('chart').addEventListener('pointerleave', chartLeave);
+  if (window.ResizeObserver) new ResizeObserver(() => renderChart()).observe($('chart'));
+  $('m-search').addEventListener('input', (e) => { S.search = e.target.value; renderRail(); });
+  $('m-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (b) { S.filter = b.dataset.filter; renderRail(); } });
+  $('m-list').addEventListener('click', (e) => { const b = e.target.closest('[data-mkt]'); if (b) selectMarket(b.dataset.mkt, true); });
+  $('pair-btn').addEventListener('click', () => { S.msearch = ''; $('mp-search').value = ''; renderMPicker(); openSheet('mpicker', $('mp-search')); });
+  $('mp-search').addEventListener('input', (e) => { S.msearch = e.target.value; renderMPicker(); });
+  $('mp-list').addEventListener('click', (e) => { const b = e.target.closest('[data-mkt]'); if (b) { closeSheet('mpicker'); selectMarket(b.dataset.mkt, false); } });
+  $('mp-close').addEventListener('click', () => closeSheet('mpicker'));
+  $('mpicker').addEventListener('click', (e) => { if (e.target === $('mpicker')) closeSheet('mpicker'); });
+  MQ2.addEventListener('change', () => renderNav(false));
+  MQ3.addEventListener('change', () => renderNav(false));
+
+  function trade(side) {
+    const m = byId(S.mkt);
+    if (side === 'buy') { S.pay = m.quote; S.recv = m.base; } else { S.pay = m.base; S.recv = m.quote; }
+    S.amount = ''; S.mode = 'swap';
+    if (!MQ2.matches) S.tab = 'swap';
+    save(); render(); if (!MQ2.matches) top(); ping();
+    if (MQ2.matches) $('pay-in').focus({ preventScroll: true });
+  }
+  $('ph-buy').addEventListener('click', () => trade('buy'));
+  $('ph-sell').addEventListener('click', () => trade('sell'));
+  $('center').addEventListener('click', (e) => {
+    const r = e.target.closest('.lvl'); if (!r) return;
+    const m = byId(S.mkt), side = r.dataset.side, list = side === 'ask' ? m.asks : m.bids, l = list.find((x) => x.id === +r.dataset.id);
+    if (!l) return;
+    if (l.you) { toast('È una tua offerta', 'La trovi in Le mie offerte'); return; }
+    let total = 0;
+    for (const x of list) { if (x.you) continue; if (side === 'ask' ? x.p > l.p : x.p < l.p) break; total += side === 'ask' ? x.q * x.p : x.q; }
+    if (side === 'ask') { S.pay = m.quote; S.recv = m.base; } else { S.pay = m.base; S.recv = m.quote; }
+    S.amount = fa(S.pay, total); S.mode = 'swap';
+    if (!MQ2.matches) S.tab = 'swap';
+    save(); $('pay-in').value = S.amount; render(); if (!MQ2.matches) top(); ping();
+  });
+
+  // ---------- events: swap ----------
+  for (const [id, get, set, tok] of [['pay-in', () => S.amount, (v) => { S.amount = v; }, () => S.pay], ['mk-in', () => S.mk.amount, (v) => { S.mk.amount = v; }, () => S.mk.give]]) {
+    $(id).addEventListener('blur', () => { const n = num(get()); if (n > 0) { set(fa(tok(), n)); $(id).value = get(); render(false); } });
+  }
+  $('pay-in').addEventListener('input', (e) => { const v = clean(e.target.value); if (v !== e.target.value) e.target.value = v; S.amount = v; renderSwap(); });
+  document.querySelectorAll('.qb').forEach((b) => b.addEventListener('click', () => { S.amount = fa(S.pay, S.bal[S.pay] * parseFloat(b.dataset.q)); $('pay-in').value = S.amount; renderSwap(); }));
+  $('flip').addEventListener('click', () => {
+    const q = quote();
+    [S.pay, S.recv] = [S.recv, S.pay];
+    S.amount = q.ok && q.got > 0 ? fa(S.pay, q.got) : '';
+    S.rot += 180; $('flip').style.setProperty('--rot', S.rot + 'deg');
+    $('pay-in').value = S.amount; render();
+  });
+  $('sum-btn').addEventListener('click', () => { S.details = !S.details; $('details').classList.toggle('open', S.details); $('sum-btn').setAttribute('aria-expanded', S.details); });
+  $('over').addEventListener('click', () => {
+    const q = quote(); S.mk.give = S.pay; S.mk.get = S.recv; S.mk.amount = fa(S.pay, q.left); S.mk.mode = 'market'; S.mk.custom = '';
+    setMode('make');
+  });
+
+  // token picker
+  let pickTarget = null;
+  const curOf = (t) => ({ pay: S.pay, recv: S.recv, give: S.mk.give, get: S.mk.get }[t]);
+  const otherOf = (t) => ({ pay: S.recv, recv: S.pay, give: S.mk.get, get: S.mk.give }[t]);
+  function renderPicker() {
+    const cur = curOf(pickTarget), other = otherOf(pickTarget), needMkt = pickTarget === 'recv' || pickTarget === 'get', q = S.psearch.trim().toLowerCase();
+    const list = Object.keys(TOK).filter((t) => !q || t.toLowerCase().includes(q) || TOK[t].name.toLowerCase().includes(q));
+    $('p-list').innerHTML = list.length ? list.map((t) => {
+      const has = t === other || !!findMarket(t, other), dis = needMkt && (!has || t === other);
+      const sub = dis ? (t === other ? 'È già l’altra moneta' : 'Nessun mercato con ' + other) : TOK[t].name;
+      return `<button type="button" class="coin-item" data-t="${t}" aria-pressed="${t === cur}"${dis ? ' disabled' : ''}>${coin(t)}<span class="grow"><b>${t}</b><small>${esc(sub)}</small></span><span class="bal">${fa(t, S.bal[t])}<small>${fusd(usd(t, S.bal[t]))}</small></span></button>`;
+    }).join('') : '<p class="empty">Nessuna moneta trovata</p>';
+  }
+  function openPicker(target) {
+    pickTarget = target; S.psearch = ''; $('p-search').value = '';
+    $('p-title').textContent = { pay: 'Moneta da pagare', recv: 'Moneta da ricevere', give: 'Moneta che dai', get: 'Moneta che ricevi' }[target];
+    renderPicker(); openSheet('picker', $('p-search'));
+  }
+  $('pay-tok').addEventListener('click', () => openPicker('pay'));
+  $('recv-tok').addEventListener('click', () => openPicker('recv'));
+  $('mk-give').addEventListener('click', () => openPicker('give'));
+  $('mk-get').addEventListener('click', () => openPicker('get'));
+  $('p-search').addEventListener('input', (e) => { S.psearch = e.target.value; renderPicker(); });
+  $('p-close').addEventListener('click', () => closeSheet('picker'));
+  $('picker').addEventListener('click', (e) => { if (e.target === $('picker')) closeSheet('picker'); });
+  $('p-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-t]'); if (!b || b.disabled) return;
+    const t = b.dataset.t, k = S.mk;
+    if (pickTarget === 'pay') { if (t === S.recv) S.recv = S.pay; S.pay = t; if (!findMarket(S.pay, S.recv)) S.recv = counterpart(S.pay); S.amount = ''; }
+    else if (pickTarget === 'recv') { S.recv = t; }
+    else if (pickTarget === 'give') { if (t === k.get) k.get = k.give; k.give = t; if (!findMarket(k.give, k.get)) k.get = counterpart(k.give); k.amount = ''; k.custom = ''; k.mode = 'market'; }
+    else { k.get = t; k.custom = ''; k.mode = 'market'; }
+    syncMarket(); closeSheet('picker'); save(); render();
+  });
+
+  // confirm — the quote is indicative until the on-chain check (eth_call), the recipient is always the connected wallet,
+  // and every order is its own transaction that can be skipped (taken before sending: free) or fail (taken in the mempool: gas paid).
+  let busy = false;
+  S.allowed = {};
+  const wait = (ms) => new Promise((r) => setTimeout(r, RM.matches ? 0 : ms));
+  function setStep(id, s, txt) { const el = $(id); el.dataset.s = s; el.querySelector('small').textContent = txt; }
+  const OS = { wait: ['In coda', ''], verify: ['Verifica…', 'run'], sign: ['Firma nel wallet…', 'run'], pending: ['In conferma…', 'run'],
+    done: ['Eseguita', 'ok'], skipped: ['Già presa · nessun costo', 'bad'], dropped: ['Presa prima di te · non inclusa, nessun costo', 'bad'], failed: ['Presa prima di te · gas pagato', 'bad'] };
+  const active = (P) => P.orders.filter((o) => o.st !== 'skipped');
+  function renderOrders(P) {
+    const m = P.m;
+    $('c-olist').innerHTML = P.orders.map((o, i) => {
+      const [t, cls] = OS[o.st], spin = cls === 'run' ? '<span class="spin" aria-hidden="true"></span>' : '';
+      return `<div class="orow${o.st === 'skipped' ? ' gone' : ''}"><span>${i + 1}. ${fq(m.base, o.base)} ${m.base} a ${fp(o.p)}</span><span class="os ${cls}">${spin}${t}</span></div>`;
+    }).join('');
+  }
+  // ---------- wallet & MEV protection status (EIP-6963; same rules as client/wallet-protection.js) ----------
+  const PROT_RPC = { 1: [['MEV Blocker (no revert)', 'https://rpc.mevblocker.io/noreverts'], ['Flashbots Protect', 'https://rpc.flashbots.net/fast']] };
+  const L2 = new Set([8453, 10, 42161]);
+  const WPROT = { 'io.metamask': { name: 'MetaMask', path: 'Impostazioni › Transazioni (estensione) o Impostazioni › Avanzate (mobile)' }, 'io.metamask.flask': { name: 'MetaMask Flask', path: 'Impostazioni › Transazioni' } };
+  const DEMO_WALLETS = [{ rdns: 'io.metamask', name: 'MetaMask', demo: true }, { rdns: 'io.rabby', name: 'Rabby', demo: true }, { rdns: 'other', name: 'Altro wallet', demo: true }];
+  let rpcSet = {};
+  try { rpcSet = JSON.parse(localStorage.getItem('fondaco-rpcset') || '{}'); } catch (e) { /* storage unavailable */ }
+  S.wallets = []; S.wal = 'io.metamask'; S.chain = 1;
+  function walStatus() {
+    const w = WPROT[S.wal], rpc = PROT_RPC[S.chain] || [];
+    if (L2.has(S.chain)) return { level: 'l2', ok: true, title: 'Non serve su questa rete', detail: 'Su Base le transazioni vanno al sequencer: non c’è una mempool pubblica da cui un bot possa copiarle.', rpc: [] };
+    if (!rpc.length) return { level: 'none', ok: false, title: 'Nessun RPC protetto noto', detail: 'Su questa rete le transazioni passano dalla mempool pubblica.', rpc: [] };
+    if (w) return { level: 'wallet', ok: true, title: `Protetto da ${w.name}`, detail: `${w.name} instrada le transazioni con Smart Transactions, attivo di default (protezione MEV e dai revert). Verifica che sia acceso in ${w.path}. Non impostare un RPC personalizzato per Ethereum: lo disattiverebbe.`, rpc: [] };
+    if (rpcSet[S.wal]) return { level: 'user_rpc', ok: true, title: 'RPC protetto impostato', detail: 'Hai indicato di usare un RPC protetto in questo wallet: le transazioni non passano dalla mempool pubblica.', rpc };
+    return { level: 'guide', ok: false, title: 'Non protetto', detail: 'Il tuo wallet invia dalla mempool pubblica: un bot può vedere la transazione e passare prima di te. Imposta un RPC protetto per Ethereum nel wallet.', rpc };
+  }
+  function renderWallet() {
+    const st = walStatus(), list = S.wallets.length ? S.wallets : DEMO_WALLETS;
+    $('wal-dot').classList.toggle('off', !st.ok);
+    $('net-lbl').textContent = S.chain === 8453 ? 'Base' : 'Ethereum';
+    $('w-list-l').textContent = S.wallets.length ? 'Wallet trovati nel browser' : 'Wallet collegato (anteprima: nessun wallet trovato nel browser)';
+    $('w-list').innerHTML = list.map((w) => `<label><input type="radio" name="wsel" value="${esc(w.rdns)}"${w.rdns === S.wal ? ' checked' : ''}><span><b>${esc(w.name)}</b><small>${w.demo ? 'anteprima' : esc(w.rdns)}</small></span></label>`).join('');
+    document.querySelectorAll('input[name="wnet"]').forEach((r) => { r.checked = +r.value === S.chain; });
+    const ic = st.ok ? 'i-shield' : 'i-alert';
+    let h = `<div class="wstat-h"><svg class="ic sm" aria-hidden="true"><use href="#${ic}"/></svg>${esc(st.title)}</div><p>${esc(st.detail)}</p>`;
+    if (st.level === 'guide') h += '<ol class="wsteps"><li>Copia uno degli indirizzi qui sotto.</li><li>Nel wallet apri le impostazioni delle reti e scegli Ethereum.</li><li>Aggiungi un nuovo RPC con l’indirizzo copiato e impostalo come predefinito.</li><li>Torna qui e conferma: FONDACO se lo ricorda per questo wallet.</li></ol>';
+    if (st.rpc.length) h += '<div>' + st.rpc.map(([n, u]) => `<div class="rpc-row"><div><b>${esc(n)}</b><code>${esc(u)}</code></div><button type="button" class="btn" data-copy="${esc(u)}" data-name="${esc(n)}">Copia</button></div>`).join('') + '</div>' +
+      `<label class="guard-ok"><input type="checkbox" id="w-rpcset"${rpcSet[S.wal] ? ' checked' : ''}>Ho impostato l’RPC protetto in questo wallet</label>`;
+    const box = $('w-stat'); box.innerHTML = h; box.classList.toggle('off', !st.ok);
+    renderMev();
+  }
+  function renderMev() {
+    const st = walStatus();
+    $('c-mev').innerHTML = `<span class="mev-row"><span class="mev${st.ok ? '' : ' off'}"><svg class="ic sm" aria-hidden="true"><use href="#${st.ok ? 'i-shield' : 'i-alert'}"/></svg>${esc(st.ok ? (st.level === 'l2' ? 'Non serve (L2)' : st.title) : 'Mempool pubblica')}</span><button type="button" class="linkbtn" data-wsheet>${st.ok ? 'Dettagli' : 'Attivala'}</button></span>`;
+  }
+  const openW = () => { renderWallet(); openSheet('wsheet', $('w-close')); };
+  $('wal-chip').addEventListener('click', openW);
+  $('net-chip').addEventListener('click', openW);
+  $('c-mev').addEventListener('click', (e) => { if (e.target.closest('[data-wsheet]')) openW(); });
+  $('w-close').addEventListener('click', () => closeSheet('wsheet'));
+  $('wsheet').addEventListener('click', (e) => { if (e.target === $('wsheet')) closeSheet('wsheet'); });
+  $('w-list').addEventListener('change', (e) => { if (e.target.name === 'wsel') { S.wal = e.target.value; renderWallet(); } });
+  $('w-net').addEventListener('change', (e) => { if (e.target.name === 'wnet') { S.chain = +e.target.value; renderWallet(); } });
+  $('w-stat').addEventListener('change', (e) => {
+    if (e.target.id !== 'w-rpcset') return;
+    if (e.target.checked) rpcSet[S.wal] = true; else delete rpcSet[S.wal];
+    try { localStorage.setItem('fondaco-rpcset', JSON.stringify(rpcSet)); } catch (err) { /* storage unavailable */ }
+    renderWallet();
+  });
+  $('w-stat').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copy]'); if (!b) return;
+    const url = b.dataset.copy;
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch (err) {
+      try { const t = document.createElement('textarea'); t.value = url; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); ok = document.execCommand('copy'); t.remove(); } catch (err2) { ok = false; }
+    }
+    b.textContent = ok ? 'Copiato' : 'Seleziona';
+    setTimeout(() => { b.textContent = 'Copia'; }, 1600);
+    if (ok) toast('Indirizzo copiato', b.dataset.name); else toast('Copia non riuscita', 'Tieni premuto sull’indirizzo per copiarlo');
+  });
+  // EIP-6963: real wallets announce themselves; without any, the sheet shows a preview list
+  window.addEventListener('eip6963:announceProvider', (e) => {
+    const d = e.detail;
+    if (!d || !d.info || !d.info.rdns || S.wallets.some((w) => w.uuid === d.info.uuid)) return;
+    S.wallets.push({ uuid: d.info.uuid, rdns: d.info.rdns, name: d.info.name, provider: d.provider });
+    if (S.wallets.length === 1) {
+      S.wal = d.info.rdns;
+      d.provider.request({ method: 'eth_chainId' }).then((h) => { const id = parseInt(h, 16); if (id === 1 || id === 8453) { S.chain = id; renderWallet(); } }).catch(() => {});
+    }
+    renderWallet();
+  });
+  try { window.dispatchEvent(new Event('eip6963:requestProvider')); } catch (e) { /* no wallets */ }
+  function renderTotals(P) {
+    const a = active(P), spent = a.reduce((s, o) => s + o.pay, 0), got = a.reduce((s, o) => s + o.out, 0);
+    $('c-pay').innerHTML = amtHTML(spent, TOK[P.pay].d); $('c-recv').innerHTML = amtHTML(got, TOK[P.recv].d);
+    $('c-avg').textContent = got > 0 ? `${fp(P.buy ? spent / got : got / spent)} ${P.m.quote} per ${P.m.base}` : '—';
+    $('c-legs').textContent = a.length === 1 ? '1 · una transazione' : a.length + ' · una transazione ciascuna';
+    return { spent, got };
+  }
+  const needsApproval = (P, spent) => !(S.allowed[P.pay] === 'max' || (S.allowed[P.pay] || 0) + 1e-9 >= spent);
+
+  $('review').addEventListener('click', async () => {
+    const q = quote(); if (!q.ok || q.got <= 0 || $('review').disabled) return;
+    const P = { m: q.m, buy: q.buy, pay: S.pay, recv: S.recv, orders: q.legs.flatMap((l) => l.parts.map((pt) => ({ levelId: l.id, p: l.p, ...pt, st: 'wait' }))) };
+    S.pending = P;
+    $('c-pay-tok').innerHTML = coin(S.pay, 26) + S.pay; $('c-recv-tok').innerHTML = coin(S.recv, 26) + S.recv;
+    $('c-qs').className = 'qs ind'; $('c-qs').textContent = 'Indicativo'; $('c-qs-t').textContent = 'Stima dal libro offerte';
+    $('st1').querySelector('b').textContent = 'Autorizza ' + S.pay;
+    setStep('st0', 'busy', 'Firme, scadenze e fondi delle offerte…'); setStep('st1', 'idle', 'Una firma nel wallet'); setStep('st2', 'idle', 'In attesa');
+    $('c-appr').hidden = false;
+    $('c-main').hidden = false; $('c-done').hidden = true; $('c-go').disabled = true; $('c-go-t').textContent = 'Verifica in corso…';
+    renderTotals(P); renderOrders(P); renderMev();
+    openSheet('confirm', $('c-close'));
+
+    // verify: one batched eth_call (SwapERC20.check per order + own balance/allowance) on the latest block
+    await wait(750);
+    if (S.pending !== P) return;
+    let dropped = 0;
+    if ($('c-race').checked && P.orders.length >= 2) { P.orders[P.orders.length - 1].st = 'skipped'; dropped = 1; }
+    const { spent } = renderTotals(P); renderOrders(P);
+    const block = '#' + fmt(21453112 + Math.floor(Date.now() / 12000) % 100000, 0);
+    $('c-qs').className = 'qs ok'; $('c-qs').textContent = 'Verificato';
+    $('c-qs-t').textContent = dropped ? `1 offerta non è più disponibile: importi aggiornati · blocco ${block}` : `Importi definitivi · blocco ${block}`;
+    setStep('st0', 'done', dropped ? `${active(P).length} offerte su ${P.orders.length} ancora valide` : 'Tutte le offerte sono valide');
+    const appr = needsApproval(P, spent);
+    $('c-appr').hidden = !appr;
+    if (!appr) setStep('st1', 'done', 'Già autorizzato');
+    $('c-go').disabled = false; $('c-go-t').textContent = appr ? 'Autorizza e scambia' : 'Scambia';
+    $('c-go').focus({ preventScroll: true });
+  });
+
+  function execute(P, filled) {
+    const m = P.m, list = P.buy ? m.asks : m.bids;
+    for (const o of filled) { const l = list.find((x) => x.id === o.levelId); if (!l) continue; l.q -= o.base; S.flash[l.id] = Date.now(); }
+    if (P.buy) m.asks = m.asks.filter((l) => l.q > 1e-9); else m.bids = m.bids.filter((l) => l.q > 1e-9);
+    const spent = filled.reduce((s, o) => s + o.pay, 0), got = filled.reduce((s, o) => s + o.out, 0);
+    if (filled.length) {
+      m.trades.unshift({ id: lid++, buy: P.buy, p: roundP(P.buy ? spent / got : got / spent), q: P.buy ? got : spent, t: Date.now() });
+      m.vol += usd(P.pay, spent);
+      S.bal[P.pay] -= spent; S.bal[P.recv] += got;
+      S.history.unshift({ t: `Scambio: +${fa(P.recv, got)} ${P.recv}`, s: `${fa(P.pay, spent)} ${P.pay} · ora` });
+    }
+    S.amount = ''; render(false);
+    return { got, spent };
+  }
+
+  $('c-go').addEventListener('click', async () => {
+    const P = S.pending;
+    if (busy || !P) return;
+    busy = true; $('c-go').disabled = true; $('c-close').disabled = true;
+    const race = $('c-race').checked, list = active(P);
+    const spentAll = list.reduce((s, o) => s + o.pay, 0);
+    if (needsApproval(P, spentAll)) {
+      const exact = document.querySelector('input[name="appr"]:checked').value === 'exact';
+      setStep('st1', 'busy', 'Conferma nel wallet…'); $('c-go-t').textContent = 'Autorizzazione…';
+      await wait(900);
+      S.allowed[P.pay] = exact ? spentAll : 'max';
+      setStep('st1', 'done', exact ? 'Autorizzato solo questo importo' : 'Autorizzazione illimitata');
+    }
+    $('c-appr').hidden = true;
+    setStep('st2', 'busy', ''); $('c-go-t').textContent = 'Scambio in corso…';
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i], tag = `Offerta ${i + 1} di ${list.length}`;
+      o.st = 'verify'; renderOrders(P); setStep('st2', 'busy', `${tag} · ultima verifica prima dell’invio`); await wait(350);
+      o.st = 'sign'; renderOrders(P); setStep('st2', 'busy', `${tag} · firma nel wallet`); await wait(650);
+      o.st = 'pending'; renderOrders(P); setStep('st2', 'busy', `${tag} · in attesa di conferma on-chain`); await wait(950);
+      // demo: with 3+ orders the second one is taken in the mempool by a buyer paying more priority → our tx reverts
+      // demo: with 3+ orders the second one is taken first by a competing buyer; protected → never included (free), public → reverts (gas)
+      o.st = race && list.length >= 2 && i === 1 ? (['wallet', 'user_rpc'].includes(walStatus().level) ? 'dropped' : 'failed') : 'done'; renderOrders(P);
+    }
+    const filled = P.orders.filter((o) => o.st === 'done'), skipped = P.orders.filter((o) => o.st === 'skipped'), failed = P.orders.filter((o) => o.st === 'failed'), dropped = P.orders.filter((o) => o.st === 'dropped');
+    const r = execute(P, filled);
+    if (S.allowed[P.pay] !== 'max') S.allowed[P.pay] = Math.max(0, (S.allowed[P.pay] || 0) - r.spent);
+    setStep('st2', filled.length ? 'done' : 'idle', filled.length === P.orders.length ? 'Completato' : `${filled.length} offerte su ${P.orders.length} eseguite`);
+    S.pending = null;
+
+    const all = filled.length === P.orders.length, none = filled.length === 0;
+    $('c-done').classList.toggle('none', none);
+    $('c-done-h').textContent = all ? 'Scambio completato' : none ? 'Nessuno scambio eseguito' : 'Scambio parziale completato';
+    $('c-done-amt').textContent = none ? '' : '+' + fa(P.recv, r.got) + ' ' + P.recv;
+    $('c-done-sub').textContent = none ? 'I tuoi fondi non sono stati toccati.' : `Pagati ${fa(P.pay, r.spent)} ${P.pay} · ricevuti sul tuo wallet · ricevuta nello Storico`;
+    const lines = [];
+    if (skipped.length) lines.push(skipped.length === 1 ? '1 offerta era già stata presa prima dell’invio: saltata, nessun costo.' : `${skipped.length} offerte erano già state prese prima dell’invio: saltate, nessun costo.`);
+    if (dropped.length) lines.push(`${dropped.length === 1 ? '1 offerta è stata presa' : dropped.length + ' offerte sono state prese'} da un altro prima di te: grazie all’invio protetto la tua transazione non è stata inclusa, nessun costo.`);
+    if (failed.length) lines.push(`${failed.length === 1 ? '1 offerta è stata presa' : failed.length + ' offerte sono state prese'} da un altro nello stesso blocco: transazione fallita, hai pagato il costo di rete. Con l’invio protetto non succede.`);
+    if (!all) lines.push('Per il resto puoi rifare la quotazione o proporre tu un prezzo.');
+    $('c-done-list').innerHTML = lines.map((t) => `<p><svg class="ic sm" aria-hidden="true"><use href="#i-alert"/></svg><span>${esc(t)}</span></p>`).join('');
+    $('c-main').hidden = true; reveal($('c-done'), true, true); $('confirm').querySelector('.sheet').scrollTop = 0;
+    busy = false; $('c-close').disabled = false; $('c-done-btn').focus({ preventScroll: true });
+  });
+  $('c-close').addEventListener('click', () => { if (!busy) { S.pending = null; closeSheet('confirm'); } });
+  $('c-done-btn').addEventListener('click', () => closeSheet('confirm'));
+  $('confirm').addEventListener('click', (e) => { if (e.target === $('confirm') && !busy) { S.pending = null; closeSheet('confirm'); } });
+
+  // ---------- events: propose ----------
+  $('mk-in').addEventListener('input', (e) => { const v = clean(e.target.value); if (v !== e.target.value) e.target.value = v; S.mk.amount = v; renderMake(); });
+  $('custom-in').addEventListener('input', (e) => { const v = clean(e.target.value); if (v !== e.target.value) e.target.value = v; S.mk.custom = v; renderMake(); });
+  $('modes').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (!b) return; S.mk.mode = b.dataset.mode; renderMake(); if (S.mk.mode === 'custom') $('custom-in').focus(); });
+  $('mk-guard-ok').addEventListener('change', (e) => { S.mk.ack = e.target.checked; renderMake(); });
+  $('exp-seg').addEventListener('click', (e) => { const b = e.target.closest('[data-exp]'); if (b) { S.mk.exp = b.dataset.exp; renderMake(); } });
+  $('partial').addEventListener('change', (e) => { S.mk.partial = e.target.checked; renderMake(); });
+  $('publish').addEventListener('click', () => {
+    const I = mkInfo(), k = S.mk, amount = num(k.amount);
+    if (!I || !amount || !I.price || $('publish').disabled) return;
+    const { m, sell, price } = I, parts = k.partial ? 4 : 1, baseAmt = sell ? amount : amount / price;
+    const level = { id: lid++, p: roundP(price), q: roundQ(m.base, baseAmt), you: true, unit: roundQ(m.base, baseAmt / parts) };
+    if (sell) { m.asks.push(level); m.asks.sort((a, b) => a.p - b.p); } else { m.bids.push(level); m.bids.sort((a, b) => b.p - a.p); }
+    S.flash[level.id] = Date.now(); S.mkt = m.id;
+    S.offers.unshift({ id: S.nextOffer++, mkt: m.id, side: sell ? 'sell' : 'buy', baseAmt, price, parts, filled: 0, funded: parts, status: 'active', exp: { '1h': 'tra 1 h', '24h': 'tra 24 h', '7d': 'tra 7 giorni' }[k.exp], levelId: level.id });
+    S.ofilter = 'attive'; if (!MQ2.matches) S.tab = 'offers';
+    save(); render(); if (!MQ2.matches) top();
+    toast('Offerta pubblicata', 'Nessun costo finché qualcuno non accetta');
+  });
+
+  // ---------- events: offers ----------
+  function onOffers(e) {
+    const of = e.target.closest('[data-of]'); if (of) { S.ofilter = of.dataset.of; S.confirmAll = false; renderOffers(); return; }
+    const g = e.target.closest('[data-go]'); if (g) { S.mode = g.dataset.go; if (!MQ2.matches) S.tab = 'swap'; save(); render(); top(); return; }
+    const ca = e.target.closest('[data-ca]');
+    if (ca) {
+      if (ca.dataset.ca === 'ask') { S.confirmAll = true; renderOffers(); return; }
+      if (ca.dataset.ca === 'no') { S.confirmAll = false; renderOffers(); return; }
+      let n = 0;
+      S.offers.forEach((o) => { if (['active', 'paused', 'resign'].includes(o.status)) { o.status = 'cancelled'; n++; } });
+      M.forEach((m) => { m.asks = m.asks.filter((l) => !l.you); m.bids = m.bids.filter((l) => !l.you); });
+      S.history.unshift({ t: `${n} offerte annullate`, s: '1 transazione · ora' }); S.confirmAll = false; render();
+      toast('Offerte annullate', 'Invio protetto: nessuno ha potuto anticiparti'); return;
+    }
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const o = S.offers.find((x) => x.id === +b.dataset.id); if (!o) return;
+    const m = byId(o.mkt);
+    if (b.dataset.act === 'cancel') {
+      o.status = 'cancelled'; m.asks = m.asks.filter((l) => l.id !== o.levelId); m.bids = m.bids.filter((l) => l.id !== o.levelId);
+      S.history.unshift({ t: `Annullata: ${o.side === 'sell' ? 'vendita' : 'acquisto'} di ${fq(m.base, o.baseAmt)} ${m.base}`, s: 'ora' });
+      render(); toast('Offerta annullata', 'Invio protetto: nessuno ha potuto anticiparti');
+    } else if (b.dataset.act === 'fund') { o.funded = o.parts; o.status = 'active'; render(); toast('Fondi aggiunti', 'Tutte le parti sono di nuovo visibili'); }
+    else { o.status = 'active'; render(); toast('Offerta rifirmata', 'Di nuovo in vendita, senza costi'); }
+  }
+  $('offers-d').addEventListener('click', onOffers);
+  $('offers-m-list').addEventListener('click', onOffers);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (openSheets.has('wsheet')) closeSheet('wsheet');
+    else if (openSheets.has('picker')) closeSheet('picker');
+    else if (openSheets.has('mpicker')) closeSheet('mpicker');
+    else if (openSheets.has('confirm') && !busy) { S.pending = null; closeSheet('confirm'); }
+  });
+
+  // ---------- live market (simulated) ----------
+  setInterval(() => {
+    if (document.hidden || openSheets.size) return;
+    const m = Math.random() < 0.55 ? byId(S.mkt) : M[Math.floor(Math.random() * M.length)];
+    const st = isStable(m.base) && isStable(m.quote), drift = 1 + (Math.random() - 0.5) * (st ? 0.0002 : 0.0016);
+    for (const l of m.asks.concat(m.bids)) if (!l.you) l.p = roundP(l.p * drift);
+    m.asks.sort((a, b) => a.p - b.p); m.bids.sort((a, b) => b.p - a.p);
+    m.dir = drift >= 1 ? 1 : -1; m.flash = Date.now();
+    const pool = m.asks.concat(m.bids).filter((l) => !l.you);
+    if (pool.length) { const l = pool[Math.floor(Math.random() * pool.length)]; l.q = roundQ(m.base, l.q * (0.8 + Math.random() * 0.4)); S.flash[l.id] = Date.now(); }
+    const buy = Math.random() > 0.5, best = (buy ? m.asks : m.bids).find((x) => !x.you);
+    if (best) {
+      const q = roundQ(m.base, (50 + Math.random() * 1800) / TOK[m.base].usd);
+      m.trades.unshift({ id: lid++, buy, p: best.p, q, t: Date.now() }); m.trades.length = Math.min(m.trades.length, 16);
+      m.vol += q * best.p * TOK[m.quote].usd;
+    }
+    renderRail(); renderPair(); renderSwap();
+    if (S.mode === 'make') renderMake();
+  }, 2600);
+
+  render(false);
+  renderWallet();
+
+  // ---------- splash ----------
+  (function splash() {
+    const el = $('splash');
+    let seen = false;
+    try { seen = sessionStorage.getItem('fondaco-splash') === '1'; sessionStorage.setItem('fondaco-splash', '1'); } catch (e) { /* storage unavailable */ }
+    if (seen) { el.remove(); return; }
+    const L = [58, 86, 44, 98, 70, 52], R = [72, 50, 92, 62, 100, 56];
+    $('sp-rows').innerHTML = L.map(() => '<div class="sp-row"><span><i></i></span><span><i></i></span></div>').join('');
+    const rows = [...$('sp-rows').children], word = $('sp-word');
+    const steps = [[35, 'RACCOLGO LE OFFERTE'], [82, 'CHIUDO LA DIFFERENZA'], [99.9, 'VERIFICO IL CONTRATTO'], [101, 'PRONTO']];
+    const D = RM.matches ? 1 : 2800, t0 = performance.now();
+    let raf = 0, done = false;
+    const finish = () => {
+      if (done) return; done = true; cancelAnimationFrame(raf);
+      el.classList.add('gone'); setTimeout(() => el.remove(), 500);
+    };
+    const frame = (now) => {
+      const p = Math.min(100, ((now - t0) / D) * 100);
+      const seg = (a, b) => { const k = Math.max(0, Math.min(1, (p - a) / (b - a))); return 1 - Math.pow(1 - k, 3); };
+      const gap = 2 + 46 * (1 - seg(40, 82));
+      rows.forEach((r, i) => {
+        const k = seg(i * 6, 40 + i * 6);
+        r.style.gap = gap + 'px';
+        r.children[0].firstChild.style.width = L[i] * k + 'px';
+        r.children[1].firstChild.style.width = R[i] * k + 'px';
+      });
+      const w = seg(72, 96);
+      word.style.opacity = w; word.style.transform = `translateY(${(1 - w) * 12}px)`;
+      $('sp-l').style.width = $('sp-r').style.width = p / 2 + '%';
+      $('sp-step').textContent = steps.find((s) => p < s[0])[1];
+      $('sp-pct').textContent = String(Math.round(p)).padStart(3, '0') + '%';
+      if (p < 100) raf = requestAnimationFrame(frame); else setTimeout(finish, RM.matches ? 300 : 450);
+    };
+    $('sp-skip').addEventListener('click', finish);
+    raf = requestAnimationFrame(frame);
+  })();
+})();
+</script>
