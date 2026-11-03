@@ -72,6 +72,29 @@ export const MIGRATIONS: readonly Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS orders_revoked ON orders (chain_id, signer, expiry) WHERE status = 'invalid_signer'`)
     },
   },
+  {
+    version: 5,
+    name: 'fills: indexed fills of this book (trades and price history for the app)',
+    up: (db) => db.exec(`
+      CREATE TABLE IF NOT EXISTS fills (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chain_id INTEGER NOT NULL,
+        order_hash TEXT NOT NULL,
+        block INTEGER NOT NULL,
+        tx TEXT NOT NULL,
+        log_index INTEGER NOT NULL,
+        ts INTEGER NOT NULL,                 -- block timestamp (s)
+        signer TEXT NOT NULL,
+        signer_token TEXT NOT NULL,
+        signer_amount TEXT NOT NULL,
+        sender_token TEXT NOT NULL,
+        sender_amount TEXT NOT NULL,
+        UNIQUE (chain_id, tx, log_index)
+      );
+      CREATE INDEX IF NOT EXISTS fills_pair ON fills (chain_id, signer_token, sender_token, ts);
+      CREATE INDEX IF NOT EXISTS fills_block ON fills (chain_id, block);
+    `),
+  },
 ]
 
 export const LATEST_VERSION = Math.max(...MIGRATIONS.map((m) => m.version))

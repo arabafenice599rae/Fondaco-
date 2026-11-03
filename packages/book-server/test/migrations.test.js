@@ -30,7 +30,7 @@ const fresh = openDb(file('fresh'))
 const freshShape = shape(fresh.raw)
 const hist = fresh.raw.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map((r) => r.version)
 const jm = fresh.raw.prepare('PRAGMA journal_mode').get().journal_mode
-check('M1: fresh database migrated to the latest version, history recorded, WAL', fresh.migration.to === LATEST_VERSION && LATEST_VERSION === MIGRATIONS.length && hist.join() === '1,2,3,4' && !fresh.migration.adoptedLegacy && jm === 'wal',
+check('M1: fresh database migrated to the latest version, history recorded, WAL', fresh.migration.to === LATEST_VERSION && LATEST_VERSION === MIGRATIONS.length && hist.join() === '1,2,3,4,5' && !fresh.migration.adoptedLegacy && jm === 'wal',
   `v${fresh.migration.to}, history ${hist}, journal ${jm}`)
 
 // M2 database written by the JavaScript reference server (exchange-book.zip db.js), with orders in every status
@@ -85,18 +85,18 @@ newer.exec('PRAGMA user_version = 99')
 newer.close()
 let e6 = null
 try { openDb(file('newer')) } catch (e) { e6 = e }
-check('M6: database newer than the code is refused (no downgrade)', e6 instanceof MigrationError && /schema v99 is newer than this server \(knows up to v4\)/.test(e6.message), e6?.message)
+check('M6: database newer than the code is refused (no downgrade)', e6 instanceof MigrationError && /schema v99 is newer than this server \(knows up to v5\)/.test(e6.message), e6?.message)
 
 // M7 a failing step rolls back completely
 const m7 = new DatabaseSync(file('fail'))
 migrate(m7)
-const broken = [...MIGRATIONS, { version: 5, name: 'broken', up: (db) => { db.exec('ALTER TABLE orders ADD COLUMN half_done INTEGER'); throw new Error('boom') } }]
+const broken = [...MIGRATIONS, { version: 6, name: 'broken', up: (db) => { db.exec('ALTER TABLE orders ADD COLUMN half_done INTEGER'); throw new Error('boom') } }]
 let e7 = null
 try { migrate(m7, broken) } catch (e) { e7 = e }
 const v7 = m7.prepare('PRAGMA user_version').get().user_version
 const cols7 = m7.prepare('PRAGMA table_info(orders)').all().map((c) => c.name)
-check('M7: failed migration rolls back (version, columns and history unchanged)', e7 instanceof MigrationError && v7 === 4 && !cols7.includes('half_done') &&
-  m7.prepare('SELECT COUNT(*) AS n FROM schema_migrations WHERE version = 5').get().n === 0, e7?.message)
+check('M7: failed migration rolls back (version, columns and history unchanged)', e7 instanceof MigrationError && v7 === 5 && !cols7.includes('half_done') &&
+  m7.prepare('SELECT COUNT(*) AS n FROM schema_migrations WHERE version = 6').get().n === 0, e7?.message)
 
 const failed = results.filter((x) => !x).length
 console.log(`\n${results.length - failed}/${results.length} checks passed`)

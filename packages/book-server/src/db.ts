@@ -2,7 +2,7 @@
 // plus a REAL price column used only for sorting.
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import type { Address, Hex } from 'viem'
-import type { NormalizedOrder, OrderInsert, OrderRow, OrderStatus } from './types.js'
+import type { FillRow, NormalizedOrder, OrderInsert, OrderRow, OrderStatus } from './types.js'
 import { migrate, type MigrationReport } from './migrations.js'
 
 export const OPEN_STATES = ['open', 'unfunded'] as const
@@ -18,6 +18,7 @@ export interface Db {
   insert(row: OrderInsert): void
   byHash(h: string): OrderRow | undefined
   byNonce(c: number, signer: Address, nonce: string): Pick<OrderRow, 'hash' | 'status'> | undefined
+  orderByNonce(c: number, signer: Address, nonce: string): OrderRow | undefined
   setStatus(hash: Hex, status: OrderStatus, now: number, block?: bigint | number | null): boolean
   setStatusByNonce(c: number, signer: Address, nonce: string, status: OrderStatus, now: number, block?: bigint | number | null): Hex[]
   rollback(c: number, fromBlock: bigint, now: number): Pick<OrderRow, 'hash' | 'signer' | 'signer_token' | 'status'>[]
@@ -35,6 +36,14 @@ export interface Db {
   setLive(hash: Hex, live: boolean, now: number): void
   revoked(c: number, chainTime: bigint): OrderRow[]
   revokedBySigner(c: number, signer: Address, chainTime: bigint): OrderRow[]
+  insertFill(f: Omit<FillRow, 'id'>): boolean
+  /** fills between two tokens in either direction, oldest first, with ts in [fromTs, toTs] */
+  fillsForPair(c: number, a: Address, b: Address, fromTs: number, toTs: number, limit: number): FillRow[]
+  /** the most recent fill between the two tokens strictly before `ts` (price carried into an empty window) */
+  lastFillBefore(c: number, a: Address, b: Address, ts: number): FillRow | undefined
+  recentFills(c: number, a: Address, b: Address, limit: number): FillRow[]
+  rollbackFills(c: number, fromBlock: bigint): number
+  lastFillId(c: number): number
   getMeta(k: string): string | undefined
   setMeta(k: string, v: string | number | bigint): void
 }
@@ -58,6 +67,7 @@ export function openDb(file: string): Db {
       :sender_token,:sender_amount,:protocol_fee,:v,:r,:s,:price,:status,:now,:now,:contract_signer)`),
     byHash: p('SELECT * FROM orders WHERE hash = ?'),
     byNonce: p('SELECT hash, status FROM orders WHERE chain_id = ? AND signer = ? AND nonce = ?'),
+    orderByNonce: p('SELECT * FROM orders WHERE chain_id = ? AND signer = ? AND nonce = ?'),
     setStatus: p(`UPDATE orders SET status = ?, updated_at = ?, status_block = ?, signer_revoked = MAX(signer_revoked, ?) WHERE hash = ? AND status <> ?`),
     // 'used' (seen consumed by a read) is upgraded to filled/cancelled when the event arrives.
     // invalid_signer too: after revoke() the old signature is valid again on-chain, so it can still be filled or cancelled.
@@ -88,6 +98,16 @@ export function openDb(file: string): Db {
     // invalid_signer orders whose signature may come back to life: watched until filled, cancelled or expired
     revoked: p(`SELECT * FROM orders WHERE chain_id = ? AND status = 'invalid_signer' AND expiry > ? ORDER BY created_at, rowid`),
     revokedBySigner: p(`SELECT * FROM orders WHERE chain_id = ? AND signer = ? AND status = 'invalid_signer' AND expiry > ? ORDER BY created_at, rowid`),
+    insertFill: p(`INSERT OR IGNORE INTO fills (chain_id, order_hash, block, tx, log_index, ts, signer, signer_token, signer_amount, sender_token, sender_amount)
+      VALUES (:chain_id,:order_hash,:block,:tx,:log_index,:ts,:signer,:signer_token,:signer_amount,:sender_token,:sender_amount)`),
+    fillsForPair: p(`SELECT * FROM fills WHERE chain_id = ? AND ((signer_token = ? AND sender_token = ?) OR (signer_token = ? AND sender_token = ?))
+      AND ts >= ? AND ts <= ? ORDER BY ts, id LIMIT ?`),
+    lastFillBefore: p(`SELECT * FROM fills WHERE chain_id = ? AND ((signer_token = ? AND sender_token = ?) OR (signer_token = ? AND sender_token = ?))
+      AND ts < ? ORDER BY ts DESC, id DESC LIMIT 1`),
+    recentFills: p(`SELECT * FROM fills WHERE chain_id = ? AND ((signer_token = ? AND sender_token = ?) OR (signer_token = ? AND sender_token = ?))
+      ORDER BY ts DESC, id DESC LIMIT ?`),
+    rollbackFills: p('DELETE FROM fills WHERE chain_id = ? AND block >= ?'),
+    lastFillId: p('SELECT COALESCE(MAX(id), 0) AS id FROM fills WHERE chain_id = ?'),
     getMeta: p('SELECT value FROM meta WHERE key = ?'),
     setMeta: p('INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
   }
@@ -103,6 +123,7 @@ export function openDb(file: string): Db {
     insert: (row) => { st.insert.run(row as unknown as Record<string, string | number>) },
     byHash: (h) => get<OrderRow>(st.byHash, h),
     byNonce: (c, signer, nonce) => get(st.byNonce, c, signer, nonce),
+    orderByNonce: (c, signer, nonce) => get<OrderRow>(st.orderByNonce, c, signer, nonce),
     setStatus: (hash, status, now, block = null) => Number(st.setStatus.run(status, now, blk(block), status === 'invalid_signer' ? 1 : 0, hash, status).changes) > 0,
     setStatusByNonce: (c, signer, nonce, status, now, block = null) => all<{ hash: Hex }>(st.setStatusByNonce, status, now, blk(block), c, signer, nonce).map((r) => r.hash),
     rollback: (c, fromBlock, now) => all(st.rollback, now, c, Number(fromBlock)),
@@ -120,6 +141,12 @@ export function openDb(file: string): Db {
     setLive: (hash, live, now) => { st.setLive.run(live ? 1 : 0, now, hash) },
     revoked: (c, chainTime) => all<OrderRow>(st.revoked, c, Number(chainTime)),
     revokedBySigner: (c, signer, chainTime) => all<OrderRow>(st.revokedBySigner, c, signer, Number(chainTime)),
+    insertFill: (f) => Number(st.insertFill.run(f as unknown as Record<string, string | number>).changes) > 0,
+    fillsForPair: (c, a, b, fromTs, toTs, limit) => all<FillRow>(st.fillsForPair, c, a, b, b, a, fromTs, toTs, limit),
+    lastFillBefore: (c, a, b, ts) => get<FillRow>(st.lastFillBefore, c, a, b, b, a, ts),
+    recentFills: (c, a, b, limit) => all<FillRow>(st.recentFills, c, a, b, b, a, limit),
+    rollbackFills: (c, fromBlock) => Number(st.rollbackFills.run(c, Number(fromBlock)).changes),
+    lastFillId: (c) => (get<{ id: number }>(st.lastFillId, c) as { id: number }).id,
     getMeta: (k) => get<{ value: string }>(st.getMeta, k)?.value,
     setMeta: (k, v) => { st.setMeta.run(k, String(v)) },
   }

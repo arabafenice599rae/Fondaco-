@@ -91,7 +91,7 @@ function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
 
 /** Route label for metrics: bounded cardinality (never the raw path). */
 const routeOf = (method: string, path: string) =>
-  path === '/book' || path === '/config' || path === '/health' || path === '/stream' || path === '/metrics' || path === '/orders' ? `${method} ${path}`
+  ['/book', '/config', '/health', '/stream', '/metrics', '/orders', '/trades', '/candles'].includes(path) ? `${method} ${path}`
     : /^\/orders\/0x[0-9a-fA-F]{64}$/.test(path) ? `${method} /orders/:hash` : 'other'
 
 export interface ServerOptions {
@@ -116,6 +116,8 @@ export function createServer(engine: Engine, { corsOrigin = '*', rate, trustProx
   engine.on('order', (e) => broadcast('order', e))
   engine.on('fee', (e) => broadcast('fee', e))
   engine.on('reorg', (e) => broadcast('reorg', e))
+  engine.on('trade', (e) => broadcast('trade', e))
+  engine.on('governance', (e) => broadcast('governance', e))
   const tokenHash = metrics?.token ? createHash('sha256').update(metrics.token).digest() : null
   const metricsAllowed = (req: IncomingMessage) => {
     const auth = String(req.headers.authorization || '')
@@ -180,6 +182,18 @@ export function createServer(engine: Engine, { corsOrigin = '*', rate, trustProx
         const { etag, ...book } = engine.book(chainId, base as string, quote as string, limit, { signed: url.searchParams.get('signed') === '1' })
         if (req.headers['if-none-match'] === etag) { res.writeHead(304, { etag, ...SEC_HEADERS }); return void res.end() }
         return json(res, 200, book, { etag, 'cache-control': 'no-cache' })
+      }
+
+      if (req.method === 'GET' && (path === '/trades' || path === '/candles')) {
+        const chainId = Number(url.searchParams.get('chainId'))
+        const base = url.searchParams.get('base'), quote = url.searchParams.get('quote')
+        if (!isAddress(base || '') || !isAddress(quote || '')) return json(res, 400, { error: 'bad_request', message: 'base/quote required' })
+        const num = (k: string, d: number) => { const v = Number(url.searchParams.get(k) || d); return Number.isFinite(v) ? v : d }
+        const { etag, ...body } = path === '/trades'
+          ? engine.trades(chainId, base as string, quote as string, num('limit', 50))
+          : engine.candles(chainId, base as string, quote as string, num('interval', 300), num('limit', 288))
+        if (req.headers['if-none-match'] === etag) { res.writeHead(304, { etag, ...SEC_HEADERS }); return void res.end() }
+        return json(res, 200, body, { etag, 'cache-control': 'no-cache' })
       }
 
       const m = path.match(/^\/orders\/(0x[0-9a-fA-F]{64})$/)

@@ -6,6 +6,7 @@ import type { ChainCfg, NormalizedOrder } from './types.js'
 export { MULTICALL3 }
 export const SWAP_ABI = parseAbi([
   'function protocolFee() view returns (uint256)',
+  'function protocolFeeLight() view returns (uint256)',
   'function nonceUsed(address signer, uint256 nonce) view returns (bool)',
   'function authorized(address signer) view returns (address)',
   'function check(address senderWallet, uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount, address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s) view returns (bytes32[])',
@@ -157,3 +158,15 @@ export async function snapshot(client: PublicClient, chainCfg: Pick<ChainCfg, 's
 }
 
 export const readFee = (client: PublicClient, swap: Address): Promise<bigint> => client.readContract({ address: swap, abi: SWAP_ABI, functionName: 'protocolFee' })
+export const readFeeLight = (client: PublicClient, swap: Address): Promise<bigint> => client.readContract({ address: swap, abi: SWAP_ABI, functionName: 'protocolFeeLight' })
+
+/** Administrative events of SwapERC20 v5.0.0 (signatures from the verified ABI): any of them triggers a 'governance' notice. */
+export const GOVERNANCE_EVENTS = [
+  parseAbiItem('event SetProtocolFeeLight(uint256 protocolFeeLight)'),
+  parseAbiItem('event SetProtocolFeeWallet(address indexed feeWallet)'),
+  parseAbiItem('event SetStaking(address indexed staking)'),
+  parseAbiItem('event SetBonusMax(uint256 bonusMax)'),
+  parseAbiItem('event SetBonusScale(uint256 bonusScale)'),
+  parseAbiItem('event OwnershipTransferred(address indexed oldOwner, address indexed newOwner)'),
+  parseAbiItem('event OwnershipHandoverRequested(address indexed pendingOwner)'),
+] as const

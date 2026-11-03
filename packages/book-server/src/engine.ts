@@ -7,12 +7,12 @@
 // `fullSweepMs` (and after a reorg, a fee change or a long gap) as a backstop for anything logs cannot show
 // (token blacklists, pauses, missed logs).
 import { EventEmitter } from 'node:events'
-import { parseAbiItem, getAddress, toHex, type Address, type Block, type Hex, type Log, type PublicClient } from 'viem'
+import { parseAbiItem, getAddress, toHex, formatUnits, type Address, type Block, type Hex, type Log, type PublicClient } from 'viem'
 import { normalizeOrder, validateShape, orderHash, recoverSignatory, requiredSignerFunds, packedSignature, domainFor, ORDER_TYPES, typedMessage, OrderError } from './order.js'
-import { makeClient, snapshot, readFee, EV_AUTHORIZE, EV_REVOKE, TOPIC, padTopic, topicAddr, type RequestCounter, type Snapshot } from './chain.js'
+import { makeClient, snapshot, readFee, readFeeLight, EV_AUTHORIZE, EV_REVOKE, GOVERNANCE_EVENTS, TOPIC, padTopic, topicAddr, type RequestCounter, type Snapshot } from './chain.js'
 import { rowToOrder, rowToJson, type Db, type OrderJson } from './db.js'
 import { allocate } from './allocation.js'
-import type { ChainCfg, EngineEvents, NormalizedOrder, OrderRow, OrderStatus, SubmitResult, TickResult } from './types.js'
+import type { ChainCfg, EngineEvents, FillRow, NormalizedOrder, OrderRow, OrderStatus, SubmitResult, TickResult } from './types.js'
 
 const EV_SWAP = parseAbiItem('event SwapERC20(uint256 indexed nonce, address indexed signerWallet)')
 const EV_CANCEL = parseAbiItem('event Cancel(uint256 indexed nonce, address indexed signerWallet)')
@@ -51,6 +51,7 @@ export interface ChainState {
   cfg: ChainCfg
   client: PublicClient
   fee: bigint
+  feeLight: bigint
   chainTime: bigint
   chainTimeAt: number
   head: Block | null
@@ -63,6 +64,8 @@ export interface ChainState {
   lastOk: number
   /** until this wall-clock ms, token logs are read unfiltered (the provider rejected the signer filter) */
   filterRejectedUntil: number
+  /** bumped by every new or rolled-back fill: ETag of /trades and /candles */
+  tradeVersion: number
 }
 
 export interface BookEntry { hash: Hex; price: number; baseAmount: string; quoteAmount: string; expiry: number; signer: Address; order?: OrderJson['order'] }
@@ -86,8 +89,8 @@ export class Engine extends EventEmitter<EngineEvents> {
     this.hooks = hooks
     for (const cfg of chains) {
       this.chains.set(cfg.id, {
-        cfg, client: makeClient(cfg.id, cfg, counter), fee: 0n, chainTime: 0n, chainTimeAt: 0, head: null, busy: false,
-        version: 0, cache: new Map(), lastFull: 0, forceFull: true, lastOk: 0, filterRejectedUntil: 0,
+        cfg, client: makeClient(cfg.id, cfg, counter), fee: 0n, feeLight: 0n, chainTime: 0n, chainTimeAt: 0, head: null, busy: false,
+        version: 0, cache: new Map(), lastFull: 0, forceFull: true, lastOk: 0, filterRejectedUntil: 0, tradeVersion: 0,
       })
     }
   }
@@ -106,6 +109,7 @@ export class Engine extends EventEmitter<EngineEvents> {
   async init(): Promise<void> {
     for (const c of this.chains.values()) {
       c.fee = await readFee(c.client, c.cfg.swap)
+      c.feeLight = await readFeeLight(c.client, c.cfg.swap)
       const b = await c.client.getBlock()
       this._setHead(c, b)
       c.lastOk = nowMs()
@@ -188,6 +192,9 @@ export class Engine extends EventEmitter<EngineEvents> {
       out[c.cfg.id] = {
         swap: c.cfg.swap,
         protocolFee: c.fee.toString(),
+        // must equal protocolFee (both 30 at deploy); a difference means an administrative change: the app shows a banner
+        protocolFeeLight: c.feeLight.toString(),
+        markets: c.cfg.markets,
         domain: domainFor(c.cfg.id, c.cfg.swap),
         types: ORDER_TYPES,
         tokens: c.cfg.tokens,
@@ -342,6 +349,7 @@ export class Engine extends EventEmitter<EngineEvents> {
       const to = last - c.cfg.reorgDepth > floor ? last - c.cfg.reorgDepth : floor
       const stamp = nowMs()
       const rolled = this.db.rollback(id, to + 1n, stamp)
+      if (this.db.rollbackFills(id, to + 1n) > 0) c.tradeVersion++
       for (const r of rolled) { this._emitOrder(c, r.hash, r.status); out.pairs.add(`${r.signer}|${r.signer_token}`) }
       this.emit('reorg', { chainId: id, rewoundTo: to, rolledBack: rolled.length })
       this.hooks.onReorg?.({ chainId: id, rewoundTo: to, rolledBack: rolled.length })
@@ -358,11 +366,22 @@ export class Engine extends EventEmitter<EngineEvents> {
     let from = start
     while (from <= headNumber) {
       const to = minBig(from + c.cfg.logChunk - 1n, headNumber)
-      const logs = await c.client.getLogs({ address: c.cfg.swap, events: [EV_SWAP, EV_CANCEL, EV_FEE, EV_AUTHORIZE, EV_REVOKE], fromBlock: from, toBlock: to }) as unknown as ContractLog[]
+      const logs = await c.client.getLogs({ address: c.cfg.swap, events: [EV_SWAP, EV_CANCEL, EV_FEE, EV_AUTHORIZE, EV_REVOKE, ...GOVERNANCE_EVENTS], fromBlock: from, toBlock: to }) as unknown as ContractLog[]
       const toHash = to === headNumber ? headHash : ((await c.client.getBlock({ blockNumber: to })).hash as Hex)
+      // block timestamps of the fills (one read per block that has fills; the head's is already known)
+      const fillBlocks = [...new Set(logs.filter((l) => l.eventName === 'SwapERC20').map((l) => l.blockNumber as bigint))]
+      const ts = new Map<bigint, number>()
+      for (const b of fillBlocks) ts.set(b, b === headNumber ? Number(head.timestamp) : Number((await c.client.getBlock({ blockNumber: b })).timestamp))
       const stamp = nowMs()
+      const newTrades: { orderHash: Hex; tx: Hex; block: number; ts: number }[] = []
       this.db.tx(() => {
         for (const l of logs) {
+          if (GOVERNANCE_EVENTS.some((e) => e.name === l.eventName)) {
+            if (l.eventName === 'SetProtocolFeeLight') c.feeLight = l.args.protocolFeeLight as bigint
+            this.emit('governance', { chainId: id, event: l.eventName, block: Number(l.blockNumber), tx: l.transactionHash as Hex,
+              args: Object.fromEntries(Object.entries(l.args).map(([k, v]) => [k, String(v)])) })
+            continue
+          }
           if (l.eventName === 'SetProtocolFee') {
             c.fee = l.args.protocolFee as bigint
             this._emitAll(c, this.db.invalidateFee(id, Number(c.fee), stamp), 'invalid_fee')
@@ -374,13 +393,24 @@ export class Engine extends EventEmitter<EngineEvents> {
           } else {
             const status: OrderStatus = l.eventName === 'SwapERC20' ? 'filled' : 'cancelled'
             const signer = getAddress(l.args.signerWallet as string)
-            this._emitAll(c, this.db.setStatusByNonce(id, signer, (l.args.nonce as bigint).toString(), status, stamp, l.blockNumber), status)
+            const nonce = (l.args.nonce as bigint).toString()
+            this._emitAll(c, this.db.setStatusByNonce(id, signer, nonce, status, stamp, l.blockNumber), status)
+            if (status === 'filled') {
+              // only fills of orders this book knows: amounts come from the signed order (the event carries nonce + signer)
+              const row = this.db.orderByNonce(id, signer, nonce)
+              if (row && this.db.insertFill({ chain_id: id, order_hash: row.hash, block: Number(l.blockNumber), tx: l.transactionHash as Hex, log_index: Number(l.logIndex),
+                ts: ts.get(l.blockNumber as bigint) ?? Number(head.timestamp), signer, signer_token: row.signer_token, signer_amount: row.signer_amount,
+                sender_token: row.sender_token, sender_amount: row.sender_amount })) {
+                newTrades.push({ orderHash: row.hash, tx: l.transactionHash as Hex, block: Number(l.blockNumber), ts: ts.get(l.blockNumber as bigint) ?? Number(head.timestamp) })
+              }
+            }
             out.signers.add(signer) // a fill moved this signer's funds: re-allocate the rest of the ladder
           }
         }
         this.db.setMeta(`last_block:${id}`, to.toString())
         this.db.setMeta(`last_hash:${id}`, toHash)
       })
+      if (newTrades.length) { c.tradeVersion++; for (const t of newTrades) this.emit('trade', { chainId: id, ...t }) }
       from = to + 1n
     }
     if (!out.full) await this._tokenSignals(c, start, headNumber, out)
@@ -561,5 +591,58 @@ export class Engine extends EventEmitter<EngineEvents> {
     if (c.cache.size > 2000) c.cache.clear()
     c.cache.set(key, { version: c.version, bucket, value })
     return value
+  }
+
+  // ------------------------------------------------------------------ trades and price history (indexed fills)
+  /** Price (quote per base, decimals-adjusted), base amount and taker side of a fill, seen from the base/quote market. */
+  private _trade(c: ChainState, f: FillRow, base: Address) {
+    const tb = c.cfg.tokens[base] as { decimals: number }
+    const quote = f.signer_token === base ? f.sender_token : f.signer_token
+    const tq = c.cfg.tokens[quote] as { decimals: number }
+    const askTaken = f.signer_token === base // the signer sold base: the taker bought
+    const baseAmt = BigInt(askTaken ? f.signer_amount : f.sender_amount), quoteAmt = BigInt(askTaken ? f.sender_amount : f.signer_amount)
+    const b = Number(baseAmt) / 10 ** tb.decimals, q = Number(quoteAmt) / 10 ** tq.decimals
+    return { price: q / b, base: b, quote: q, side: (askTaken ? 'buy' : 'sell') as 'buy' | 'sell', baseAmount: baseAmt.toString(), quoteAmount: quoteAmt.toString() }
+  }
+
+  private _pair(c: ChainState, base: string, quote: string): [Address, Address] {
+    const b = getAddress(base), q = getAddress(quote)
+    if (!c.cfg.tokens[b] || !c.cfg.tokens[q] || b === q) throw new OrderError('token_not_allowed', 'pair not whitelisted')
+    return [b, q]
+  }
+
+  /** Most recent fills of the pair (newest first). */
+  trades(chainId: number | string, base: string, quote: string, limit = 50) {
+    const c = this.chain(chainId)
+    const [b, q] = this._pair(c, base, quote)
+    const rows = this.db.recentFills(c.cfg.id, b, q, Math.max(1, Math.min(limit, 200)))
+    return { base: b, quote: q, etag: `W/"t-${c.cfg.id}-${c.tradeVersion}"`,
+      trades: rows.map((f) => ({ ...this._trade(c, f, b), ts: f.ts, tx: f.tx, block: f.block, orderHash: f.order_hash })) }
+  }
+
+  /**
+   * OHLCV buckets of `interval` seconds for the last `limit` buckets up to the current chain time, from indexed fills.
+   * Only buckets with trades are returned; `prev` is the last price before the window (to draw a flat start).
+   */
+  candles(chainId: number | string, base: string, quote: string, interval = 300, limit = 288) {
+    const c = this.chain(chainId)
+    const [b, q] = this._pair(c, base, quote)
+    const iv = Math.max(60, Math.min(Math.floor(interval), 86_400)), n = Math.max(1, Math.min(Math.floor(limit), 1000))
+    const now = Number(this.chainNow(c)), end = Math.floor(now / iv) * iv, start = end - (n - 1) * iv
+    const rows = this.db.fillsForPair(c.cfg.id, b, q, start, end + iv - 1, 100_000)
+    // volumes summed exactly in base units, converted once
+    const buckets = new Map<number, { t: number; o: number; h: number; l: number; c: number; vb: bigint; vqb: bigint; n: number }>()
+    for (const f of rows) {
+      const t = Math.floor(f.ts / iv) * iv, x = this._trade(c, f, b)
+      const k = buckets.get(t)
+      if (!k) buckets.set(t, { t, o: x.price, h: x.price, l: x.price, c: x.price, vb: BigInt(x.baseAmount), vqb: BigInt(x.quoteAmount), n: 1 })
+      else { k.h = Math.max(k.h, x.price); k.l = Math.min(k.l, x.price); k.c = x.price; k.vb += BigInt(x.baseAmount); k.vqb += BigInt(x.quoteAmount); k.n++ }
+    }
+    const db = (c.cfg.tokens[b] as { decimals: number }).decimals, dq = (c.cfg.tokens[q] as { decimals: number }).decimals
+    const units = (v: bigint, d: number) => Number(formatUnits(v, d))
+    const before = this.db.lastFillBefore(c.cfg.id, b, q, start)
+    return { base: b, quote: q, interval: iv, from: start, to: end, now, prev: before ? this._trade(c, before, b).price : null,
+      candles: [...buckets.values()].map(({ vb, vqb, ...k }) => ({ ...k, v: units(vb, db), vq: units(vqb, dq) })),
+      etag: `W/"c-${c.cfg.id}-${c.tradeVersion}-${iv}-${n}-${end}"` }
   }
 }

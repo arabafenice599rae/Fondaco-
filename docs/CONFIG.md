@@ -63,6 +63,7 @@ Le chiavi sconosciute sono un errore all'avvio. Tutti gli errori vengono elencat
 | `maxLiveOrders` | integer ≥ 1 | `100000` | Max live orders on this chain (book_full). |
 | `maxStalenessMs` | integer ≥ 1000 | `120000` | Fail-closed: if no indexing round has succeeded for this long, GET /book answers 503 stale instead of serving unverified offers. |
 | `tokens` | map address → object | **obbligatoria** | Token whitelist: address → { symbol, decimals, min? }. |
+| `markets` | list of object | — | Markets shown by the app, as [base, quote]. Default: every pair of whitelisted tokens, quote = the first of USDC, USDT, DAI, WETH present (else the second token). |
 
 ## `chains.<chainId>.tokens.<address>`
 

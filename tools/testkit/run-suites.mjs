@@ -25,6 +25,7 @@ export const SUITES = [
   { name: 'engine', pkg: 'packages/book-server', file: 'test/engine.test.js' },
   { name: 'signers', pkg: 'packages/book-server', file: 'test/signers.test.js' },
   { name: 'metrics', pkg: 'packages/book-server', file: 'test/metrics.test.js' },
+  { name: 'trades', pkg: 'packages/book-server', file: 'test/trades.test.js' },
   { name: 'faults', pkg: 'packages/book-server', file: 'test/faults.test.js' },
   { name: 'reorg', pkg: 'packages/book-server', file: 'test/reorg.test.js' },
   { name: 'pinned-read', pkg: 'packages/book-server', file: 'test/pinned-read.test.js' },

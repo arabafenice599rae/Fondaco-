@@ -78,13 +78,34 @@ export interface ChainCfg {
   maxOpenPerSigner: number
   maxLiveOrders: number
   maxStalenessMs: number
+  /** markets offered to the app: [base, quote] token pairs (from config, or derived from the whitelist) */
+  markets: { base: Address; quote: Address }[]
+}
+
+/** One fill of an order of this book, indexed from SwapERC20 events (amounts as exact decimal strings). */
+export interface FillRow {
+  id: number
+  chain_id: number
+  order_hash: Hex
+  block: number
+  tx: Hex
+  log_index: number
+  ts: number
+  signer: Address
+  signer_token: Address
+  signer_amount: string
+  sender_token: Address
+  sender_amount: string
 }
 
 // ---------------------------------------------------------------- events (EventEmitter + SSE)
 export interface OrderEvent { chainId: number; hash: Hex; status: OrderStatus; executableOnChain?: boolean }
 export interface FeeEvent { chainId: number; protocolFee: string }
 export interface ReorgEvent { chainId: number; rewoundTo: bigint; rolledBack: number }
-export interface EngineEvents { order: [OrderEvent]; fee: [FeeEvent]; reorg: [ReorgEvent] }
+export interface TradeEvent { chainId: number; orderHash: Hex; tx: Hex; block: number; ts: number }
+/** Any administrative change on the contract (owner, fees, fee wallet, staking, bonus): the app shows a banner. */
+export interface GovernanceEvent { chainId: number; event: string; args: Record<string, string>; block: number; tx: Hex }
+export interface EngineEvents { order: [OrderEvent]; fee: [FeeEvent]; reorg: [ReorgEvent]; trade: [TradeEvent]; governance: [GovernanceEvent] }
 
 /** Result of one submitted order: either accepted (hash + status) or rejected (error code + message). */
 export type SubmitResult = { hash: Hex; status: OrderStatus | 'pending' } | { error: string; message: string }

@@ -46,6 +46,8 @@ export const CHAIN = obj({
   maxLiveOrders: int('Max live orders on this chain (book_full).', { default: 100_000, min: 1 }),
   maxStalenessMs: int('Fail-closed: if no indexing round has succeeded for this long, GET /book answers 503 stale instead of serving unverified offers.', { default: 120_000, min: 1_000 }),
   tokens: record(address('Token address.'), TOKEN, 'Token whitelist: address → { symbol, decimals, min? }.', { min: 2 }),
+  markets: optional(list(obj({ base: address('Base token (must be whitelisted).'), quote: address('Quote token (must be whitelisted).') }, 'A market.'),
+    'Markets shown by the app, as [base, quote]. Default: every pair of whitelisted tokens, quote = the first of USDC, USDT, DAI, WETH present (else the second token).')),
 }, 'One chain served by the book.')
 
 export const CONFIG = obj({
@@ -83,7 +85,20 @@ export function toChainCfg(id: string, c: ChainConfig): ChainCfg {
   for (const [a, t] of Object.entries(c.tokens) as [Address, Infer<typeof TOKEN>][]) {
     tokens[a] = { symbol: t.symbol, decimals: t.decimals, ...(t.min != null ? { min: BigInt(t.min) } : {}) }
   }
+  const addrs = Object.keys(tokens) as Address[]
+  const sym = (a: Address) => (tokens[a] as TokenCfg).symbol
+  const QUOTE_PRIORITY = ['USDC', 'USDT', 'DAI', 'WETH']
+  const rank = (a: Address) => { const i = QUOTE_PRIORITY.indexOf(sym(a)); return i < 0 ? 99 : i }
+  const derived: { base: Address; quote: Address }[] = []
+  for (let i = 0; i < addrs.length; i++) for (let j = i + 1; j < addrs.length; j++) {
+    const a = addrs[i] as Address, b = addrs[j] as Address
+    derived.push(rank(a) < rank(b) ? { base: b, quote: a } : rank(b) < rank(a) ? { base: a, quote: b } : { base: a, quote: b })
+  }
+  for (const m of c.markets ?? []) {
+    if (!tokens[m.base] || !tokens[m.quote] || m.base === m.quote) throw new Error(`config.chains.${id}.markets: ${m.base}/${m.quote} is not a pair of whitelisted tokens`)
+  }
   return {
+    markets: c.markets ?? derived,
     id: Number(id), rpc: c.rpc.length === 1 ? (c.rpc[0] as string) : c.rpc, rpcTimeoutMs: c.rpcTimeoutMs, swap: c.swap, multicall: c.multicall, tokens,
     startBlock: BigInt(c.startBlock), logChunk: BigInt(c.logChunk), reorgDepth: BigInt(c.reorgDepth), signalMaxBlocks: BigInt(c.signalMaxBlocks),
     logSignerChunk: c.logSignerChunk, fullSweepMs: c.fullSweepMs, expiryBufferSec: c.expiryBufferSec, minExpirySec: c.minExpirySec,
