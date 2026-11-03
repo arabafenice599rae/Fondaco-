@@ -4,7 +4,7 @@ pragma solidity 0.8.23;
 import { Base } from "./utils/Base.sol";
 import { ISwapERC20 } from "./utils/Interfaces.sol";
 
-/// Case (e): high-s malleable signatures. OBSERVED: SwapERC20 v5.0.0 (solady SignatureCheckerLib/ecrecover) ACCEPTS the
+/// Case (e): high-s malleable signatures. OBSERVED: SwapERC20 v4.3 (solady SignatureCheckerLib/ecrecover) ACCEPTS the
 /// high-s twin (s' = n − s, v flipped). It is harmless on-chain because the order hash ignores the signature and the
 /// nonce is consumed once: only one of the two copies can ever fill. Off-chain the book deduplicates by EIP-712 hash
 /// (packages/book-server/test/signers.test.js S2).

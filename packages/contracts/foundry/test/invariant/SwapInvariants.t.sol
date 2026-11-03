@@ -6,7 +6,7 @@ import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { ISwapERC20, IERC20 } from "../utils/Interfaces.sol";
 import { Handler } from "./Handler.sol";
 
-/// Stateful invariants of SwapERC20 v5.0.0 (fixture bytecode) under random sequences of
+/// Stateful invariants of SwapERC20 v4.3 (fixture bytecode) under random sequences of
 /// public fills, private fills, cancels, fee changes, authorize, revoke, transfers and approvals:
 ///  1. fee wallet received exactly Σ floor(signerAmount · fee / 10000) over the fills that happened (per token)
 ///  2. the contract never holds tokens

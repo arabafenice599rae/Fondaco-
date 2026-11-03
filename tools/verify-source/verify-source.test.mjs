@@ -2,6 +2,7 @@
 //   V1 official settings (evmVersion paris) → exit 0, identical bytecode
 //   V2 evmVersion shanghai (solc's own default for 0.8.23) → exit 1, bytecode differs
 //   V3 fixture altered by one nibble → exit 1
+//   V4 the official build equals the AirSwap deployment 0xD82E… on Ethereum and Base (runtime, metadata excluded; immutables masked)
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,6 +19,12 @@ const last = (r) => (r.stdout + r.stderr).trim().split('\n').filter(Boolean).pop
 const settings = JSON.parse(readFileSync(join(ROOT, 'packages/contracts/compiler-settings.json'), 'utf8'))
 const ok = tool()
 check('V1: official settings (paris, 999999 runs) reproduce the fixture', ok.status === 0 && ok.stdout.includes('IDENTICAL') && settings.settings.evmVersion === 'paris', last(ok))
+
+const rep = JSON.parse(readFileSync(join(ROOT, 'reports/verify-source.json'), 'utf8')).steps.deployed
+const chains = Object.entries(rep?.chains ?? {})
+check('V4: runtime identical to the AirSwap deployment on Ethereum and Base, DOMAIN_CHAIN_ID = chain', ok.status === 0 && chains.length === 2 &&
+  chains.every(([id, c]) => c.runtimeEqualExcludingMetadata && c.domainChainIdMatches) && (ok.stdout.match(/runtime IDENTICAL excluding metadata/g) ?? []).length === 2,
+  chains.map(([id, c]) => `${id}: ${c.runtimeBytes} B, metadata ${c.metadataEqual ? 'equal' : 'differs'}`).join('; '))
 
 const sh = tool('--evm-version', 'shanghai')
 check('V2: evmVersion shanghai → verification FAILS (bytecode differs)', sh.status === 1 && /creation bytecode differs/.test(sh.stderr), last(sh))

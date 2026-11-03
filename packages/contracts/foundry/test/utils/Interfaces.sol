@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-/// The subset of SwapERC20 v5.0.0 used by the tests. Signatures checked against fixtures/SwapERC20.json (a mismatch reverts).
+/// The subset of SwapERC20 (AirSwap tag v4.3) used by the tests. Signatures checked against fixtures/SwapERC20.json (a mismatch reverts).
 interface ISwapERC20 {
+  error ChainIdChanged();
+  error InvalidFee();
+  error InvalidFeeLight();
+  error InvalidFeeWallet();
+  error InvalidStaking();
   error NonceAlreadyUsed(uint256);
   error OrderExpired();
   error SignatureInvalid();
@@ -15,6 +20,8 @@ interface ISwapERC20 {
     address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s) external;
   function swapAnySender(address recipient, uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount,
     address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s) external;
+  function swapLight(uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount,
+    address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s) external;
   function check(address senderWallet, uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount,
     address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s) external view returns (bytes32[] memory);
   function cancel(uint256[] calldata nonces) external;
@@ -23,6 +30,10 @@ interface ISwapERC20 {
   function revoke() external;
   function authorized(address) external view returns (address);
   function setProtocolFee(uint256) external;
+  function setProtocolFeeLight(uint256) external;
+  function setProtocolFeeWallet(address) external;
+  function setStaking(address) external;
+  function DOMAIN_CHAIN_ID() external view returns (uint256);
   function protocolFee() external view returns (uint256);
   function protocolFeeWallet() external view returns (address);
   function owner() external view returns (address);

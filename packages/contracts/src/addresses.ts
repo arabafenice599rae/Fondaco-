@@ -9,7 +9,7 @@ export interface TokenInfo { address: Address; symbol: string; decimals: number 
 export interface ChainAddresses {
   chainId: number
   name: string
-  /** FONDACO's SwapERC20 v5.0.0 deployment, null = not deployed yet */
+  /** FONDACO's SwapERC20 v4.3 deployment, null = not deployed yet */
   swapERC20: Address | null
   multicall3: Address
   tokens: Readonly<Record<string, TokenInfo>>

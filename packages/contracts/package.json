@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "AirSwap SwapERC20 v5.0.0 fixtures (unmodified), deploy script and on-chain tests",
+  "description": "AirSwap SwapERC20 v4.3 fixtures (unmodified), deploy script and on-chain tests",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

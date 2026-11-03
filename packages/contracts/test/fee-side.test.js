@@ -1,4 +1,4 @@
-// Who pays the protocol fee, measured on-chain: SwapERC20 v5.0.0 (fixture compiled from tag 28156e5) on a mainnet fork.
+// Who pays the protocol fee, measured on-chain: SwapERC20 v4.3 (fixture compiled from tag v4.3, commit 6ad0137) on a mainnet fork.
 // Expected: the signer pays fee = floor(signerAmount * protocolFee / 10000) in signerToken, on top of signerAmount;
 // the sender pays exactly senderAmount and receives exactly signerAmount.
 import { readFileSync } from 'node:fs'

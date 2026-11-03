@@ -1,4 +1,4 @@
-// Deploy AirSwap SwapERC20 v5.0.0 (unmodified, from the verified fixture) and hand ownership to a Safe.
+// Deploy AirSwap SwapERC20 v4.3 (unmodified, from the verified fixture) and hand ownership to a Safe.
 //
 // Same address on every chain: a DEDICATED deployer key whose nonce is 0 on each chain. CREATE addresses depend only
 // on (deployer, nonce), so tx #0 = SwapERC20 lands at the same address everywhere. Do NOT use a CREATE2 factory:

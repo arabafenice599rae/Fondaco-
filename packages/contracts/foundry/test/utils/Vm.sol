@@ -12,6 +12,7 @@ interface Vm {
   function store(address target, bytes32 slot, bytes32 value) external;
   function load(address target, bytes32 slot) external view returns (bytes32);
   function warp(uint256 timestamp) external;
+  function chainId(uint256 newChainId) external;
   function readFile(string calldata path) external view returns (string memory);
   function parseJsonBytes(string calldata json, string calldata key) external pure returns (bytes memory);
   function parseJsonUint(string calldata json, string calldata key) external pure returns (uint256);

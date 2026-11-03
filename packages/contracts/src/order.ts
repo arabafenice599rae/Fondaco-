@@ -1,4 +1,4 @@
-// EIP-712 model of SwapERC20 v5.0.0 orders. Must match _domainNameAndVersion() and ORDER_TYPEHASH in the tagged source.
+// EIP-712 model of SwapERC20 v4.3 orders. Must match _domainNameAndVersion() and ORDER_TYPEHASH in the tagged source.
 import { getAddress, type Address, type Hex } from 'viem'
 
 export const DOMAIN_NAME = 'SWAP_ERC20'
