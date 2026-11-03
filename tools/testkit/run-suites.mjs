@@ -35,6 +35,9 @@ export const SUITES = [
   { name: 'taker', pkg: 'packages/client', file: 'test/taker.test.js' },
   { name: 'protect', pkg: 'packages/client', file: 'test/protect.test.js' },
   { name: 'taker-advanced', pkg: 'packages/client', file: 'test/taker-advanced.test.js' },
+  { name: 'web-model', pkg: 'apps/web', file: 'test/model.test.mjs', unit: true },
+  { name: 'web-keys', pkg: 'apps/web', file: 'scripts/scan-keys.mjs', unit: true },
+  { name: 'web-e2e', pkg: 'apps/web', file: 'test/e2e.mjs' },
 ]
 
 function run(cmd, args, opts) {
