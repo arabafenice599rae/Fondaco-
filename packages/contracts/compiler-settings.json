@@ -1,11 +1,11 @@
 {
-  "$comment": "Official build settings of the deployed bytecode. evmVersion 'paris' is REQUIRED: it is Hardhat's default for solc 0.8.23 in the AirSwap repository at the tag, and with solc's own default (shanghai) the bytecode differs. Checked by tools/verify-source and by the deploy script.",
+  "$comment": "Official build settings of the deployed bytecode. Source: AirSwap tag v4.3 = the SwapERC20 AirSwap deployed as 'V5.0' at 0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46 (Sourcify exact match), audited by PeckShield ('AirSwap V4.3'). evmVersion 'paris' is REQUIRED: it is Hardhat's default for solc 0.8.23 in the AirSwap repository at the tag, and with solc's own default (shanghai) the bytecode differs. Checked by tools/verify-source and by the deploy script.",
   "source": {
     "repo": "https://github.com/airswap/airswap-protocols.git",
-    "tag": "v5.0.0",
-    "commit": "28156e5115218a444d35f35162162f643e5ccb91",
+    "tag": "v4.3",
+    "commit": "6ad0137fa62ab2bd9eead257b77b8f77962d0bf3",
     "file": "source/swap-erc20/contracts/SwapERC20.sol",
-    "fileSha256": "5203e5a0bd04011edf7d479d8506d1269f3caf9987a9765b8aba8b3f02304e64"
+    "fileSha256": "4103d213f9be81e501b8cde1482ab7dbe304bec4f1844299557b062989753a36"
   },
   "solc": {
     "version": "0.8.23",
@@ -13,14 +13,33 @@
     "sha256": "28726a452290c70e1984f15c53ad3088e7d98783ee3070b11b3664da77415732"
   },
   "settings": {
-    "optimizer": { "enabled": true, "runs": 999999 },
+    "optimizer": {
+      "enabled": true,
+      "runs": 999999
+    },
     "evmVersion": "paris"
   },
   "fixtures": {
     "SwapERC20": {
       "file": "fixtures/SwapERC20.json",
-      "creationBytecodeSha256": "139ab5cbba7bfa70a5199bc69e232e253add456c233cd621a1804ea450963d77",
-      "bytes": 12221
+      "creationBytecodeSha256": "45dffc5747eb04b8b184d3dbdb2efa861eb1725820e0923431f754017a236109",
+      "bytes": 12123
+    }
+  },
+  "deployed": {
+    "$comment": "AirSwap's own deployment of this source; verify-source step 7 compares its runtime code (metadata excluded, immutables masked).",
+    "address": "0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46",
+    "chains": {
+      "1": {
+        "name": "Ethereum",
+        "rpcEnv": "MAINNET_RPC_URL",
+        "defaultRpc": "https://eth.drpc.org"
+      },
+      "8453": {
+        "name": "Base",
+        "rpcEnv": "BASE_RPC_URL",
+        "defaultRpc": "https://mainnet.base.org"
+      }
     }
   }
 }
