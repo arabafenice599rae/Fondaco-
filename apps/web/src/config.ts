@@ -5,7 +5,7 @@ import type { TokenView } from './tokens.js'
 import { isStableSymbol } from './tokens.js'
 
 export interface ChainConf { name: string; rpc: string; swap: Address | null; explorer?: string; tokens: Record<Address, TokenView> }
-export interface AppConfig { book: string; defaultChain: number; chains: Record<string, ChainConf> }
+export interface AppConfig { book: string; defaultChain: number; chains: Record<string, ChainConf>; /** wait this long for a transaction to be mined before stopping (default 300) */ txTimeoutSec: number }
 export interface Settings { book?: string; chains?: Record<string, { rpc?: string; swap?: string }> }
 export interface Effective extends AppConfig { overridden: { book: boolean; rpc: Record<string, boolean>; swap: Record<string, boolean> } }
 
@@ -38,8 +38,10 @@ export function parseAppConfig(raw: unknown): AppConfig {
   }
   const defaultChain = Number(r.defaultChain ?? Object.keys(chains)[0] ?? 1)
   if (!chains[String(defaultChain)]) errs.push(`defaultChain ${defaultChain} is not in chains`)
+  const txTimeoutSec = r.txTimeoutSec == null ? 300 : Number(r.txTimeoutSec)
+  if (!Number.isInteger(txTimeoutSec) || txTimeoutSec < 5 || txTimeoutSec > 3600) errs.push('txTimeoutSec: integer seconds between 5 and 3600')
   if (errs.length) throw new Error(`config.json non valido:\n- ${errs.join('\n- ')}`)
-  return { book, defaultChain, chains }
+  return { book, defaultChain, chains, txTimeoutSec }
 }
 
 /** Validate user overrides; returns the problems (empty = ok). */

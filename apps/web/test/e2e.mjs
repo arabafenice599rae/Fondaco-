@@ -162,7 +162,7 @@ try {
 
   const pb = await session(bob, 'bob')
   await connect(pb)
-  await until(async () => (await pb.locator('#asks .lv, #asks [data-p], #asks > *').count()) > 0, 15_000, 'book visible to bob')
+  await until(async () => (await pb.locator('#asks .lvl').count()) > 0, 15_000, 'book visible to bob')
   const done = await buy(pb, '1250')
   await shot(pb, 'e2e-taker-done')
   const aW1 = await bal(WETH, alice), aU1 = await bal(USDC, alice), bW1 = await bal(WETH, bob), bU1 = await bal(USDC, bob)

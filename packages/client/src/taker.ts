@@ -16,7 +16,7 @@ import type {
   StopReason, BookEntry, DroppedLeg, ExecuteResult, IndicativeQuote, Leg, Order, OrderInput, Reason, SendResult, SubmitMode, SubmitWhy, TakerEvent, Tracked, VerifiedQuote,
 } from './types.js'
 
-export const SWAP_TAKER_ABI = parseAbi([
+export const SWAP_TAKER_ABI = /*#__PURE__*/ parseAbi([
   'function swapAnySender(address recipient, uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount, address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s)',
   'function swap(address recipient, uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount, address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s)',
   'function check(address senderWallet, uint256 nonce, uint256 expiry, address signerWallet, address signerToken, uint256 signerAmount, address senderToken, uint256 senderAmount, uint8 v, bytes32 r, bytes32 s) view returns (bytes32[])',
@@ -28,12 +28,12 @@ export const SWAP_TAKER_ABI = parseAbi([
   'error SignatoryInvalid()',
   'error TransferFromFailed()',
 ])
-const ERC20_ABI = parseAbi([
+const ERC20_ABI = /*#__PURE__*/ parseAbi([
   'function balanceOf(address) view returns (uint256)',
   'function allowance(address owner, address spender) view returns (uint256)',
 ])
 // No return value declared: USDT-style tokens return nothing, and simulation must not fail on decoding.
-const APPROVE_ABI = parseAbi(['function approve(address spender, uint256 amount)'])
+const APPROVE_ABI = /*#__PURE__*/ parseAbi(['function approve(address spender, uint256 amount)'])
 const FEE_DIVISOR = 10_000n
 export const MULTICALL3: Address = '0xcA11bde05977b3631167028862bE2a173976CA11' // same address on every major EVM chain
 
@@ -57,34 +57,9 @@ export const REASONS: Record<Reason, string> = {
   private_unavailable: 'Invio protetto non disponibile: nessuna transazione inviata',
 }
 
-const big = (x: unknown) => BigInt(x as string | number | bigint)
-const norm = (o: OrderInput): Order => ({
-  nonce: big(o.nonce), expiry: big(o.expiry), signerWallet: getAddress(String(o.signerWallet)), signerToken: getAddress(String(o.signerToken)),
-  signerAmount: big(o.signerAmount), protocolFee: big(o.protocolFee), senderWallet: getAddress((o.senderWallet as string) || zeroAddress),
-  senderToken: getAddress(String(o.senderToken)), senderAmount: big(o.senderAmount), v: Number(o.v), r: o.r as Hex, s: o.s as Hex,
-})
+import { norm, plan } from './plan.js'
+export { plan }
 const orderArgs = (recipient: Address | null, o: Order) => [recipient, o.nonce, o.expiry, o.signerWallet, o.signerToken, o.signerAmount, o.senderToken, o.senderAmount, o.v, o.r, o.s] as const
-
-/**
- * Indicative plan: take whole orders best-first while the cumulative payment stays ≤ `pay`.
- * @param entries book side, best first: [{ hash, order }] (GET /book?signed=1 → asks to buy base, bids to sell base)
- * @param pay amount of senderToken the taker wants to spend (bigint, base units)
- */
-export function plan(entries: readonly BookEntry[], pay: bigint): IndicativeQuote {
-  const legs: Leg[] = []
-  let paid = 0n, got = 0n
-  for (const e of entries) {
-    const o = norm(e.order)
-    if (o.senderWallet !== zeroAddress) continue // private orders never come from the public book
-    const first = legs[0]?.order
-    if (first && (o.senderToken !== first.senderToken || o.signerToken !== first.signerToken)) continue
-    if (paid + o.senderAmount > pay) continue // all-or-nothing: a bigger order further down may not fit either, a smaller one may
-    legs.push({ hash: e.hash, order: o })
-    paid += o.senderAmount
-    got += o.signerAmount
-  }
-  return { kind: 'indicative', legs, pay: paid, receive: got, left: pay - paid, at: Date.now() }
-}
 
 /** A way to send transactions: the wallet itself, or a private (MEV-protected) submitter from ./protect.js. */
 export interface Submitter {

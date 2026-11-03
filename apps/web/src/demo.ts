@@ -228,7 +228,8 @@ export class DemoBackend implements Backend {
     return this.my.filter((o) => (o.status === 'open' || o.status === 'unfunded') && getAddress(o.order.signerToken) === token)
       .reduce((s, o) => s + BigInt(o.order.signerAmount) + (BigInt(o.order.signerAmount) * FEE) / 10_000n, 0n)
   }
-  async publish(terms: OrderTerms[], expirySec: number): Promise<PublishResult> {
+  async privateOrder(): Promise<null> { return null }
+  async publish(terms: OrderTerms[], expirySec: number, counterparty: Address | null = null): Promise<PublishResult> {
     await wait(500)
     const nowMs = Date.now()
     for (const t of terms) {
@@ -237,13 +238,13 @@ export class DemoBackend implements Backend {
       const ask = t.signerToken === s.m.base.address
       const baseAmt = ask ? t.signerAmount : t.senderAmount, quoteAmt = ask ? t.senderAmount : t.signerAmount
       const price = Number(formatUnits(quoteAmt, s.m.quote.decimals)) / Number(formatUnits(baseAmt, s.m.base.decimals))
-      const order = { nonce: String(Math.floor(Math.random() * 2 ** 48)), expiry: String(expirySec), signerWallet: ME, signerToken: t.signerToken, signerAmount: String(t.signerAmount), protocolFee: String(FEE), senderWallet: ZERO, senderToken: t.senderToken, senderAmount: String(t.senderAmount) }
+      const order = { nonce: String(Math.floor(Math.random() * 2 ** 48)), expiry: String(expirySec), signerWallet: ME, signerToken: t.signerToken, signerAmount: String(t.signerAmount), protocolFee: String(FEE), senderWallet: counterparty ?? ZERO, senderToken: t.senderToken, senderAmount: String(t.senderAmount) }
       const e: BookEntry = { hash: hex(64), price, baseAmount: String(baseAmt), quoteAmount: String(quoteAmt), expiry: expirySec, signer: ME, order: { ...order, v: 27, r: hex(64), s: hex(64) } }
-      this.insert(s, ask, e)
+      if (!counterparty) this.insert(s, ask, e)
       this.my.push({ hash: e.hash, chainId: 1, status: 'open', order, createdAt: nowMs, updatedAt: nowMs, executableOnChain: true })
     }
     this.emit('mine'); this.emit('book')
-    return { ok: terms.length, errors: [] }
+    return { ok: terms.length, errors: [], hashes: this.my.slice(-terms.length).map((o) => o.hash) }
   }
   async cancel(nonces: string[]) {
     await wait(700)

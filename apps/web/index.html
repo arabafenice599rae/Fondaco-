@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="it" class="booting">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -7,6 +7,9 @@
 <meta name="referrer" content="no-referrer">
 <!-- Static app: no inline scripts; fonts and code are served from here. The book and the RPC are user-configurable, hence connect-src https/wss + local. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none'">
+<!-- book requests start while the bundle downloads: before any stylesheet, so this script never waits for CSS -->
+<link rel="preload" href="./config.json" as="fetch" crossorigin="anonymous">
+<script src="./boot.js" async></script>
 <title>FONDACO</title>
 <meta name="description" content="FONDACO: exchange P2P non-custodial. Il prezzo lo fate voi.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 14'%3E%3Crect x='1' width='8' height='3' fill='%23F4AE52'/%3E%3Crect x='11' width='6' height='3' fill='%237C93FF'/%3E%3Crect x='3' y='5.5' width='6' height='3' fill='%23F4AE52'/%3E%3Crect x='11' y='5.5' width='8' height='3' fill='%237C93FF'/%3E%3Crect y='11' width='9' height='3' fill='%23F4AE52'/%3E%3Crect x='11' y='11' width='5' height='3' fill='%237C93FF'/%3E%3C/svg%3E">
@@ -46,7 +49,7 @@
   </div>
 </div>
 <div class="ambient" aria-hidden="true"></div>
-<div class="app">
+<div class="app" id="app">
   <header class="top">
     <div class="shell top-in">
       <div class="brand">
@@ -251,6 +254,15 @@
               <span><b>Accetta acquisti parziali</b><small id="partial-note"></small><span class="parts" id="parts" aria-hidden="true"></span></span>
               <input type="checkbox" class="switch" id="partial" role="switch" checked>
             </label>
+            <div class="hr" aria-hidden="true"></div>
+            <label class="toggle" for="mk-private">
+              <span><b>Solo per un indirizzo</b><small>Offerta privata: non compare nel libro, la può accettare solo quell’indirizzo</small></span>
+              <input type="checkbox" class="switch" id="mk-private" role="switch">
+            </label>
+            <div class="cp-wrap" id="cp-wrap" hidden>
+              <label for="mk-cp" class="cp-l">Indirizzo della controparte</label>
+              <input id="mk-cp" class="field mono" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…">
+            </div>
           </div>
           <dl class="summary">
             <div class="kv big"><dt>Riceverai</dt><dd id="mk-recv"></dd></div>

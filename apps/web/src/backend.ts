@@ -11,7 +11,8 @@ export interface TakerLike {
 }
 export interface Notice { id: string; level: 'warn' | 'danger' | 'info'; title: string; text: string; blocksTrading: boolean }
 export interface ChainOption { id: number; name: string }
-export interface PublishResult { ok: number; errors: string[] }
+export interface PublishResult { ok: number; errors: string[]; hashes: string[] }
+export interface SignedOrderView { hash: string; status: string; executableOnChain: boolean; order: Record<string, string | number> }
 
 export interface Backend {
   readonly demo: boolean
@@ -49,6 +50,9 @@ export interface Backend {
   approveFor(token: Address, amount: bigint): Promise<void>
   /** amount + fee that my live orders of `token` already require (the allowance must cover them too) */
   liveNeed(token: Address): bigint
-  publish(terms: OrderTerms[], expirySec: number): Promise<PublishResult>
+  /** sign and post; `counterparty` = private offer: only that address can take it (signed as senderWallet), never in the public book */
+  publish(terms: OrderTerms[], expirySec: number, counterparty?: Address | null): Promise<PublishResult>
+  /** a private offer by hash (GET /orders/:hash, signature included), or null */
+  privateOrder(hash: string): Promise<SignedOrderView | null>
   cancel(nonces: string[]): Promise<CancelResult | { status: 'unavailable'; error: string }>
 }

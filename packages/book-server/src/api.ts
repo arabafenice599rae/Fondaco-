@@ -91,7 +91,7 @@ function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
 
 /** Route label for metrics: bounded cardinality (never the raw path). */
 const routeOf = (method: string, path: string) =>
-  ['/book', '/config', '/health', '/stream', '/metrics', '/orders', '/trades', '/candles'].includes(path) ? `${method} ${path}`
+  ['/book', '/books', '/config', '/health', '/stream', '/metrics', '/orders', '/trades', '/candles'].includes(path) ? `${method} ${path}`
     : /^\/orders\/0x[0-9a-fA-F]{64}$/.test(path) ? `${method} /orders/:hash` : 'other'
 
 export interface ServerOptions {
@@ -182,6 +182,28 @@ export function createServer(engine: Engine, { corsOrigin = '*', rate, trustProx
         const { etag, ...book } = engine.book(chainId, base as string, quote as string, limit, { signed: url.searchParams.get('signed') === '1' })
         if (req.headers['if-none-match'] === etag) { res.writeHead(304, { etag, ...SEC_HEADERS }); return void res.end() }
         return json(res, 200, book, { etag, 'cache-control': 'no-cache' })
+      }
+
+      // several books in one request (the app's first screen): one entry per pair, a pair outside the whitelist is reported
+      // in its entry (no HTTP error); a stale chain fails the whole request, like /book (fail closed)
+      if (req.method === 'GET' && path === '/books') {
+        const chainId = Number(url.searchParams.get('chainId'))
+        const pairs = (url.searchParams.get('pairs') || '').split(',').filter(Boolean)
+        const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 50) || 50, 200))
+        if (!pairs.length || pairs.length > 10) return json(res, 400, { error: 'bad_request', message: '1 to 10 pairs (base:quote) required' })
+        const books: Record<string, unknown> = {}
+        for (const p of pairs) {
+          const [base, quote] = p.split(':')
+          if (!isAddress(base || '') || !isAddress(quote || '')) return json(res, 400, { error: 'bad_request', message: `pair ${p}: base:quote addresses required` })
+          try {
+            const { etag: _e, ...book } = engine.book(chainId, base as string, quote as string, limit, { signed: url.searchParams.get('signed') === '1' })
+            books[p] = book
+          } catch (e) {
+            if ((e as HttpError).code !== 'token_not_allowed') throw e
+            books[p] = { error: 'token_not_allowed' }
+          }
+        }
+        return json(res, 200, { books }, { 'cache-control': 'no-cache' })
       }
 
       if (req.method === 'GET' && (path === '/trades' || path === '/candles')) {

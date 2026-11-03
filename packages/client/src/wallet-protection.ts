@@ -1,6 +1,6 @@
 // Which wallet is connected (EIP-6963) and what that means for MEV protection — for the UI only.
 // Nothing here changes how a transaction is sent: a browser wallet always broadcasts through its own RPC.
-import { PROTECTED_RPC, SEQUENCER_CHAINS } from './protect.js'
+import { PROTECTED_RPC, SEQUENCER_CHAINS } from './guards.js'
 
 /** Human names for the protected endpoints in PROTECTED_RPC. */
 export const RPC_NAMES: Readonly<Record<string, string>> = {

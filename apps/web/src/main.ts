@@ -8,6 +8,8 @@ import { parseAppConfig, effective, readSettings, writeSettings, clearSettings, 
 import { esc } from './fmt.js'
 import { startUI, splash, type UIHandle } from './ui.js'
 import type { Backend } from './backend.js'
+// static: no extra round trip before the book can be requested (the demo backend stays a separate, dead-code chunk)
+import { LiveBackend } from './live.js'
 
 const store = (() => { try { return localStorage } catch { return null } })()
 const $ = (id: string) => document.getElementById(id) as HTMLElement
@@ -16,9 +18,11 @@ async function boot(): Promise<void> {
   splash()
   let cfg: AppConfig
   try {
-    const r = await fetch('./config.json', { cache: 'no-store' })
-    cfg = parseAppConfig(await r.json())
+    // same request as the <link rel=preload> in index.html (default cache mode: the host should send config.json with no-cache)
+    const early = (window as unknown as { __fondacoConfig?: Promise<unknown> }).__fondacoConfig
+    cfg = parseAppConfig(await (early ? early.catch(() => fetch('./config.json').then((r) => r.json())) : fetch('./config.json').then((r) => r.json())))
   } catch (e) {
+    document.documentElement.classList.remove('booting')
     document.body.insertAdjacentHTML('afterbegin', `<div class="fatal" role="alert"><b>Configurazione non valida</b><pre>${esc((e as Error).message)}</pre></div>`)
     return
   }
@@ -31,7 +35,6 @@ async function boot(): Promise<void> {
     const badge = $('demo-badge'); badge.hidden = false
     document.documentElement.dataset.demo = 'true'
   } else {
-    const { LiveBackend } = await import('./live.js')
     const live = new LiveBackend(eff)
     B = live
     void live.start()

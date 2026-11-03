@@ -2,7 +2,8 @@
 // a temp dir and imported. Covers: indicative/verified quote, offer states, exact ladder terms, float→units, chart series,
 // banners (contract mismatch, governance), config + settings, the book API client (stale 503, ETag, SSE reconnection).
 import { build } from 'vite'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync } from 'node:fs'
+import vm from 'node:vm'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -10,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const APP = resolve(fileURLToPath(new URL('.', import.meta.url)), '..')
 const out = mkdtempSync(join(tmpdir(), 'fondaco-web-unit-'))
 const entry = join(out, 'entry.ts')
-writeFileSync(entry, ['model', 'config', 'api', 'fmt'].map((m) => `export * from ${JSON.stringify(resolve(APP, 'src', m + '.ts'))}`).join('\n'))
+writeFileSync(entry, ['model', 'config', 'api', 'fmt', 'prefetch'].map((m) => `export * from ${JSON.stringify(resolve(APP, 'src', m + '.ts'))}`).join('\n'))
 await build({ configFile: false, logLevel: 'error', root: APP, build: { outDir: out, emptyOutDir: false, lib: { entry, formats: ['es'], fileName: 'bundle' }, minify: false } })
 const M = await import(pathToFileURL(join(out, 'bundle.js')).href)
 
@@ -180,6 +181,43 @@ const askE = (price, base, signer = OTHER) => {
   const api2 = new M.BookApi('http://book', async (url, init) => { posted.push(JSON.parse(init.body)); return res(400, { error: 'bad_request', message: 'chainId mancante' }) })
   const sub = await api2.submit(1, [{}, {}])
   check('U35: a rejected batch gives one error per order (the UI can say which and why)', sub.length === 2 && sub.every((x) => x.error === 'bad_request' && x.message === 'chainId mancante') && posted[0].chainId === 1)
+}
+
+// ------------------------------------------------------------------ U36–U39 Phase 6 additions
+{
+  // U36 the font subsets (scripts/subset-fonts.sh UNICODES) cover every character the sources write
+  const sh = readFileSync(resolve(APP, 'scripts/subset-fonts.sh'), 'utf8')
+  const ranges = /UNICODES="([^"]+)"/.exec(sh)[1].split(',').map((r) => r.replace('U+', '').split('-').map((h) => parseInt(h, 16))).map(([a, b]) => [a, b ?? a])
+  const covered = (cp) => ranges.some(([a, b]) => cp >= a && cp <= b)
+  const srcs = ['index.html', ...readdirSync(resolve(APP, 'src')).filter((f) => /\.(ts|css)$/.test(f)).map((f) => 'src/' + f)]
+  const missing = new Set()
+  for (const f of srcs) for (const ch of readFileSync(resolve(APP, f), 'utf8')) { const cp = ch.codePointAt(0); if (cp > 0x7e && !covered(cp) && !/\s/.test(ch)) missing.add(`${ch} U+${cp.toString(16)} (${f})`) }
+  const css = readFileSync(resolve(APP, 'src/fonts.css'), 'utf8')
+  check('U36: every character of the UI sources is in the Latin font subsets (and fonts.css declares the same unicode-range)', missing.size === 0 && css.includes('unicode-range: U+0020-007E, U+00A0-00FF'), [...missing].slice(0, 5).join(', ') || `${ranges.length} ranges`)
+
+  // U37 public/boot.js asks for exactly the URLs the app then takes (same pairs, same order, lowercase)
+  const toks = { '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': { symbol: 'USDC' }, '0xdAC17F958D2ee523a2206206994597C13D831ec7': { symbol: 'USDT' }, '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2': { symbol: 'WETH' } }
+  const fetched = []
+  const win = { localStorage: { getItem: () => JSON.stringify({ book: 'http://127.0.0.1:9999/' }) } }
+  const fakeFetch = (u) => { fetched.push(u); return Promise.resolve({ json: async () => ({ book: 'https://official.example', defaultChain: 1, chains: { 1: { tokens: toks } } }) }) }
+  vm.runInNewContext(readFileSync(resolve(APP, 'public/boot.js'), 'utf8'), { window: win, localStorage: win.localStorage, fetch: fakeFetch, Map, JSON, String, Number, Object })
+  await new Promise((r) => setTimeout(r, 20))
+  const app = 'http://127.0.0.1:9999' + M.booksPath(1, M.guessPairs(toks))
+  check('U37: boot.js prefetches /config and /books of the user\'s book with the same URL the app requests', fetched.includes('http://127.0.0.1:9999/config') && fetched.includes(app) && M.guessPairs(toks).map((p) => p.id).join() === 'USDT-USDC,WETH-USDC,WETH-USDT',
+    fetched.slice(1).join(' | '))
+
+  // U38 txTimeoutSec (wait for a mined transaction before stopping): default 300, validated
+  const base = { book: '', defaultChain: 1, chains: { 1: { name: 'E', tokens: {} } } }
+  let e38 = ''
+  try { M.parseAppConfig({ ...base, txTimeoutSec: 2 }) } catch (e) { e38 = e.message }
+  check('U38: txTimeoutSec defaults to 300 s, accepts 5–3600, rejects anything else', M.parseAppConfig(base).txTimeoutSec === 300 && M.parseAppConfig({ ...base, txTimeoutSec: 8 }).txTimeoutSec === 8 && /txTimeoutSec/.test(e38))
+
+  // U39 a private offer is its own group, marked with its counterparty
+  const now = 1_800_000_000, B2 = '0x3333333333333333333333333333333333333333'
+  const mk = (nonce, sw) => ({ hash: '0x' + nonce, chainId: 1, status: 'open', executableOnChain: true, createdAt: 1, updatedAt: 2,
+    order: { nonce, expiry: String(now + 3600), signerWallet: ME, signerToken: WETH.address, signerAmount: String(M.toUnits(0.1, 18)), senderToken: USDC.address, senderAmount: String(M.toUnits(250, 6)), protocolFee: '30', senderWallet: sw } })
+  const g = M.groupOffers([mk('1', ZERO), mk('2', B2)], [mkt], { 'WETH-USDC': 2500 }, now)
+  check('U39: same terms, one public and one private → two offers; the private one carries privateFor', g.live.length === 2 && g.live.filter((o) => o.privateFor).length === 1 && g.live.find((o) => o.privateFor).privateFor.toLowerCase() === B2)
 }
 
 const passed = results.filter(Boolean).length
