@@ -130,3 +130,7 @@ Sono anche nelle decisioni.
 - **`txTimeoutSec`:** nuova opzione in `config.json`, il tempo massimo di attesa di una conferma prima di fermarsi (default
   300 s).
 - **Book server, `GET /books`:** più libri in una richiesta.
+
+
+**Aggiornamento (Fase 7, D-59):** il controllo `web-perf` P5 ha soglia LCP 3,0 s e obiettivo documentato 2,5 s.
+Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, 2,53 s in locale.

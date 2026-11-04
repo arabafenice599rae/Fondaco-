@@ -404,17 +404,30 @@ costruita e provata con lo smoke test, ma non pubblicata.
   - L5 confronta i box di ogni elemento con id tra le due modalità: tolleranza 2 px, misurato 0,5 px sull'host (ripiego
     DejaVu) e 0,4 px nell'immagine (ripiego Liberation).
 
-### D-58 · Smoke del backup anche contro MinIO, costruito dal tag — da notare
-Richiesto: MinIO da `quay.io/minio/minio`, con tag e digest. Non è possibile:
-- quay.io rifiuta il pull anonimo di `minio/minio`: il token anonimo ha `"actions": []`, e `docker pull` risponde 401 a ogni tag;
-- su Docker Hub `minio/minio` non esiste più, perché MinIO ha smesso di distribuire immagini pubbliche.
+### D-58 · Smoke del backup anche contro MinIO — approvata con variante
+Richiesto in origine: MinIO da `quay.io/minio/minio` con tag e digest. Non è possibile:
+- quay.io rifiuta il pull anonimo di `minio/minio`: il token anonimo ha `"actions": []` e risponde 401 a ogni tag;
+- `minio/minio` non esiste più su Docker Hub.
 
-Soluzione adottata:
-- `deploy/minio/Dockerfile` compila `github.com/minio/minio@RELEASE.2025-09-07T16-13-09Z` con `go install`, verificato dal
-  checksum database di Go, su `golang:1.24.7-alpine3.22@sha256:fc2cff66…dbb5`, in un'immagine `scratch`;
-- l'immagine serve solo al test, non viene pubblicata, e il CI la costruisce nel job `docker`;
-- lo smoke test, dopo S1–S6 con lo stub SigV4, esegue lo stesso `backup once/list/restore` contro MinIO:
-  - S7: un solo oggetto `book/book-*.sqlite.gz`, riletto con le credenziali di MinIO, gzip di un database SQLite;
-  - S8: list e restore con lo stesso esito dello stub;
-- con `MINIO_IMAGE=<ref@sha256:…>` il test usa un'immagine pronta, per esempio quay.io con credenziali o un mirror. Basta
-  quella variabile per tornare alla richiesta originale.
+**Variante approvata:** il binario della release da dl.min.io, verificato con il suo `.sha256sum`; la compilazione dal
+sorgente solo come riserva. Così fa `deploy/minio/Dockerfile`:
+1. scarica `minio.RELEASE.2025-09-07T16-13-09Z` e `.sha256sum` da `dl.min.io/server/minio/release/linux-amd64/archive/` e
+   confronta gli hash;
+2. se il download o il confronto falliscono, esegue `go install github.com/minio/minio@RELEASE.2025-09-07T16-13-09Z`,
+   verificato dal checksum database di Go, su `golang:1.24.7-alpine3.22@sha256:fc2cff66…dbb5`;
+3. scrive in `/SOURCE` quale strada ha preso, e S7 lo riporta.
+
+**Stato al 2026-11-04:** dl.min.io risponde **410 Gone** per il binario e per il `.sha256sum`: "These files are no longer
+served from this site. This applies to all community releases". Quindi oggi gira la riserva.
+
+**Dopo il merge su `main`:** il job `docker` ha una sonda informativa che prova il pull anonimo di
+`quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` dal runner GitHub e scrive l'esito nel riepilogo. Se risulta pullabile, il
+test passa all'immagine con digest (`MINIO_IMAGE`) e il Dockerfile viene tolto.
+
+Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/list/restore` contro MinIO, con lo stesso esito.
+
+### D-59 · Soglia LCP — approvata
+- Il controllo `web-perf` P5 fallisce sopra **3,0 s** (mediana di 3 esecuzioni Lighthouse).
+- L'obiettivo documentato è **2,5 s**. P5 riporta il valore misurato e lo scarto dall'obiettivo.
+- Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, 2,53 s in locale (2,56 · 2,45 · 2,53).
+- L'elemento LCP è il marchio dello splash, la cui animazione dura 2,8 s per progetto: è il limite voluto di PHASE6-RESULTS.

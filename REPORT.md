@@ -42,7 +42,7 @@ Branch di lavoro: `claude/fondaco-p2p-build-test-2glj2b`. Dettagli: `CHANGELOG.m
 
 **Regressione locale finale: 39 suite, tutte verdi** (tabella in fondo).
 
-## Deviazioni dalla specifica (approvate, tranne l'8)
+## Deviazioni dalla specifica (tutte approvate)
 
 1. **Contratto:** v4.3 invece di v5.0.0 (D-40). È il sorgente deployato da AirSwap e coperto dall'audit PeckShield; la
    differenza è in `docs/AUDIT-DIFF.md`.
@@ -57,10 +57,15 @@ Branch di lavoro: `claude/fondaco-p2p-build-test-2glj2b`. Dettagli: `CHANGELOG.m
    - Demo su telefono e "TU" a punto;
    - etichette del grafico e hover del pulsante;
    - `<h1>` nascosto.
-7. **Limite voluto:** l'LCP di 2,5 s è il marchio dello splash, la cui animazione dura 2,8 s.
-8. **MinIO dal sorgente, non da quay.io (D-58), da approvare.** `quay.io/minio/minio` rifiuta il pull anonimo (401 a ogni
-   tag) e `minio/minio` non esiste più su Docker Hub. Lo smoke usa MinIO `RELEASE.2025-09-07T16-13-09Z` compilato dal tag
-   (`deploy/minio/Dockerfile`). Con `MINIO_IMAGE=<ref@sha256:…>` usa un'immagine pronta.
+7. **LCP, limite voluto (D-59):**
+   - l'elemento LCP è il marchio dello splash, la cui animazione dura 2,8 s per progetto;
+   - soglia del controllo 3,0 s, obiettivo 2,5 s;
+   - misurato nell'immagine Playwright: **2,6 s** nelle run CI 6 e 7, **2,53 s** in locale (P5).
+8. **MinIO (D-58, approvata con variante):**
+   - prima strada: il binario della release da dl.min.io con verifica `.sha256sum`;
+   - riserva: la compilazione dal tag;
+   - oggi dl.min.io risponde 410 Gone per tutte le release community, quindi gira la riserva;
+   - dopo il merge, la sonda nel CI dice se quay.io è pullabile in anonimo dal runner.
 9. **Preload a priorità bassa (D-57).** Con priorità normale P3 (Fast 3G) passava da 1,8 a 2,4 s; con `fetchpriority="low"`
    è 1,82 s.
 
@@ -159,12 +164,12 @@ rilanciato da solo nell'immagine Playwright. Il `docker-smoke` (8/8) è esplicit
 | contracts | verify-source 4/4 · foundry 29/29 · addresses 5/5 · deploy 8/8 · fee 2/2 |
 | book-server | backup 3/3 · config 9/9 · allocation 5/5 · migrations 7/7 · observability 5/5 · e2e 22/22 · engine 13/13 · signers 8/8 · metrics 7/7 · trades 12/12 · faults 12/12 · reorg 5/5 · pinned-read 1/1 · differential 3/3 · event-order 2/2 · http-security 11/11 |
 | client | wallet 5/5 · client-guards 9/9 · client-smoke 4/4 · taker 13/13 · protect 5/5 · taker-advanced 12/12 |
-| web | web-model 39/39 · web-keys 6/6 · web-layout 7/7 (L1 con webfont, L1b con woff2 bloccati, L5 geometria) · web-a11y 4/4 · web-visual 2/2 · web-e2e 18/18 · web-flows 21/21 · web-perf 4/4 |
+| web | web-model 39/39 · web-keys 6/6 · web-layout 7/7 (L1 con webfont, L1b con woff2 bloccati, L5 geometria) · web-a11y 4/4 · web-visual 2/2 · web-e2e 18/18 · web-flows 21/21 · web-perf 5/5 (P5 LCP) |
 
-Totale: **331 controlli** su 39 suite, più `docker-smoke` 8/8.
+Totale: **332 controlli** su 39 suite, più `docker-smoke` 8/8.
 
 Suite web eseguite anche nell'immagine Playwright in locale: model 39, keys 6, layout 7, a11y 4, visual 2, e2e 18, flows 21,
-perf 4, tutte verdi.
+perf 5 (P5 LCP 2,53 s), tutte verdi.
 
 ## Prova del CI (`verify.yml`)
 
@@ -193,7 +198,7 @@ Valori principali di `web-e2e` nella run 7:
 - **Prestazioni:**
   - P3 Fast 3G 1,84 s;
   - Lighthouse 0,96/1;
-  - LCP 2,6 s, sempre il marchio dello splash: nell'immagine è 0,1 s sopra i 2,5 s accettati come limite voluto.
+  - LCP 2,6 s, il marchio dello splash: accettato, con soglia 3,0 s e obiettivo 2,5 s (D-59).
 
 Storico delle run:
 
