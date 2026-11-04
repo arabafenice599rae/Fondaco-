@@ -145,4 +145,32 @@ Totale: **329 controlli** su 39 suite.
 
 ## Prova del CI (`verify.yml`)
 
-<!-- CI-RUN -->
+Run verde: **https://github.com/arabafenice599rae/Fondaco-/actions/runs/41800320167** (run 5, commit `29348df`, profilo
+`full`, avviata con il trigger push temporaneo: vedi D-53). **Durata: 13 min 41 s** (08:32:44 → 08:46:25 UTC).
+
+| Job | Esito | Durata |
+|---|---|---|
+| toolchain (piano + cache) | ✅ | 1 min 26 s |
+| lint (build, typecheck, generati, lint, checksums) | ✅ | 1 min 55 s |
+| unit | ✅ | 1 min 34 s |
+| fork (anvil al blocco 23700000) | ✅ | 4 min 23 s |
+| foundry | ✅ | 1 min 7 s |
+| web-e2e (model, keys, layout, a11y, visual, e2e, flows, Lighthouse) | ✅ | 12 min 9 s |
+| supply-chain (audit, lockfile, gitleaks, SHA256SUMS) | ✅ | 21 s |
+| reproducible-build-a / -b | ✅ / ✅ | 31 s / 36 s |
+| reproducible-compare (tree hash e CID uguali) | ✅ | 3 s |
+| docker (immagine + compose smoke 6/6) | ✅ | 2 min 7 s |
+| docker-publish | saltato, come previsto (solo `main` o tag `v*`) | — |
+
+Run precedenti, tutte con un solo job rosso, `web-e2e`, mentre il resto era verde:
+
+| Run | Esito | Causa | Correzione |
+|---|---|---|---|
+| [1](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41792062847) | V1 20/20 diverse, L1 | hinting completo dei glifi sul runner | — |
+| 2 | annullata dalla run 3 (concurrency) | — | — |
+| [3](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41795830126) | identica alla 1 | ipotesi sbagliata: i font non arrivavano in ritardo | attesa dei font, tenuta comunque |
+| [4](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41798013672) | L1 verde, V1 4/20 | antialiasing di due fogli a offset frazionari | rendering fissato (`fonts.conf`, `--font-render-hinting=none`) |
+| [5](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41800320167) | **tutto verde** | — | baseline CI per 4 schermate (D-54) |
+
+Dopo la prova il trigger push sul branch è stato tolto: restano `pull_request`, il notturno, `workflow_dispatch` e il push di
+un tag `v*`, che serve a pubblicare l'immagine.

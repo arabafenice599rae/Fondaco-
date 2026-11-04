@@ -1,6 +1,7 @@
-# FONDACO verification. Three ways to run it:
+# FONDACO verification. Four ways to run it:
 #   pull_request        quick profile (slow suites skipped, Foundry ci-quick profile, public fork RPC with retries)
 #   schedule (nightly)  full profile
+#   push of a v* tag    full profile, then the image is published (docker-publish)
 #   workflow_dispatch   by hand: Actions → verify → Run workflow, or  gh workflow run verify.yml -f suite=full [-f fork_block=…] [-f ref=…]
 # Secrets: FORK_RPC_URL (archive mainnet RPC, used by the nightly and manual runs; without it a public RPC is used with
 # 3 retries per fork suite), BASE_RPC_URL (optional, verify-source step 7). Every job writes its table to the run summary.
@@ -8,9 +9,8 @@ name: verify
 
 on:
   pull_request:
-  # TEMPORARY (phase 7 trial run): workflow_dispatch works only once the file is on the default branch
   push:
-    branches: [claude/fondaco-p2p-build-test-2glj2b]
+    tags: ["v*"]          # releases: full profile, then docker-publish
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
