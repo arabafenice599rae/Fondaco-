@@ -2,20 +2,29 @@
 // updates): each screenshot is compared with test/visual/baseline/<name>.png using pixelmatch (per-pixel threshold 0.1);
 // the check fails above MAX_DIFF of differing pixels. Baselines change only with an explicit command:
 //   node test/visual.mjs --update        (or: pnpm --filter @fondaco/web test:visual:update)
-// On the GitHub runner a screenshot is compared with test/visual/baseline-ci/<name>.png when that file exists: the runner
-// rasterises text at fractional offsets (two sheets) with slightly different antialiasing. Those files come only from a CI
-// run's reports/visual/<name>-actual.png, committed by hand after looking at them; --update never writes them.
+// One set of baselines for every machine (D-54): screenshots are taken only inside the pinned Playwright image
+// (tools/ci/toolchain.json → playwrightImage). Run anywhere else, this script re-runs itself in that image with docker;
+// in CI the web-e2e job already runs in it. Text rasterisation depends on the system (fonts, FreeType, hinting), so a
+// baseline made outside the image would not match the CI.
 // Differences are written to reports/visual/<name>-diff.png, and a failing screenshot to reports/visual/<name>-actual.png.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { PNG } from 'pngjs'
 import pixelmatch from 'pixelmatch'
 import * as H from './harness.mjs'
 import { STATES, demoApp, enter } from './states.mjs'
+import { PW_IMAGE, runInImage } from '../../../tools/testkit/in-playwright.mjs'
+
+if (process.env.FONDACO_PW_IMAGE !== PW_IMAGE) {
+  if (process.env.CI) { console.error(`FAIL | V!: the visual suite must run inside ${PW_IMAGE} (verify.yml web-e2e container)`); process.exit(1) }
+  console.log(`(re-running inside ${PW_IMAGE})`)
+  process.exit(runInImage(['node', '--no-warnings', fileURLToPath(import.meta.url), ...process.argv.slice(2)]))
+}
 
 export const MAX_DIFF = 0.001 // 0.1 % of the pixels
 const UPDATE = process.argv.includes('--update')
-const BASE = resolve(H.APP, 'test/visual/baseline'), BASE_CI = resolve(H.APP, 'test/visual/baseline-ci'), OUT = resolve(H.ROOT, 'reports/visual')
+const BASE = resolve(H.APP, 'test/visual/baseline'), OUT = resolve(H.ROOT, 'reports/visual')
 mkdirSync(BASE, { recursive: true }); mkdirSync(OUT, { recursive: true })
 const VIEWS = ['scambia', 'scambia-importo', 'proponi', 'proponi-avvisi', 'mercati', 'mercato', 'offerte', 'conferma', 'wallet', 'impostazioni']
 const { check, finish } = H.reporter()
@@ -29,8 +38,7 @@ for (const vp of [[390, 844], [1440, 900]]) {
     const name = `${id}-${vp[0]}`
     const shot = await p.screenshot({ animations: 'disabled', caret: 'hide', mask: [p.locator('#toast')] })
     await ctx.close()
-    const ciFile = join(BASE_CI, name + '.png')
-    const file = process.env.GITHUB_ACTIONS === 'true' && !UPDATE && existsSync(ciFile) ? ciFile : join(BASE, name + '.png')
+    const file = join(BASE, name + '.png')
     if (UPDATE || !existsSync(file)) { writeFileSync(file, shot); rows.push({ name, status: UPDATE ? 'updated' : 'created' }); continue }
     const a = PNG.sync.read(readFileSync(file)), b = PNG.sync.read(shot)
     if (a.width !== b.width || a.height !== b.height) { rows.push({ name, status: 'size', ratio: 1 }); continue }

@@ -73,9 +73,11 @@ check(`P3: Fast 3G — book on screen in ${med} ms (median of 3) ≤ ${BUDGET.fa
 await H.closeBrowser()
 
 // ------------------------------------------------------------------ P4 Lighthouse (async spawn: this process serves the page)
+// Chrome for Lighthouse: CHROME_PATH (set by the CI toolchain), else Playwright's own Chromium (in the Playwright image too)
+const CHROME = (await import('playwright')).chromium.executablePath()
 const lh = (out) => new Promise((res) => {
   const p = spawn(process.execPath, [resolve(H.APP, 'node_modules/lighthouse/cli/index.js'), srv.url, '--quiet', '--chrome-flags=--headless=new --no-sandbox --disable-background-networking --disable-component-update --no-first-run',
-    '--only-categories=performance,accessibility', '--max-wait-for-load=20000', '--output=json', `--output-path=${out}`], { env: { ...process.env, CHROME_PATH: process.env.CHROME_PATH || '/opt/pw-browsers/chromium' }, stdio: 'ignore' })
+    '--only-categories=performance,accessibility', '--max-wait-for-load=20000', '--output=json', `--output-path=${out}`], { env: { ...process.env, CHROME_PATH: process.env.CHROME_PATH || CHROME }, stdio: 'ignore' })
   const t = setTimeout(() => p.kill('SIGKILL'), 180_000)
   p.on('exit', (code) => { clearTimeout(t); res(code) })
 })

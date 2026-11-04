@@ -2,12 +2,15 @@
 //   anvil (local chain) + SwapERC20 from the fixture + an S3 stub that VERIFIES SigV4 on every request, all on the host;
 //   docker compose (deploy/compose.yaml + compose.smoke.yaml): book + Caddy (TLS, localhost CA) + backup.
 // Checks /health, /config and /book through Caddy over HTTPS, a backup uploaded (signature verified by the stub),
-// `backup list` and `backup restore` inside the backup container, log rotation configured. Tears everything down.
+// `backup list` and `backup restore` inside the backup container, log rotation configured. Then the same backup steps
+// against a real MinIO server (S7–S8, D-58): MINIO_IMAGE if set, otherwise fondaco-minio:smoke built from deploy/minio
+// (MinIO release tag). Tears everything down.
 //   node packages/book-server/test/docker-smoke.mjs [image]          (default fondaco-book:smoke, built beforehand)
 import { spawn, execFileSync, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createServer } from 'node:http'
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
+import { gunzipSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -91,11 +94,40 @@ try {
   const user = execFileSync('docker', ['inspect', `${project}-book-1`, '--format', '{{.Config.User}}'], { encoding: 'utf8' }).trim()
   const bindings = JSON.parse(execFileSync('docker', ['inspect', `${project}-book-1`, '--format', '{{json .HostConfig.PortBindings}}'], { encoding: 'utf8' }))
   check('S6: the book runs as the unprivileged "node" user, with no port published on the host', user === 'node' && Object.keys(bindings ?? {}).length === 0, `user ${user}, bindings ${JSON.stringify(bindings)}`)
+
+  // ---------------------------------------------------------------- the same against MinIO (D-58)
+  const MINIO = { accessKeyId: 'smokeminio', secretAccessKey: 'smoke-minio-secret', region: 'us-east-1' }
+  const minioImage = process.env.MINIO_IMAGE || 'fondaco-minio:smoke'
+  try { execFileSync('docker', ['image', 'inspect', minioImage], { stdio: 'ignore' }) } catch {
+    if (process.env.MINIO_IMAGE) throw new Error(`MINIO_IMAGE ${minioImage} is not available: docker pull it first`)
+    execFileSync('docker', ['build', '-t', minioImage, resolve(ROOT, 'deploy/minio')], { stdio: 'inherit' })
+  }
+  const mport = await freePort()
+  execFileSync('docker', ['run', '-d', '--name', `${project}-minio`, '-p', `${mport}:9000`, '-e', `MINIO_ROOT_USER=${MINIO.accessKeyId}`, '-e', `MINIO_ROOT_PASSWORD=${MINIO.secretAccessKey}`, minioImage], { stdio: 'ignore' })
+  const m3 = async (method, path, body) => { const url = `http://127.0.0.1:${mport}${path}`; const { headers } = signV4({ method, url, body, ...MINIO }); return fetch(url, { method, headers, body }) }
+  let live = 0
+  for (let i = 0; i < 60 && live !== 200; i++) { await sleep(500); live = await fetch(`http://127.0.0.1:${mport}/minio/health/live`).then((r) => r.status, () => 0) }
+  const mk = await m3('PUT', '/fondaco')
+  // the release: the image label (deploy/minio builds with `go install`, so the binary itself reports DEVELOPMENT.GOGET)
+  const label = execFileSync('docker', ['image', 'inspect', minioImage, '--format', '{{index .Config.Labels "org.opencontainers.image.version"}}'], { encoding: 'utf8' }).trim()
+  const version = label && label !== '<no value>' ? `${minioImage} ${label}` : execFileSync('docker', ['exec', `${project}-minio`, '/minio', '--version'], { encoding: 'utf8' }).split('\n')[0]
+  const menv = ['-e', `S3_ENDPOINT=http://host.docker.internal:${mport}`, '-e', 'S3_BUCKET=fondaco', '-e', `S3_ACCESS_KEY_ID=${MINIO.accessKeyId}`, '-e', `S3_SECRET_ACCESS_KEY=${MINIO.secretAccessKey}`]
+  const once = await composeAsync('exec', '-T', ...menv, 'backup', 'node', 'scripts/backup.mjs', 'once')
+  const xml = await (await m3('GET', '/fondaco?list-type=2&prefix=book%2F')).text()
+  const mkeys = [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((x) => x[1])
+  const obj = mkeys[0] ? Buffer.from(await (await m3('GET', `/fondaco/${mkeys[0]}`)).arrayBuffer()) : Buffer.alloc(0)
+  let sqliteHeader = ''; try { sqliteHeader = gunzipSync(obj).subarray(0, 15).toString() } catch {}
+  check(`S7: MinIO (${version}): the backup job uploads one gzip snapshot, read back with MinIO's own credentials — same key format as the stub`,
+    live === 200 && mk.ok && mkeys.length === 1 && /^book\/book-.*\.sqlite\.gz$/.test(mkeys[0]) && sqliteHeader === 'SQLite format 3', `${mkeys[0] ?? 'none'} (${obj.length} bytes, ${sqliteHeader || 'not a gzip of SQLite'}); ${once.trim().slice(0, 80)}`)
+  const mlisted = (await composeAsync('exec', '-T', ...menv, 'backup', 'node', 'scripts/backup.mjs', 'list')).trim()
+  const mrestored = await composeAsync('exec', '-T', ...menv, 'backup', 'node', 'scripts/backup.mjs', 'restore', 'latest', '/tmp/restored-minio.sqlite')
+  check('S8: MinIO: backup list and restore (download, integrity_check) give the same outcome as with the stub', mlisted === mkeys[0] && /"msg":"restored"/.test(mrestored) && /"msg":"restored"/.test(restored), mrestored.trim().slice(0, 120))
 } catch (e) {
   check('S!: unexpected error', false, String(e.stderr || e.message).slice(0, 300))
   try { console.log(compose('logs', '--no-color', '--tail', '40')) } catch {}
 } finally {
   try { compose('down', '-v', '--remove-orphans') } catch {}
+  try { execFileSync('docker', ['rm', '-f', `${project}-minio`], { stdio: 'ignore' }) } catch {}
   anvil.kill(); s3.close()
 }
 const p = results.filter(Boolean).length

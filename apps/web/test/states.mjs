@@ -42,8 +42,10 @@ export async function demoApp() {
   const b = await H.launch()
   return {
     url: srv.url,
-    async page([w, h], { scale = 1, freeze = true, deterministic = false } = {}) {
+    async page([w, h], { scale = 1, freeze = true, deterministic = false, blockFonts = false } = {}) {
       const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: scale, reducedMotion: 'reduce' })
+      // blockFonts: the woff2 never arrive, so the page renders with the metric-matched local fallbacks (D-57)
+      if (blockFonts) await ctx.route('**/*.woff2', (r) => r.abort())
       await ctx.addInitScript(() => { try { sessionStorage.setItem('fondaco-splash', '1'); localStorage.clear() } catch {} })
       if (deterministic) await ctx.addInitScript(() => {
         // same pixels on every run: seeded Math.random, no periodic updates (demo ticker, "ago" labels)
@@ -67,21 +69,25 @@ export async function demoApp() {
 export async function enter(app, vp, st, opts) {
   const { p, ctx, logs } = await app.page(vp, opts)
   await st.go(p)
-  await fontsLoaded(p)
+  await fontsLoaded(p, { blocked: !!opts?.blockFonts })
   await p.waitForTimeout(450)
   return { p, ctx, logs }
 }
 /**
- * Waits until every bundled font face is loaded. The faces use `font-display: swap` and load on first use (a sheet that
- * opens may need a weight not used before): on a slow machine a screenshot or a layout sample could otherwise see the
- * fallback font (wider, with other metrics), so wraps and overlaps would depend on the machine. Throws if one fails.
+ * Waits until every bundled font face is loaded (the `local()` fallback faces are not checked: which ones exist depends on
+ * the system). The faces use `font-display: swap` and load on first use, so a screenshot or a layout sample must not run
+ * before them. With `blocked` (woff2 requests aborted) it checks the opposite: no bundled face loaded, a fallback in use.
  */
-export async function fontsLoaded(p) {
-  const bad = await p.evaluate(async () => {
-    await Promise.allSettled([...document.fonts].map((f) => f.load()))
+export async function fontsLoaded(p, { blocked = false } = {}) {
+  const st = await p.evaluate(async () => {
+    const web = [...document.fonts].filter((f) => !/Fallback/.test(f.family))
+    await Promise.allSettled(web.map((f) => f.load()))
     await document.fonts.ready
-    return [...document.fonts].filter((f) => f.status !== 'loaded').map((f) => `${f.family} ${f.weight} ${f.status}`)
+    const fb = [...document.fonts].filter((f) => /Fallback/.test(f.family) && f.status === 'loaded').map((f) => f.family)
+    return { bad: web.filter((f) => f.status !== 'loaded').map((f) => `${f.family} ${f.weight} ${f.status}`), loaded: web.filter((f) => f.status === 'loaded').length, fb: [...new Set(fb)] }
   })
-  if (bad.length) throw new Error('fonts not loaded: ' + bad.join(', '))
+  if (!blocked && st.bad.length) throw new Error('fonts not loaded: ' + st.bad.join(', '))
+  if (blocked && (st.loaded || !st.fb.length)) throw new Error(`fonts blocked, but ${st.loaded} web faces loaded and fallbacks in use: ${st.fb.join(', ') || 'none'}`)
+  return st
 }
 export const require_ = createRequire(import.meta.url)

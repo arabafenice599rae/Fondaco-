@@ -92,35 +92,55 @@ const app = await demoApp()
     `${r.covered.length} covered, ${r.clipped.length} clipped`)
   await ctx.close()
 }
+// Every view is sampled twice (D-57): with the web fonts, and with the woff2 blocked so the metric-matched local fallbacks
+// render. Both must be clean, and the geometry must not move between the two (L5).
 const report = []
-let samples = 0
-for (const vp of VIEWPORTS) {
-  for (const st of STATES) {
-    const { p, ctx, logs } = await enter(app, vp, st)
-    const scroller = st.sheet ? `#${st.sheet} .sheet` : null
-    for (const f of [0, 1 / 3, 2 / 3, 1]) {
-      await p.evaluate(([sel, f]) => { const s = sel ? document.querySelector(sel) : document.scrollingElement; s.scrollTop = (s.scrollHeight - s.clientHeight) * f }, [scroller, f])
-      await p.waitForTimeout(120)
-      const r = await p.evaluate(detect, st.sheet ?? null)
-      samples++
-      if (r.covered.length || r.clipped.length || r.hscroll) report.push({ vp: vp.join('×'), state: st.id, scroll: f, covered: r.covered, clipped: r.clipped, hscroll: r.hscroll })
-      if (r.ellipsis.length) report.push({ vp: vp.join('×'), state: st.id, scroll: f, ellipsis: r.ellipsis })
+const samples = { webfont: 0, fallback: 0 }
+const geo = { webfont: new Map(), fallback: new Map() }
+const rects = () => [...document.querySelectorAll('[id]')].filter((e) => e.getClientRects().length && !e.closest('[hidden],.sheet-wrap:not(.open)'))
+  .map((e) => { const r = e.getBoundingClientRect(); return [e.id, Math.round(r.x * 10) / 10, Math.round(r.y * 10) / 10, Math.round(r.width * 10) / 10, Math.round(r.height * 10) / 10] })
+for (const mode of ['webfont', 'fallback']) {
+  for (const vp of VIEWPORTS) {
+    for (const st of STATES) {
+      const { p, ctx, logs } = await enter(app, vp, st, { blockFonts: mode === 'fallback' })
+      geo[mode].set(`${vp.join('×')} ${st.id}`, await p.evaluate(rects))
+      const scroller = st.sheet ? `#${st.sheet} .sheet` : null
+      for (const f of [0, 1 / 3, 2 / 3, 1]) {
+        await p.evaluate(([sel, f]) => { const s = sel ? document.querySelector(sel) : document.scrollingElement; s.scrollTop = (s.scrollHeight - s.clientHeight) * f }, [scroller, f])
+        await p.waitForTimeout(120)
+        const r = await p.evaluate(detect, st.sheet ?? null)
+        samples[mode]++
+        if (r.covered.length || r.clipped.length || r.hscroll) report.push({ mode, vp: vp.join('×'), state: st.id, scroll: f, covered: r.covered, clipped: r.clipped, hscroll: r.hscroll })
+        if (r.ellipsis.length) report.push({ mode, vp: vp.join('×'), state: st.id, scroll: f, ellipsis: r.ellipsis })
+      }
+      // with the woff2 blocked Chrome logs the aborted requests; nothing else is allowed
+      const con = mode === 'fallback' ? logs.filter((l) => !/\.woff2|ERR_FAILED/.test(l)) : logs
+      if (con.length) report.push({ mode, vp: vp.join('×'), state: st.id, console: con })
+      await ctx.close()
     }
-    if (logs.length) report.push({ vp: vp.join('×'), state: st.id, console: logs })
-    await ctx.close()
   }
 }
 await app.close()
 mkdirSync(resolve(H.ROOT, 'reports'), { recursive: true })
 writeFileSync(resolve(H.ROOT, 'reports/layout.json'), JSON.stringify(report, null, 2))
 const bad = report.filter((x) => x.covered?.length || x.clipped?.length || x.hscroll)
-const per = (k) => bad.reduce((s, x) => s + (x[k]?.length ?? (k === 'hscroll' && x.hscroll ? 1 : 0)), 0)
-const show = (x) => `${x.vp} ${x.state}@${x.scroll.toFixed(2)}: ${[...(x.covered ?? []).map((c) => `covered ${c.el} by ${c.by} "${c.text}"`), ...(x.clipped ?? []).map((c) => `clipped ${c.el} in ${c.clip} +${c.over}px "${c.text}"`), x.hscroll ? `h-scroll ${x.hscroll}px` : ''].filter(Boolean).slice(0, 2).join('; ')}`
-check(`L1: no element covered — ${STATES.length} views/sheets × ${VIEWPORTS.length} viewports × 4 scroll positions (${samples} samples)`, per('covered') === 0, bad.filter((x) => x.covered?.length).slice(0, 4).map(show).join(' || '))
-check('L2: no text clipped (truncation with an ellipsis is allowed and listed in reports/layout.json)', per('clipped') === 0, bad.filter((x) => x.clipped?.length).slice(0, 4).map(show).join(' || '))
-check('L3: no horizontal scroll at any viewport', bad.every((x) => !x.hscroll), bad.filter((x) => x.hscroll).slice(0, 4).map(show).join(' || '))
+const per = (k, mode) => bad.filter((x) => !mode || x.mode === mode).reduce((s, x) => s + (x[k]?.length ?? (k === 'hscroll' && x.hscroll ? 1 : 0)), 0)
+const show = (x) => `${x.mode} ${x.vp} ${x.state}@${x.scroll.toFixed(2)}: ${[...(x.covered ?? []).map((c) => `covered ${c.el} by ${c.by} "${c.text}"`), ...(x.clipped ?? []).map((c) => `clipped ${c.el} in ${c.clip} +${c.over}px "${c.text}"`), x.hscroll ? `h-scroll ${x.hscroll}px` : ''].filter(Boolean).slice(0, 2).join('; ')}`
+const views = `${STATES.length} views/sheets × ${VIEWPORTS.length} viewports × 4 scroll positions`
+check(`L1: no element covered, web fonts — ${views} (${samples.webfont} samples)`, per('covered', 'webfont') === 0, bad.filter((x) => x.mode === 'webfont' && x.covered?.length).slice(0, 4).map(show).join(' || '))
+check(`L1b: no element covered, woff2 blocked (metric-matched fallback) — ${views} (${samples.fallback} samples)`, per('covered', 'fallback') === 0, bad.filter((x) => x.mode === 'fallback' && x.covered?.length).slice(0, 4).map(show).join(' || '))
+check('L2: no text clipped, both font modes (truncation with an ellipsis is allowed and listed in reports/layout.json)', per('clipped') === 0, bad.filter((x) => x.clipped?.length).slice(0, 4).map(show).join(' || '))
+check('L3: no horizontal scroll at any viewport, both font modes', bad.every((x) => !x.hscroll), bad.filter((x) => x.hscroll).slice(0, 4).map(show).join(' || '))
 const con = report.filter((x) => x.console)
-check('L4: clean console in every state (demo build)', con.length === 0, con.slice(0, 2).map((x) => `${x.vp} ${x.state}: ${x.console[0]}`).join(' | '))
+check('L4: clean console in every state (demo build; with the woff2 blocked only the aborted font requests)', con.length === 0, con.slice(0, 2).map((x) => `${x.mode} ${x.vp} ${x.state}: ${x.console[0]}`).join(' | '))
+// L5: the fallback keeps the layout — every element with an id at the same place and size (±GEO_TOL px)
+const GEO_TOL = 2
+let worst = { d: 0, at: '' }, compared = 0
+for (const [k, a] of geo.webfont) {
+  const b = new Map((geo.fallback.get(k) ?? []).map((r) => [r[0], r]))
+  for (const r of a) { const q = b.get(r[0]); if (!q) continue; compared++; const d = Math.max(...[1, 2, 3, 4].map((i) => Math.abs(r[i] - q[i]))); if (d > worst.d) worst = { d, at: `${k} #${r[0]} ${JSON.stringify(r.slice(1))} vs ${JSON.stringify(q.slice(1))}` } }
+}
+check(`L5: same geometry with the fallback fonts — ${compared} element boxes, max difference ≤ ${GEO_TOL} px`, compared > 0 && worst.d <= GEO_TOL, `max ${worst.d.toFixed(1)} px${worst.d ? ' at ' + worst.at : ''}`)
 const ell = report.filter((x) => x.ellipsis).reduce((s, x) => s + x.ellipsis.length, 0)
 console.log(`(info) ${ell} intentional ellipsis truncations`)
 process.exit(finish() ? 0 : 1)

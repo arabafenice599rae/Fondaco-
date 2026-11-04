@@ -25,6 +25,12 @@ if (need.has('playwright')) {
   const exe = (() => { try { return req('playwright').chromium.executablePath() } catch { return '' } })()
   row('chromium (playwright)', 'present', exe && existsSync(exe) ? `present ${exe}` : 'missing')
 }
+{ // the pinned Playwright image: same string in toolchain.json and in verify.yml, same version as the playwright package
+  const ref = T.playwrightImage.ref, wf = readFileSync(resolve(ROOT, '.github/workflows/verify.yml'), 'utf8')
+  const imgVer = (ref.match(/:v([\d.]+)-/) ?? [])[1] ?? '?'
+  row('playwright image (verify.yml, version)', `${ref} ${web.playwright}`, `${wf.includes(`image: ${ref}`) ? ref : 'verify.yml differs'} ${imgVer}`, wf.includes(`image: ${ref}`) && imgVer === web.playwright && /@sha256:[0-9a-f]{64}$/.test(ref))
+  if (process.env.FONDACO_PW_IMAGE) row('running in the image', ref, process.env.FONDACO_PW_IMAGE)
+}
 if (need.has('foundry')) {
   row('forge', T.foundry.commit, sh('forge', ['--version']).replace(/\n/g, ' '))
   row('anvil', T.foundry.version.slice(1), sh('anvil', ['--version']))

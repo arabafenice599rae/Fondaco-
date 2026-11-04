@@ -6,7 +6,7 @@ description: >-
 inputs:
   foundry: { description: install forge/anvil/cast, default: "false" }
   solc: { description: download solc 0.8.23 for tools/verify-source (checksum verified), default: "false" }
-  playwright: { description: install Playwright Chromium (and its system deps), default: "false" }
+  playwright: { description: "\"true\": install Playwright Chromium (and its system deps); \"image\": already in the job container (the pinned Playwright image)", default: "false" }
   docker: { description: set up Docker Buildx, default: "false" }
   kubo: { description: install the kubo (ipfs) CLI, default: "false" }
   gitleaks: { description: install gitleaks, default: "false" }
@@ -43,6 +43,10 @@ runs:
         [ -f "$f" ] || curl -fsSL --retry 3 -o "$f" "https://binaries.soliditylang.org/linux-amd64/$build"
         echo "$want  $f" | sha256sum -c -; chmod +x "$f"
 
+    - name: Playwright browsers from the image (CHROME_PATH for Lighthouse)
+      if: inputs.playwright == 'image'
+      shell: bash
+      run: echo "CHROME_PATH=$(cd apps/web && node -e "console.log(require('playwright').chromium.executablePath())")" >> "$GITHUB_ENV"
     - name: Playwright browsers cache
       if: inputs.playwright == 'true'
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
@@ -83,7 +87,7 @@ runs:
         need=""
         [ "${{ inputs.foundry }}" = true ] && need="$need,foundry"
         [ "${{ inputs.solc }}" = true ] && need="$need,solc"
-        [ "${{ inputs.playwright }}" = true ] && need="$need,playwright"
+        [ "${{ inputs.playwright }}" != false ] && need="$need,playwright"
         [ "${{ inputs.docker }}" = true ] && need="$need,docker"
         [ "${{ inputs.kubo }}" = true ] && need="$need,kubo"
         [ "${{ inputs.gitleaks }}" = true ] && need="$need,gitleaks"
