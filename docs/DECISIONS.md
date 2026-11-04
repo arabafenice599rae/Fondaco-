@@ -420,7 +420,11 @@ sorgente solo come riserva. Così fa `deploy/minio/Dockerfile`:
 **Stato al 2026-11-04:** dl.min.io risponde **410 Gone** per il binario e per il `.sha256sum`: "These files are no longer
 served from this site. This applies to all community releases". Quindi oggi gira la riserva.
 
-**Dopo il merge su `main`:** il job `docker` ha una sonda informativa che prova il pull anonimo di
+**Verificato dal runner GitHub dopo il merge** (run manuale 41927262623): la sonda risponde `unauthorized: access to the
+requested resource is not authorized`. quay.io non è pullabile in anonimo neanche da lì, quindi resta la variante e la riserva
+compila dal tag.
+
+**Ogni run:** il job `docker` ha una sonda informativa che prova il pull anonimo di
 `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` dal runner GitHub e scrive l'esito nel riepilogo. Se risulta pullabile, il
 test passa all'immagine con digest (`MINIO_IMAGE`) e il Dockerfile viene tolto.
 
@@ -429,5 +433,6 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
 ### D-59 · Soglia LCP — approvata
 - Il controllo `web-perf` P5 fallisce sopra **3,0 s** (mediana di 3 esecuzioni Lighthouse).
 - L'obiettivo documentato è **2,5 s**. P5 riporta il valore misurato e lo scarto dall'obiettivo.
-- Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, 2,53 s in locale (2,56 · 2,45 · 2,53).
+- Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, **2,67 s** con P5 nella run manuale 41927262623
+  (2,60 · 2,68 · 2,67), 2,53 s in locale (2,56 · 2,45 · 2,53).
 - L'elemento LCP è il marchio dello splash, la cui animazione dura 2,8 s per progetto: è il limite voluto di PHASE6-RESULTS.

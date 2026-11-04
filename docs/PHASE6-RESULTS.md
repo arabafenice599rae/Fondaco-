@@ -133,4 +133,4 @@ Sono anche nelle decisioni.
 
 
 **Aggiornamento (Fase 7, D-59):** il controllo `web-perf` P5 ha soglia LCP 3,0 s e obiettivo documentato 2,5 s.
-Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, 2,53 s in locale.
+Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, 2,67 s nella run manuale 41927262623, 2,53 s in locale.

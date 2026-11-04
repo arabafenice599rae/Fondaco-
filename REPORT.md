@@ -60,12 +60,13 @@ Branch di lavoro: `claude/fondaco-p2p-build-test-2glj2b`. Dettagli: `CHANGELOG.m
 7. **LCP, limite voluto (D-59):**
    - l'elemento LCP è il marchio dello splash, la cui animazione dura 2,8 s per progetto;
    - soglia del controllo 3,0 s, obiettivo 2,5 s;
-   - misurato nell'immagine Playwright: **2,6 s** nelle run CI 6 e 7, **2,53 s** in locale (P5).
+   - misurato nell'immagine Playwright: **2,6 s** nelle run CI 6 e 7, **2,67 s** con P5 nella run manuale 41927262623,
+     **2,53 s** in locale.
 8. **MinIO (D-58, approvata con variante):**
    - prima strada: il binario della release da dl.min.io con verifica `.sha256sum`;
    - riserva: la compilazione dal tag;
    - oggi dl.min.io risponde 410 Gone per tutte le release community, quindi gira la riserva;
-   - dopo il merge, la sonda nel CI dice se quay.io è pullabile in anonimo dal runner.
+   - verificato dal runner GitHub (run 41927262623): quay.io risponde `unauthorized` al pull anonimo.
 9. **Preload a priorità bassa (D-57).** Con priorità normale P3 (Fast 3G) passava da 1,8 a 2,4 s; con `fetchpriority="low"`
    è 1,82 s.
 
@@ -211,6 +212,16 @@ Storico delle run:
 | [5](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41800320167) | verde | — | baseline solo CI: **non approvata**, rimossa |
 | [6](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41914373389) | verde, ma F4a solo al 2° tentativo | il test leggeva lo stato una volta; gli eventi del firmatario sono indicizzati un giro dopo | F4a aspetta lo stato (max 20 s) |
 | [7](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41918930214) | **verde al primo tentativo** | — | — |
+
+Dopo il merge della PR #2: run manuale `workflow_dispatch` (suite `full`) sul branch,
+**https://github.com/arabafenice599rae/Fondaco-/actions/runs/41927262623**, verde, 18 min 19 s.
+- Tutti i job verdi, nessuna suite ripetuta.
+- Valori principali:
+  - P5 LCP 2,67 s;
+  - V1 20/20;
+  - F4a al primo tentativo;
+  - MinIO compilato dal tag (dl.min.io: 410);
+  - sonda quay.io `unauthorized`.
 
 Dopo la run 7 il trigger push sul branch è stato tolto. Restano `pull_request`, il notturno, `workflow_dispatch` (attivo
 quando `verify.yml` è su `main`) e il push dei tag `v*`.
