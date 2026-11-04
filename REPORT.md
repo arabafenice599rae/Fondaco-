@@ -168,32 +168,44 @@ perf 4, tutte verdi.
 
 ## Prova del CI (`verify.yml`)
 
-Run verde: **https://github.com/arabafenice599rae/Fondaco-/actions/runs/41800320167** (run 5, commit `29348df`, profilo
-`full`, avviata con il trigger push temporaneo: vedi D-53). **Durata: 13 min 41 s** (08:32:44 → 08:46:25 UTC).
+Run verde dopo le correzioni della revisione: **https://github.com/arabafenice599rae/Fondaco-/actions/runs/41918930214**
+(run 7, commit `61a0ee4`, profilo `full`, trigger push temporaneo: D-53). **Durata: 18 min 9 s** (21:44:44 → 22:02:53 UTC).
+Zero `FAIL` e nessuna suite ripetuta.
 
 | Job | Esito | Durata |
 |---|---|---|
-| toolchain (piano + cache) | ✅ | 1 min 26 s |
-| lint (build, typecheck, generati, lint, checksums) | ✅ | 1 min 55 s |
-| unit | ✅ | 1 min 34 s |
-| fork (anvil al blocco 23700000) | ✅ | 4 min 23 s |
-| foundry | ✅ | 1 min 7 s |
-| web-e2e (model, keys, layout, a11y, visual, e2e, flows, Lighthouse) | ✅ | 12 min 9 s |
-| supply-chain (audit, lockfile, gitleaks, SHA256SUMS) | ✅ | 21 s |
-| reproducible-build-a / -b | ✅ / ✅ | 31 s / 36 s |
-| reproducible-compare (tree hash e CID uguali) | ✅ | 3 s |
-| docker (immagine + compose smoke 6/6) | ✅ | 2 min 7 s |
+| toolchain (piano + cache) | ✅ | 1 min 6 s |
+| lint (build, typecheck, generati, lint, checksums) | ✅ | 1 min 46 s |
+| unit | ✅ | 1 min 31 s |
+| fork (anvil al blocco 23700000) | ✅ | 4 min 46 s |
+| foundry | ✅ | 1 min 9 s |
+| web-e2e, nel container `mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30…4a27` | ✅ | 16 min 57 s |
+| supply-chain (audit, lockfile, gitleaks, SHA256SUMS) | ✅ | 24 s |
+| reproducible-build-a / -b | ✅ / ✅ | 34 s / 32 s |
+| reproducible-compare (tree hash `c9b62461…f1efe`, CID `bafybeigfhaq…66n7q`, uguali) | ✅ | 3 s |
+| docker (immagine, MinIO dal tag, compose smoke 8/8) | ✅ | 5 min 45 s |
 | docker-publish | saltato, come previsto (solo `main` o tag `v*`) | — |
 
-Run precedenti, tutte con un solo job rosso, `web-e2e`, mentre il resto era verde:
+Valori principali di `web-e2e` nella run 7:
+- **Layout:** L1 e L1b puliti su 420 campioni ciascuno; L5 al massimo 0,4 px.
+- **Visual:** V1 20/20, differenza massima 0,000%, con una sola serie di baseline.
+- **Flussi:** F4a verde al primo tentativo.
+- **Prestazioni:**
+  - P3 Fast 3G 1,84 s;
+  - Lighthouse 0,96/1;
+  - LCP 2,6 s, sempre il marchio dello splash: nell'immagine è 0,1 s sopra i 2,5 s accettati come limite voluto.
+
+Storico delle run:
 
 | Run | Esito | Causa | Correzione |
 |---|---|---|---|
-| [1](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41792062847) | V1 20/20 diverse, L1 | hinting completo dei glifi sul runner | — |
+| [1](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41792062847) | web-e2e: V1 20/20 diverse, L1 | rendering dei glifi diverso sul runner | — |
 | 2 | annullata dalla run 3 (concurrency) | — | — |
-| [3](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41795830126) | identica alla 1 | ipotesi sbagliata: i font non arrivavano in ritardo | attesa dei font, tenuta comunque |
-| [4](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41798013672) | L1 verde, V1 4/20 | antialiasing di due fogli a offset frazionari | rendering fissato (`fonts.conf`, `--font-render-hinting=none`) |
-| [5](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41800320167) | **tutto verde** | — | baseline CI per 4 schermate (D-54) |
+| [3](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41795830126) | identica alla 1 | ipotesi sbagliata (font in ritardo) | attesa dei font, tenuta |
+| [4](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41798013672) | L1 verde, V1 4/20 | antialiasing del runner | rendering fissato |
+| [5](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41800320167) | verde | — | baseline solo CI: **non approvata**, rimossa |
+| [6](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41914373389) | verde, ma F4a solo al 2° tentativo | il test leggeva lo stato una volta; gli eventi del firmatario sono indicizzati un giro dopo | F4a aspetta lo stato (max 20 s) |
+| [7](https://github.com/arabafenice599rae/Fondaco-/actions/runs/41918930214) | **verde al primo tentativo** | — | — |
 
-Dopo la prova il trigger push sul branch è stato tolto: restano `pull_request`, il notturno, `workflow_dispatch` e il push di
-un tag `v*`, che serve a pubblicare l'immagine.
+Dopo la run 7 il trigger push sul branch è stato tolto. Restano `pull_request`, il notturno, `workflow_dispatch` (attivo
+quando `verify.yml` è su `main`) e il push dei tag `v*`.

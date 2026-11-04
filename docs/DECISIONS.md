@@ -359,7 +359,8 @@ deploy ragionevole.
 ### D-53 · `workflow_dispatch` vive solo sul branch predefinito — da notare
 GitHub accetta il dispatch soltanto per i workflow presenti sul branch predefinito, quindi un dispatch sul branch di lavoro
 risponde 404. Per la prova della Fase 7 ho aggiunto un trigger `push` temporaneo sul branch di lavoro, che il piano tratta
-come `full`. È stato tolto dopo la run verde 41800320167. Al suo posto c'è `push` sui tag `v*`, il trigger
+come `full`. È stato tolto dopo la run verde 41800320167, rimesso per la verifica delle correzioni della revisione e
+tolto di nuovo dopo la run 41918930214. Al suo posto c'è `push` sui tag `v*`, il trigger
 che serve a `docker-publish` per pubblicare l'immagine dei rilasci. Per abilitare il dispatch, `verify.yml` deve arrivare su `main`, e per questo
 serve la tua conferma.
 

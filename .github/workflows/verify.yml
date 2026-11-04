@@ -11,8 +11,6 @@ on:
   pull_request:
   push:
     tags: ["v*"]          # releases: full profile, then docker-publish
-    # TEMPORARY (D-53): full run of the work branch for the phase 7 review; removed before the PR
-    branches: [claude/fondaco-p2p-build-test-2glj2b]
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
