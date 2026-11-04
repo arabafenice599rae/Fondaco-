@@ -17,3 +17,5 @@ packages/contracts/foundry/cache/
 dist-demo/
 # the web app ships its public, key-free initial configuration
 !apps/web/public/config.json
+deploy/.env
+deploy/book.json

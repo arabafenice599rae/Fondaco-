@@ -71,6 +71,8 @@ const serious = report.axe.filter((v) => v.impact === 'serious' || v.impact === 
 const uniq = (arr, f) => [...new Map(arr.map((x) => [f(x), x])).values()]
 check(`A1: axe-core — zero serious/critical violations in ${STATES.length} views/sheets × 2 viewports`, serious.length === 0,
   uniq(serious, (v) => v.id + v.nodes[0]).slice(0, 4).map((v) => `${v.state}@${v.vp} ${v.id}: ${v.nodes[0]}`).join(' | ') || `${report.axe.length} minor/moderate`)
+const moderate = report.axe.filter((v) => v.id === 'page-has-heading-one')
+check('A4: a stable page heading (h1, visually hidden) — the axe "page-has-heading-one" notice is gone', moderate.length === 0, moderate.slice(0, 2).map((v) => `${v.state}@${v.vp}`).join(', '))
 check(`A2: measured contrast ≥ 4.5:1 on every visible text (${texts} text nodes, minimum ${minRatio.toFixed(2)}:1)`, report.contrast.length === 0,
   uniq(report.contrast, (c) => c.path + c.fg).slice(0, 5).map((c) => `${c.ratio}:1 "${c.text}" ${c.path} ${c.fg}`).join(' | '))
 

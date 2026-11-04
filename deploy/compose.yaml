@@ -1,0 +1,55 @@
+# FONDACO book: book server + Caddy (automatic TLS) + hourly SQLite backups to S3-compatible storage. See docs/OPERATIONS.md.
+#   cp deploy/.env.example deploy/.env && cp deploy/book.example.json deploy/book.json   (edit both)
+#   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d
+# Logs: json-file driver with rotation (10 MB × 5 per service). Only Caddy publishes ports.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  book:
+    image: ${BOOK_IMAGE:-ghcr.io/arabafenice599rae/fondaco-book}:${BOOK_VERSION:?set BOOK_VERSION (e.g. 0.1.0) in .env}
+    restart: unless-stopped
+    volumes:
+      - book-data:/data
+      - ./book.json:/config/book.json:ro
+    logging: *logging
+    # no ports: reachable only through Caddy (book.json: "host": "0.0.0.0", "trustProxy": 1)
+
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    depends_on: [book]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN (the book's public host name) in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging: *logging
+
+  backup:
+    image: ${BOOK_IMAGE:-ghcr.io/arabafenice599rae/fondaco-book}:${BOOK_VERSION}
+    restart: unless-stopped
+    depends_on: [book]
+    command: ["scripts/backup.mjs", "loop"]
+    environment:
+      BOOK_DB: /data/book.sqlite
+      BACKUP_EVERY_SEC: ${BACKUP_EVERY_SEC:-3600}
+      BACKUP_KEEP: ${BACKUP_KEEP:-168}
+      S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT in .env}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET in .env}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_PREFIX: ${S3_PREFIX:-book/}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
+    # SQLite in WAL mode: even a read-only reader needs the -shm file, so the volume is mounted read-write
+    volumes: [book-data:/data]
+    healthcheck: { disable: true }
+    logging: *logging
+
+volumes:
+  book-data:
+  caddy-data:
+  caddy-config:

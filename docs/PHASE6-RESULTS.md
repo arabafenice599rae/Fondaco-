@@ -95,7 +95,7 @@ Cosa è cambiato, in breve:
   tree-shaking; c'è una sola copia di viem nel bundle.
 - **Font:** sottoinsiemi latini.
 
-L'LCP di 2,5 s è il marchio dello splash, la cui animazione dura 2,8 s per progetto. Il tempo Fast 3G è misurato con lo
+**Limite voluto (approvato):** l'LCP di 2,5 s è il marchio dello splash, la cui animazione dura 2,8 s per progetto; non si accorcia lo splash per migliorare il punteggio. Il tempo Fast 3G è misurato con lo
 splash già visto nella sessione: alla prima visita il libro è già caricato sotto lo splash.
 
 ## 6. Robustezza

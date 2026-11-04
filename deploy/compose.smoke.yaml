@@ -1,0 +1,19 @@
+# Smoke test overrides (packages/book-server/test/docker-smoke.mjs): local image, chain and S3 stub on the host, Caddy on localhost with its local CA.
+services:
+  book:
+    image: ${BOOK_IMAGE}:${BOOK_VERSION}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - book-data:/data
+      - ${SMOKE_DIR}/book.json:/config/book.json:ro
+  caddy:
+    ports: !override ["${SMOKE_HTTPS_PORT}:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+  backup:
+    image: ${BOOK_IMAGE}:${BOOK_VERSION}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      BACKUP_FIRST_DELAY_SEC: "3"
