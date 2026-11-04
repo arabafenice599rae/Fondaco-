@@ -11,6 +11,7 @@ import { createClient, http, fallback, encodeFunctionData, getAddress, parseAbi,
   type Address, type Client, type Hex, type PublicClient, type Transport, type WalletClient, type TransactionReceipt } from 'viem'
 import { prepareTransactionRequest } from 'viem/actions'
 import type { ContractRequest, Submitter } from './taker.js'
+import { isUserRejection } from './errors.js'
 import type { SendResult, SubmitMode, SubmitWhy } from './types.js'
 
 import { PROTECTED_RPC, SEQUENCER_CHAINS } from './guards.js'
@@ -54,7 +55,7 @@ export function createSubmitter({ publicClient, walletClient, chainId, privateTr
     : !transport ? 'no_private_rpc' : 'browser_wallet' // the wallet's own RPC decides
   const priv: Client | null = transport ? createClient({ transport, chain: walletClient.chain }) : null
 
-  const rejected = (e: unknown) => (e instanceof BaseError && !!e.walk((x) => x instanceof UserRejectedRequestError)) || (e as { code?: number })?.code === 4001
+  const rejected = isUserRejection
 
   async function send(request: ContractRequest): Promise<SendResult> {
     try {

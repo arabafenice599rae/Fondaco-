@@ -6,6 +6,8 @@ const demo = process.env.DEMO === 'true'
 export default defineConfig({
   base: './',
   define: { __DEMO__: JSON.stringify(demo) },
+  // one copy of viem in the bundle even when pnpm resolves two (peer variants): smaller, and error classes compare equal
+  resolve: { dedupe: ['viem'] },
   // no source maps in the shipped build: they embed third-party source comments (e.g. viem's docs mention RPC providers),
   // which the key scan (scripts/scan-keys.mjs) must not have to whitelist. The build is reproducible from the repository.
   build: { target: 'es2022', sourcemap: false, assetsInlineLimit: 0, chunkSizeWarningLimit: 400 },

@@ -888,7 +888,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   }
 
   // ---------------------------------------------------------------- private offer opened from a link (#offerta=<hash>)
-  let privHash: string | null = null, privPrompted = false
+  let privHash: string | null = null, privPrompted = false, connecting = false
   function privateFromLocation() { const m = /#offerta=(0x[0-9a-fA-F]{64})$/.exec(location.hash); privHash = m ? (m[1] as string).toLowerCase() : null }
   async function openPrivate() {
     if (!privHash || busy || openSheets.has('confirm')) return
@@ -918,7 +918,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   }
   privateFromLocation()
   window.addEventListener('hashchange', () => { privateFromLocation(); void openPrivate() })
-  B.onChange(() => { if (privHash) void openPrivate() })
+  B.onChange(() => { if (privHash && !connecting) void openPrivate() })
 
   $('offers-d').addEventListener('click', (e) => void onOffers(e))
   $('offers-m-list').addEventListener('click', (e) => void onOffers(e))
@@ -947,7 +947,9 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   const connectSel = async (uuid?: string) => {
     const w = B.wallets().find((x) => x.info.uuid === uuid) ?? B.wallets()[0]
     if (!w) return
-    try { await B.connect(w); toast('Wallet collegato', shortAddr(me())) } catch (e) { toast('Collegamento non riuscito', humanError(e)) }
+    connecting = true
+    try { await B.connect(w); toast('Wallet collegato', shortAddr(me())) } catch (e) { toast('Collegamento non riuscito', humanError(e)) } finally { connecting = false }
+    if (privHash) { closeSheet('wsheet'); void openPrivate() } // a private-offer link waiting for the wallet: its message must not be overwritten
     renderWallet(); render()
   }
   $('w-list').addEventListener('change', (e) => { const t = e.target as HTMLInputElement; if (t.name === 'wsel') void connectSel(t.value) })

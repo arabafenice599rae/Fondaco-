@@ -58,6 +58,7 @@ export const REASONS: Record<Reason, string> = {
 }
 
 import { norm, plan } from './plan.js'
+import { isUserRejection } from './errors.js'
 export { plan }
 const orderArgs = (recipient: Address | null, o: Order) => [recipient, o.nonce, o.expiry, o.signerWallet, o.signerToken, o.signerAmount, o.senderToken, o.senderAmount, o.v, o.r, o.s] as const
 
@@ -142,7 +143,10 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
   }
 
   const checkReason = (errs: readonly Hex[]): Reason | null => {
-    const s = errs.map((e) => hexToString(e, { size: 32 }).replace(/\0+$/, ''))
+    // private orders (senderWallet = us): check() also reports OUR funds. The allowance is granted by execute(), so a low one
+    // is not a reason to drop the order; a low balance is reported as such.
+    const s = errs.map((e) => hexToString(e, { size: 32 }).replace(/\0+$/, '')).filter((x) => x !== 'SenderAllowanceLow')
+    if (s.includes('SenderBalanceLow')) return 'taker_balance'
     if (s.includes('NonceAlreadyUsed')) return 'taken'
     if (s.includes('OrderExpired')) return 'expired'
     if (s.some((x) => x === 'SignatureInvalid' || x === 'SignatoryInvalid' || x === 'Unauthorized')) return 'signature'
@@ -253,7 +257,7 @@ export function createTaker({ publicClient, walletClient, swap, confirmations = 
       const hash = await walletClient.writeContract(request as never)
       return { hash }
     } catch (e) {
-      if (e instanceof BaseError && e.walk((x) => x instanceof UserRejectedRequestError)) return { rejected: true }
+      if (isUserRejection(e)) return { rejected: true }
       if ((e as { code?: number })?.code === 4001) return { rejected: true }
       throw e
     }

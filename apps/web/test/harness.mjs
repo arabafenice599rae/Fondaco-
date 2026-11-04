@@ -64,7 +64,8 @@ export async function startBooks(n, swap, startBlock, { pollMs = 600 } = {}) {
   const out = []
   for (let i = 0; i < n; i++) {
     const app = await start({
-      port: 0, db: ':memory:', rateLimit: { capacity: 2000, refillPerSec: 200 },
+      // every test page connects from 127.0.0.1: allow more SSE streams per client than the production default (4)
+      port: 0, db: ':memory:', rateLimit: { capacity: 2000, refillPerSec: 200 }, ssePerClient: 32,
       chains: { 1: { rpc: FORK_URL, swap, startBlock: startBlock.toString(), pollMs, minExpirySec: 60, maxExpirySec: 7 * 86400,
         tokens: { [USDC]: { symbol: 'USDC', decimals: 6 }, [WETH]: { symbol: 'WETH', decimals: 18 } } } },
     }, { log: () => {} })
@@ -156,7 +157,7 @@ export async function session(url, account, { label = 'w', viewport = { width: 1
   }, { label, splash, rdns })
   const page = await ctx.newPage()
   page.on('pageerror', (e) => logs.push({ type: 'pageerror', text: e.message }))
-  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push({ type: m.type(), text: m.text(), url: m.location()?.url ?? '' }) })
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push({ type: m.type(), text: m.text(), url: m.location()?.url ?? '', at: Date.now() }) })
   const emit = (ev, arg) => page.evaluate(([e, a]) => window.__walletEmit?.(e, a), [ev, arg]).catch(() => {})
   const wallet = {
     state,
@@ -169,10 +170,16 @@ export async function session(url, account, { label = 'w', viewport = { width: 1
 }
 export async function connectWallet(page) {
   await page.waitForSelector('#wal-chip')
-  await page.click('#wal-chip')
+  await page.waitForFunction(() => window.__fondaco?.backend?.ready?.() || /Bacheca non/.test(document.getElementById('banners')?.textContent ?? ''), null, { timeout: 15_000 }).catch(() => {})
+  await sleep(400)
+  // the app may have opened the wallet sheet by itself (e.g. a private-offer link without a connected wallet)
+  if (await page.locator('#wsheet').isHidden()) await page.click('#wal-chip')
   await page.locator('#w-list input[name="wsel"]').first().check()
   await until(async () => (await page.textContent('#wal-addr'))?.includes('…'), 15_000, 'wallet connected')
-  await page.click('#w-close'); await sleep(350)
+  await sleep(200)
+  // the app may close it itself (and open another sheet on top, e.g. a private offer): best effort
+  if (await page.locator('#wsheet').isVisible()) await page.click('#w-close', { timeout: 2000 }).catch(() => {})
+  await sleep(350)
 }
 /** Console entries that are not in `allowed` (regexes): an empty list = a clean console. */
 export const unexpectedLogs = (logs, allowed = []) => logs.filter((l) => !allowed.some((re) => re.test(l.text)))
@@ -206,7 +213,9 @@ export async function review(page, payAmount) {
   await until(async () => (await page.textContent('#c-qs'))?.trim() === 'Verificato', 20_000, 'verified')
 }
 export async function confirmAndWait(page, ms = 90_000) {
-  await until(async () => !(await page.isDisabled('#c-go')), 10_000, 'go enabled')
+  await until(async () => !(await page.isDisabled('#c-go')), 10_000, 'go enabled').catch(async (e) => {
+    throw new Error(`${e.message}: ${(await page.textContent('#c-qs-t'))?.trim()} | ${(await page.textContent('#st0'))?.replace(/\s+/g, ' ').trim()} | ${(await page.textContent('#c-olist'))?.replace(/\s+/g, ' ').trim()}`)
+  })
   await page.click('#c-go')
   await until(async () => (await page.isVisible('#c-done')) && (await page.textContent('#c-done-h')), ms, 'swap done')
   return { title: (await page.textContent('#c-done-h'))?.trim(), sub: (await page.textContent('#c-done-sub'))?.trim(), lines: (await page.textContent('#c-done-list'))?.replace(/\s+/g, ' ').trim(), amt: (await page.textContent('#c-done-amt'))?.trim() }
