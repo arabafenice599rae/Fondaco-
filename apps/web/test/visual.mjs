@@ -2,7 +2,7 @@
 // updates): each screenshot is compared with test/visual/baseline/<name>.png using pixelmatch (per-pixel threshold 0.1);
 // the check fails above MAX_DIFF of differing pixels. Baselines change only with an explicit command:
 //   node test/visual.mjs --update        (or: pnpm --filter @fondaco/web test:visual:update)
-// Differences are written to reports/visual/<name>-diff.png.
+// Differences are written to reports/visual/<name>-diff.png, and a failing screenshot to reports/visual/<name>-actual.png.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { PNG } from 'pngjs'
@@ -34,6 +34,7 @@ for (const vp of [[390, 844], [1440, 900]]) {
     const n = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0.1 })
     const ratio = n / (a.width * a.height)
     if (n) writeFileSync(join(OUT, name + '-diff.png'), PNG.sync.write(diff))
+    if (ratio > MAX_DIFF) writeFileSync(join(OUT, name + '-actual.png'), shot) // for inspection (CI artefact); never a baseline
     rows.push({ name, status: ratio <= MAX_DIFF ? 'same' : 'changed', ratio })
   }
 }

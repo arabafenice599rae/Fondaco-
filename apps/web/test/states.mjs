@@ -67,7 +67,21 @@ export async function demoApp() {
 export async function enter(app, vp, st, opts) {
   const { p, ctx, logs } = await app.page(vp, opts)
   await st.go(p)
+  await fontsLoaded(p)
   await p.waitForTimeout(450)
   return { p, ctx, logs }
+}
+/**
+ * Waits until every bundled font face is loaded. The faces use `font-display: swap` and load on first use (a sheet that
+ * opens may need a weight not used before): on a slow machine a screenshot or a layout sample could otherwise see the
+ * fallback font (wider, with other metrics), so wraps and overlaps would depend on the machine. Throws if one fails.
+ */
+export async function fontsLoaded(p) {
+  const bad = await p.evaluate(async () => {
+    await Promise.allSettled([...document.fonts].map((f) => f.load()))
+    await document.fonts.ready
+    return [...document.fonts].filter((f) => f.status !== 'loaded').map((f) => `${f.family} ${f.weight} ${f.status}`)
+  })
+  if (bad.length) throw new Error('fonts not loaded: ' + bad.join(', '))
 }
 export const require_ = createRequire(import.meta.url)
