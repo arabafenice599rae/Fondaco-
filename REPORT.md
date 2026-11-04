@@ -130,4 +130,19 @@ Dettagli in `docs/THREAT_MODEL.md`.
 
 ## Tabella dei test (regressione locale finale)
 
-Vedi la sezione "Verifica" del README e la run del CI riportata nel riepilogo della Fase 7.
+`node tools/testkit/run-suites.mjs --retries 2`: 39 suite, tutte verdi, exit 0. Il `docker-smoke` (6/6) è esplicito e gira
+nel job `docker` del CI.
+
+| Gruppo | Suite (controlli) |
+|---|---|
+| tools | lint 1/1 · checksums 3/3 · testkit 4/4 · reproducible-build 1/1 |
+| contracts | verify-source 4/4 · foundry 29/29 · addresses 5/5 · deploy 8/8 · fee 2/2 |
+| book-server | backup 3/3 · config 9/9 · allocation 5/5 · migrations 7/7 · observability 5/5 · e2e 22/22 · engine 13/13 · signers 8/8 · metrics 7/7 · trades 12/12 · faults 12/12 · reorg 5/5 · pinned-read 1/1 · differential 3/3 · event-order 2/2 · http-security 11/11 |
+| client | wallet 5/5 · client-guards 9/9 · client-smoke 4/4 · taker 13/13 · protect 5/5 · taker-advanced 12/12 |
+| web | web-model 39/39 · web-keys 6/6 · web-layout 5/5 · web-a11y 4/4 · web-visual 2/2 · web-e2e 18/18 · web-flows 21/21 · web-perf 4/4 |
+
+Totale: **329 controlli** su 39 suite.
+
+## Prova del CI (`verify.yml`)
+
+<!-- CI-RUN -->
