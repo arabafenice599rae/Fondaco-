@@ -53,10 +53,11 @@ Job:
 - **unit**: book server, client e contratti, compresa la verifica del sorgente contro il deploy AirSwap;
 - **fork**: anvil al blocco fisso, un fork nuovo per suite;
 - **foundry**;
-- **web-e2e**: Playwright, Lighthouse, axe, layout, regressione visiva e flussi;
+- **web-e2e**: Playwright, Lighthouse, axe, layout (con webfont e con i woff2 bloccati), regressione visiva e flussi, dentro
+  l'immagine `mcr.microsoft.com/playwright:v1.63.0-noble` bloccata per digest;
 - **supply-chain**: `pnpm audit`, lockfile bloccato, gitleaks, SHA256SUMS;
 - **reproducible-build-a/b** e **reproducible-compare**: stesso hash dell'albero e stesso CID IPFS;
-- **docker**: immagine e smoke test del compose;
+- **docker**: immagine e smoke test del compose; backup verso lo stub SigV4 e verso MinIO, costruito dal tag;
 - **docker-publish**: solo su `main` o tag `v*`; pubblica su GHCR con tag di versione e riporta il digest nel riepilogo.
 
 **Segreti:**
@@ -68,6 +69,11 @@ oltre alle versioni degli strumenti, al piano e agli hash del build. Artefatti: 
 differenze visive, screenshot, log di anvil, tabelle delle suite) e il manifest del build.
 
 In locale: `node tools/testkit/run-suites.mjs [--group …] [--profile quick] [--retries N] [suite …]`.
+
+La regressione visiva gira solo nell'immagine Playwright del CI, così le baseline sono una sola serie per tutte le macchine.
+Lanciata fuori, `web-visual` si rilancia da sola nel container (serve Docker). Per rigenerare le baseline:
+`pnpm --filter @fondaco/web test:visual:update`, nello stesso container. Qualunque comando nell'immagine:
+`node tools/testkit/in-playwright.mjs <comando>`.
 
 ## Book server
 

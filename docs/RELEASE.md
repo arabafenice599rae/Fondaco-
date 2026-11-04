@@ -10,6 +10,46 @@ Prepared and rehearsed on **local forks** of both networks (`node packages/contr
 
 Read-only plan with the live gas prices: `node packages/contracts/scripts/testnet.mjs plan` (writes `reports/testnet-plan.json`).
 
+### Preparation checklist (for you, before the go-ahead)
+
+Nothing here is sent by me. Give me only **addresses**: keys stay on your machine.
+
+1. **Deployer key, generated offline.**
+   - On a machine without network: `cast wallet new` (Foundry), or a hardware wallet account used for nothing else.
+   - Store it encrypted: `cast wallet import fondaco-deployer --interactive` (keystore in `~/.foundry/keystores`).
+   - Write the private key only in your local `.env` (git-ignored) when the deploy runs; never in the repository or in a chat.
+   - Note the address as `DEPLOYER`.
+2. **Nonce 0 on both networks** (read-only, from any machine):
+   ```bash
+   cast nonce $DEPLOYER --rpc-url https://ethereum-sepolia-rpc.publicnode.com   # must print 0
+   cast nonce $DEPLOYER --rpc-url https://sepolia.base.org                       # must print 0
+   cast code $(cast compute-address $DEPLOYER --nonce 0 | awk '{print $NF}') --rpc-url https://ethereum-sepolia-rpc.publicnode.com   # 0x
+   cast code $(cast compute-address $DEPLOYER --nonce 0 | awk '{print $NF}') --rpc-url https://sepolia.base.org                       # 0x
+   ```
+   Do not send anything from the deployer before the deploy: one transaction moves the address on that chain.
+3. **Test Safe 1/1 on each network** (`OWNER_SEPOLIA`, `OWNER_BASE_SEPOLIA`):
+   - app.safe.global → network Sepolia → Create account → one owner (a test EOA, **not** the deployer), threshold 1/1.
+   - Then "Add another network" → Base Sepolia, to get the same address on both (optional: C2 accepts different owners).
+   - Check that it is a contract: `cast code <safe> --rpc-url …` is not `0x`.
+4. **Fee wallet** (`FEE_WALLET`): the same test Safe is fine.
+5. **Faucets** (test funds only):
+   - Sepolia ETH: Google Cloud Web3 faucet (cloud.google.com/application/web3/faucet/ethereum/sepolia), or another Sepolia faucet;
+   - Base Sepolia ETH: Coinbase Developer Platform faucet (portal.cdp.coinbase.com/products/faucet), or the Superchain faucet
+     (console.optimism.io/faucet);
+   - USDC on both: Circle faucet (faucet.circle.com), network "Ethereum Sepolia" and "Base Sepolia".
+6. **Minimum amounts.** "Minimum" covers the stress gas price of the table below (30 gwei on Sepolia, 0.1 gwei on Base
+   Sepolia), and "Recommended" leaves a margin:
+
+   | Account | Sepolia minimum | Sepolia recommended | Base Sepolia minimum | Base Sepolia recommended |
+   |---|---|---|---|---|
+   | DEPLOYER (deploy + transferOwnership, 2.61 M gas) | 0.1 ETH | 0.15 ETH | 0.001 ETH | 0.01 ETH |
+   | SIGNER (wrap 0.001003 + approve, 91 k gas) | 0.004 ETH | 0.01 ETH | 0.0015 ETH | 0.003 ETH |
+   | TAKER (approve + swap, 219 k gas) | 0.007 ETH + 1 USDC | 0.01 ETH + 2 USDC | 0.0001 ETH + 1 USDC | 0.001 ETH + 2 USDC |
+
+   SIGNER and TAKER are two more test accounts, distinct from the deployer and from the Safe owner.
+7. **Send me:** `DEPLOYER`, `OWNER_SEPOLIA`, `OWNER_BASE_SEPOLIA`, `FEE_WALLET`, `SIGNER`, `TAKER`. I then run the read-only
+   checks (nonce, code at the deterministic address, balances, Safe code) and report them before asking for the final go.
+
 ### What is needed from you
 1. **A dedicated deployer key**, new, with nonce 0 on both networks, used for nothing else. Give its address as `DEPLOYER`.
    The key itself stays on your machine, in `.env`, never in the repository.
@@ -18,8 +58,7 @@ Read-only plan with the live gas prices: `node packages/contracts/scripts/testne
 3. **The fee wallet** (`FEE_WALLET`), for example the same test Safe.
 4. **Funds:**
    - test ETH for the deployer on both networks;
-   - for the test fill, a SIGNER account with ≥ 0,002 test ETH and a TAKER account with ≥ 1 test USDC (Circle faucet) plus
-     gas, on each network.
+   - for the test fill, a SIGNER and a TAKER account with the amounts of the checklist above.
 
 ### Exact transactions, per network (same order on both)
 

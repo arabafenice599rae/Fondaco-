@@ -363,18 +363,20 @@ come `full`. È stato tolto dopo la run verde 41800320167. Al suo posto c'è `pu
 che serve a `docker-publish` per pubblicare l'immagine dei rilasci. Per abilitare il dispatch, `verify.yml` deve arrivare su `main`, e per questo
 serve la tua conferma.
 
-### D-54 · Rendering del testo fissato nei test dell'app — D
-Sul runner GitHub, V1 falliva su tutte le 20 schermate (0,6–6,7%) e L1 vedeva l'importo coprire l'etichetta. Il motivo è che
-il runner fa l'hinting completo dei glifi: avanzamenti a pixel interi, testo un po' più largo, a capo diversi. Le run 1 e 3
-hanno dato le stesse percentuali, quindi l'errore è deterministico.
-- **Correzione.** Il browser di test parte con `--font-render-hinting=none` e con `FONTCONFIG_FILE=apps/web/test/fontconfig/fonts.conf`
-  (niente hinting, antialiasing in scala di grigi). In locale i pixel non cambiano e in CI L1 passa, così come 16 schermate su 20.
-- **Residuo.** Due fogli (conferma e wallet, a 390 e 1440) mettono il testo a offset frazionari, e il runner lo rasterizza con
-  un antialiasing leggermente diverso (0,4–2,2%, posizioni identiche). Per queste quattro schermate il CI usa
-  `test/visual/baseline-ci/`, preso a mano dagli artefatti `*-actual.png` della run 4 dopo averli guardati. `--update` non le
-  scrive mai.
-- **Altre misure.** I test aspettano comunque che tutte le facce dei font siano caricate (`fontsLoaded`) e falliscono se una
-  manca: non era la causa, ma toglie una fonte di instabilità.
+### D-54 · Test web dentro l'immagine Playwright ufficiale, una sola baseline — D (sostituisce la versione con baseline CI)
+- **Prima.** Il rendering del testo dipende dal sistema: font, FreeType, hinting. Sul runner GitHub V1 falliva su tutte le 20
+  schermate e L1 vedeva l'importo coprire l'etichetta. La versione precedente di questa decisione teneva quattro baseline solo per
+  il CI: **non approvata, rimossa.**
+- **Ora:**
+  - il job `web-e2e` gira nel container `mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30…4a27`;
+  - lo stesso riferimento sta in `tools/ci/toolchain.json` (`playwrightImage.ref`) e `versions.mjs` fallisce se `verify.yml`, la
+    versione dell'immagine o il pacchetto `playwright` divergono;
+  - le baseline sono **una sola serie per tutte le 20 schermate**, generate in quell'immagine;
+  - `web-visual`, lanciato fuori dall'immagine, si rilancia da solo nel container (`tools/testkit/in-playwright.mjs`); in CI
+    fallisce se non è nell'immagine;
+  - rigenerazione: `pnpm --filter @fondaco/web test:visual:update`, nello stesso container.
+- **Restano** il rendering fissato del browser di test (`--font-render-hinting=none`, `test/fontconfig/fonts.conf`) e l'attesa
+  dei font (`fontsLoaded`).
 
 ### D-55 · Stima del gas del deploy su testnet — D
 Il nodo pubblico di Sepolia stima 18,2 M di gas per il deploy, mentre quello misurato sul fork è 2.578.924. Il piano usa il gas
@@ -383,3 +385,35 @@ misurato ×1,2 e riporta anche la stima del nodo. Il deploy vero passa comunque 
 ### D-56 · Immagine della bacheca — D
 L'immagine viene pubblicata su GHCR solo da `main` e dai tag `v*`, con il digest nel riepilogo della run. Sui branch viene
 costruita e provata con lo smoke test, ma non pubblicata.
+
+### D-57 · Ripieghi di Geist Mono con metriche tarate, preload dei woff2 — D
+- **Ripieghi.** `fonts.css` dichiara facce locali "Geist Mono Fallback …" per Menlo, Consolas, DejaVu Sans Mono, Liberation Mono
+  e Courier New:
+  - `size-adjust` iguaglia l'avanzamento di Geist Mono (600/1000 em);
+  - `ascent-override`, `descent-override` e `line-gap-override` riportano 1005/295/0 diviso `size-adjust`;
+  - i valori vengono da `apps/web/scripts/font-fallback.py`, che legge le metriche dai woff2 con fontTools;
+  - stanno nello stack subito dopo "Geist Mono": durante lo swap, o se il woff2 non arriva, a capo e righe non cambiano.
+- **Preload.** Un plugin Vite inserisce `<link rel="preload" as="font" crossorigin fetchpriority="low">` per i pesi 400, 500 e
+  600 del build, con gli URL con hash, dopo la CSP.
+  - Con priorità alta, su Fast 3G, la bacheca passava da 1,8 a 2,4 s (P3 rosso), perché i 72 kB competevano col bundle.
+  - Con priorità bassa il download parte subito ma lascia passare bundle e `/books`: P3 1,83 s.
+  - Il ripiego tarato tiene fermo il layout finché i font non arrivano.
+- **Prova** (`web-layout`):
+  - ogni vista viene campionata due volte, con i webfont (L1) e con i woff2 bloccati (L1b), ed entrambe devono essere pulite;
+  - L5 confronta i box di ogni elemento con id tra le due modalità: tolleranza 2 px, misurato 0,5 px sull'host (ripiego
+    DejaVu) e 0,4 px nell'immagine (ripiego Liberation).
+
+### D-58 · Smoke del backup anche contro MinIO, costruito dal tag — da notare
+Richiesto: MinIO da `quay.io/minio/minio`, con tag e digest. Non è possibile:
+- quay.io rifiuta il pull anonimo di `minio/minio`: il token anonimo ha `"actions": []`, e `docker pull` risponde 401 a ogni tag;
+- su Docker Hub `minio/minio` non esiste più, perché MinIO ha smesso di distribuire immagini pubbliche.
+
+Soluzione adottata:
+- `deploy/minio/Dockerfile` compila `github.com/minio/minio@RELEASE.2025-09-07T16-13-09Z` con `go install`, verificato dal
+  checksum database di Go, su `golang:1.24.7-alpine3.22@sha256:fc2cff66…dbb5`, in un'immagine `scratch`;
+- l'immagine serve solo al test, non viene pubblicata, e il CI la costruisce nel job `docker`;
+- lo smoke test, dopo S1–S6 con lo stub SigV4, esegue lo stesso `backup once/list/restore` contro MinIO:
+  - S7: un solo oggetto `book/book-*.sqlite.gz`, riletto con le credenziali di MinIO, gzip di un database SQLite;
+  - S8: list e restore con lo stesso esito dello stub;
+- con `MINIO_IMAGE=<ref@sha256:…>` il test usa un'immagine pronta, per esempio quay.io con credenziali o un mirror. Basta
+  quella variabile per tornare alla richiesta originale.
