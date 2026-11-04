@@ -2,6 +2,48 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Fase 7] — Sicurezza e rilascio — 2026-11-04
+
+### Aggiunto
+- `docs/THREAT_MODEL.md`: asset, attori, rischi R1–R20 con il test che copre ogni mitigazione, 8 rischi residui espliciti.
+- Supply chain:
+  - `pnpm audit` a zero;
+  - lockfile bloccato verificato nel CI;
+  - gitleaks 8.24.3 sull'intera storia (`.gitleaks.toml`);
+  - SHA256SUMS per fixture, report di audit e font (`tools/checksums.mjs`, suite `checksums`).
+- CI `.github/workflows/verify.yml`:
+  - `pull_request` rapido, notturno completo, `workflow_dispatch` (`suite`, `fork_block`, `ref`);
+  - action composita `setup-toolchain` con versioni bloccate, checksum e cache, più la verifica finale delle versioni
+    (`tools/ci/versions.mjs`);
+  - riepilogo di ogni job in `GITHUB_STEP_SUMMARY` e report come artefatti.
+- Runner: gruppi, profilo `quick`, `--retries`, `--skip`, riepilogo Markdown; nuove suite `lint`, `checksums`, `backup`,
+  `reproducible-build`, `docker-smoke`.
+- Build riproducibile: `tools/build-hash.mjs` (tree hash e manifest), confronto tra due job separati del CI.
+- Bacheca:
+  - immagine Docker (`deploy/book/Dockerfile`, utente `node`, base per digest);
+  - `deploy/compose.yaml` con Caddy (TLS), backup orario S3 (SigV4, `scripts/backup.mjs`) e rotazione dei log;
+  - smoke test autosufficiente;
+  - `docs/OPERATIONS.md`.
+- IPFS ed ENS:
+  - `tools/ipfs.mjs` (`cid` offline, `contenthash` EIP-1577, `pin` solo con `--confirm`);
+  - `tools/verify-served.mjs`;
+  - procedura in `docs/RELEASE.md`.
+- Testnet (preparata, non eseguita):
+  - `testnet.mjs plan|rehearse`, `post-deploy-check.mjs` (C1–C6) e `test-fill.mjs`;
+  - prova completa su fork di Sepolia e Base Sepolia.
+- App: `<h1>` visivamente nascosto "FONDACO"; axe senza `page-has-heading-one` (A4).
+- `REPORT.md` finale.
+
+### Modificato
+- `deploy.js` esporta `readState` e `mismatches`, usati dalla checklist post-deploy.
+- Test dell'app: screenshot e campioni di layout solo dopo il caricamento di tutti i font (D-54). Un V1 fallito salva lo
+  screenshot reale tra i report.
+
+### Corretto (con il test che lo copre)
+- Nessun difetto del prodotto.
+- Test instabili sul runner del CI: i font con `font-display: swap` arrivavano dopo lo screenshot (web-visual V1, web-layout
+  L1). Correzione in D-54.
+
 ## [Fase 6] — Test avanzati dell'app — 2026-11-04
 
 ### Aggiunto

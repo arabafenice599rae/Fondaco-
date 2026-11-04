@@ -36,6 +36,39 @@ i conteggi finiscono in `reports/tests.json`, la verifica del sorgente in `repor
 Dopo il clone: `git submodule update --init` (forge-std, solo per i test Foundry).
 Prova di carico (fuori da `pnpm test`, ~3 minuti): `node tools/load/load-test.mjs` → `reports/load.json`; risultati commentati in [`docs/LOAD.md`](docs/LOAD.md).
 
+## Verifica
+
+Il CI è `.github/workflows/verify.yml`. È autosufficiente: lo strumentario è installato dalla composite action
+`.github/actions/setup-toolchain`, con le versioni in `tools/ci/toolchain.json`, controllate a fine setup.
+
+| Come | Cosa gira |
+|---|---|
+| **Pull request** | profilo rapido: suite lente saltate nei job unit/fork, Foundry con il profilo `ci-quick`, RPC pubblico con 3 tentativi per suite su fork |
+| **Notte** (02:17 UTC) | tutto, Foundry completo, `FORK_RPC_URL` (RPC d'archivio a pagamento) |
+| **A mano** | Actions → verify → Run workflow, oppure `gh workflow run verify.yml -f suite=full [-f fork_block=23700000] [-f ref=<branch o commit>]`. `suite`: `quick`, `full`, `contracts`, `book-server`, `client`, `web` |
+
+Job:
+- **toolchain**: piano della run e cache;
+- **lint**: build, typecheck, file generati, lint e checksum;
+- **unit**: book server, client e contratti, compresa la verifica del sorgente contro il deploy AirSwap;
+- **fork**: anvil al blocco fisso, un fork nuovo per suite;
+- **foundry**;
+- **web-e2e**: Playwright, Lighthouse, axe, layout, regressione visiva e flussi;
+- **supply-chain**: `pnpm audit`, lockfile bloccato, gitleaks, SHA256SUMS;
+- **reproducible-build-a/b** e **reproducible-compare**: stesso hash dell'albero e stesso CID IPFS;
+- **docker**: immagine e smoke test del compose;
+- **docker-publish**: solo su `main` o tag `v*`; pubblica su GHCR con tag di versione e riporta il digest nel riepilogo.
+
+**Segreti:**
+- `FORK_RPC_URL`: RPC mainnet d'archivio, usato dalla notte e dalle run manuali; senza, RPC pubblico con tentativi ripetuti;
+- `BASE_RPC_URL`: facoltativo, per il confronto con il deploy su Base.
+
+**Riepilogo:** ogni job scrive nella pagina della run una tabella con suite, controlli passati/totali, tempo ed esito,
+oltre alle versioni degli strumenti, al piano e agli hash del build. Artefatti: `reports-*` (Lighthouse, layout, a11y,
+differenze visive, screenshot, log di anvil, tabelle delle suite) e il manifest del build.
+
+In locale: `node tools/testkit/run-suites.mjs [--group …] [--profile quick] [--retries N] [suite …]`.
+
 ## Book server
 
 TypeScript strict compilato in `packages/book-server/dist`; unica dipendenza di runtime di terzi: `viem`.

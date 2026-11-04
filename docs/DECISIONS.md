@@ -346,3 +346,32 @@ deploy ragionevole.
   evitare; sono l'unica eccezione ammessa, dichiarata nel test.
 - **RPC di fork gratuito** (drpc): un timeout 408 ha fatto saltare una volta l'invariante 3 di Foundry. Per CI conviene un RPC
   d'archivio meno limitato.
+
+### D-52 · CI: rapido su PR, completo di notte — D
+- **Su `pull_request`:** profilo `quick` (salta le suite lente), Foundry con il profilo `ci-quick`, RPC gratuito con
+  `--retries 3`.
+- **Di notte e con `workflow_dispatch suite=full`:**
+  - tutte le suite;
+  - Foundry completo;
+  - `FORK_RPC_URL` dal secret (RPC d'archivio a pagamento), con ricaduta sull'RPC pubblico se il secret manca.
+- **Permessi:** `contents: read` ovunque; `packages: write` solo in `docker-publish`, su `main` o sui tag.
+
+### D-53 · `workflow_dispatch` vive solo sul branch predefinito — da notare
+GitHub accetta il dispatch soltanto per i workflow presenti sul branch predefinito, quindi un dispatch sul branch di lavoro
+risponde 404. Per la prova della Fase 7 ho aggiunto un trigger `push` temporaneo sul branch di lavoro, che il piano tratta
+come `full`. È stato tolto dopo le run verdi. Per abilitare il dispatch, `verify.yml` deve arrivare su `main`, e per questo
+serve la tua conferma.
+
+### D-54 · I test dell'app aspettano i font — D
+I font usano `font-display: swap` e si caricano al primo uso. Sul runner del CI uno screenshot o un campione di layout poteva
+cadere prima dell'arrivo di un peso, quindi con il font di riserva: più largo, con altre metriche. L'effetto erano a capo
+diversi (V1 dallo 0,6% al 6,7%) e l'importo che copriva l'etichetta (L1). `enter()` ora carica tutte le facce, aspetta
+`document.fonts.ready` e fallisce se una non risulta caricata. Le baseline restano le stesse.
+
+### D-55 · Stima del gas del deploy su testnet — D
+Il nodo pubblico di Sepolia stima 18,2 M di gas per il deploy, mentre quello misurato sul fork è 2.578.924. Il piano usa il gas
+misurato ×1,2 e riporta anche la stima del nodo. Il deploy vero passa comunque da `estimateGas` del wallet.
+
+### D-56 · Immagine della bacheca — D
+L'immagine viene pubblicata su GHCR solo da `main` e dai tag `v*`, con il digest nel riepilogo della run. Sui branch viene
+costruita e provata con lo smoke test, ma non pubblicata.

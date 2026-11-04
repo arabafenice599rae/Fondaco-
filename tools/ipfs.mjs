@@ -1,5 +1,6 @@
 // IPFS for the web app's static build (kubo CLI, no long-running node).
 //   node tools/ipfs.mjs cid <dir>              CID (v1, raw leaves) of the directory, computed offline: no upload
+//   node tools/ipfs.mjs contenthash <cid>      EIP-1577 contenthash for an ENS record (0xe301 + CIDv1 bytes)
 //   node tools/ipfs.mjs pin <dir> --confirm    upload through an IPFS Pinning Service API provider (PUBLISHES the build:
 //                                              irreversible, run only after explicit approval). A temporary kubo node adds
 //                                              the files, the provider fetches them from it, the command returns when pinned.
@@ -23,6 +24,14 @@ export function cid(dir) {
   const r = repo()
   try { return r.run('add', '--only-hash', ...ADD, resolve(dir)) } finally { rmSync(r.dir, { recursive: true, force: true }) }
 }
+/** EIP-1577: ipfs-ns (0xe3, varint e301) followed by the binary CIDv1. Only base32 CIDv1 ("b…") is accepted. */
+export function contenthash(c) {
+  if (!/^b[a-z2-7]+$/.test(c)) throw new Error('expected a base32 CIDv1 (bafy…)')
+  const A = 'abcdefghijklmnopqrstuvwxyz234567'
+  let bits = 0, val = 0; const out = []
+  for (const ch of c.slice(1)) { val = (val << 5) | A.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 0xff); bits -= 8 } }
+  return '0xe301' + Buffer.from(out).toString('hex')
+}
 async function pin(dir) {
   if (!process.argv.includes('--confirm')) throw new Error('pin publishes the build: pass --confirm (after explicit approval)')
   const { PINNING_ENDPOINT: ep, PINNING_TOKEN: token, PIN_NAME: name = 'fondaco-web' } = process.env
@@ -44,7 +53,7 @@ async function pin(dir) {
 }
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [cmd, dir] = process.argv.slice(2)
-  const f = cmd === 'cid' ? async () => cid(dir) : cmd === 'pin' ? () => pin(dir) : null
-  if (!f || !dir) { console.error('usage: ipfs.mjs cid|pin <dir> [--confirm]'); process.exit(2) }
+  const f = cmd === 'cid' ? async () => cid(dir) : cmd === 'contenthash' ? async () => contenthash(dir) : cmd === 'pin' ? () => pin(dir) : null
+  if (!f || !dir) { console.error('usage: ipfs.mjs cid <dir> | contenthash <cid> | pin <dir> --confirm'); process.exit(2) }
   f().then((c) => console.log(c)).catch((e) => { console.error(e.message); process.exit(1) })
 }
