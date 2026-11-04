@@ -37,7 +37,12 @@ export const SUITES = [
   { name: 'taker-advanced', pkg: 'packages/client', file: 'test/taker-advanced.test.js' },
   { name: 'web-model', pkg: 'apps/web', file: 'test/model.test.mjs', unit: true },
   { name: 'web-keys', pkg: 'apps/web', file: 'scripts/scan-keys.mjs', unit: true },
+  { name: 'web-layout', pkg: 'apps/web', file: 'test/layout.mjs', unit: true },
+  { name: 'web-a11y', pkg: 'apps/web', file: 'test/a11y.mjs', unit: true },
+  { name: 'web-visual', pkg: 'apps/web', file: 'test/visual.mjs', unit: true },
   { name: 'web-e2e', pkg: 'apps/web', file: 'test/e2e.mjs' },
+  { name: 'web-flows', pkg: 'apps/web', file: 'test/flows.mjs' },
+  { name: 'web-perf', pkg: 'apps/web', file: 'test/perf.mjs' },
 ]
 
 function run(cmd, args, opts) {

@@ -58,8 +58,8 @@
         <span class="demo" id="demo-badge" title="Dati simulati: nessuna offerta reale" hidden>Demo</span>
       </div>
       <div class="hchips">
-        <button type="button" class="hchip" id="net-chip" aria-haspopup="dialog" aria-label="Rete e protezione MEV"><svg class="ic sm net" aria-hidden="true"><use href="#i-net"/></svg><span class="lbl" id="net-lbl">Ethereum</span></button>
-        <button type="button" class="hchip" id="wal-chip" aria-haspopup="dialog" aria-label="Wallet e protezione MEV"><span class="avatar" aria-hidden="true"></span><span class="mono" id="wal-addr">Collega</span><span class="wdot" id="wal-dot" aria-hidden="true"></span></button>
+        <button type="button" class="hchip" id="net-chip" aria-haspopup="dialog"><svg class="ic sm net" aria-hidden="true"><use href="#i-net"/></svg><span class="lbl" id="net-lbl">Ethereum</span><span class="sr-only"> · rete e protezione MEV</span></button>
+        <button type="button" class="hchip" id="wal-chip" aria-haspopup="dialog"><span class="avatar" aria-hidden="true"></span><span class="mono" id="wal-addr">Collega</span><span class="sr-only"> · wallet e protezione MEV</span><span class="wdot" id="wal-dot" aria-hidden="true"></span></button>
         <button type="button" class="hchip" id="set-chip" aria-haspopup="dialog" aria-label="Impostazioni"><svg class="ic sm" aria-hidden="true"><use href="#i-gear"/></svg></button>
       </div>
     </div>
@@ -86,8 +86,8 @@
       <button type="button" class="back" id="back" hidden><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg>Mercati</button>
 
       <div class="card ticker">
-        <button type="button" class="pair-btn" id="pair-btn" aria-haspopup="dialog" aria-label="Cambia mercato">
-          <span class="coins2" id="ph-coins"></span><span><b id="ph-name"></b><small id="ph-desc"></small></span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
+        <button type="button" class="pair-btn" id="pair-btn" aria-haspopup="dialog">
+          <span class="coins2" id="ph-coins"></span><span><b id="ph-name"></b><small id="ph-desc"></small></span><span class="sr-only"> · cambia mercato</span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
         </button>
         <div class="tk-price"><span class="big" id="ph-mid"></span><span class="u" id="ph-unit"></span></div>
         <dl class="tk-stats">
@@ -174,7 +174,7 @@
               </div>
               <div class="box-main">
                 <input id="pay-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="pay-usd">
-                <button type="button" class="tok" id="pay-tok" aria-label="Scegli la moneta da pagare"></button>
+                <button type="button" class="tok" id="pay-tok"></button>
               </div>
               <div class="box-foot"><span id="pay-usd"></span><span>Saldo <b id="pay-bal"></b></span></div>
             </div>
@@ -183,7 +183,7 @@
               <div class="box-top"><span>Ricevi</span><span class="tag ind" title="Calcolato dal libro offerte: diventa definitivo dopo la verifica on-chain">Indicativo</span></div>
               <div class="box-main">
                 <output id="recv-out" class="amount" for="pay-in" aria-live="polite">0</output>
-                <button type="button" class="tok" id="recv-tok" aria-label="Scegli la moneta da ricevere"></button>
+                <button type="button" class="tok" id="recv-tok"></button>
               </div>
               <div class="box-foot"><span id="recv-usd"></span><span>Saldo <b id="recv-bal"></b></span></div>
             </div>
@@ -220,11 +220,11 @@
             <div class="box-top"><label for="mk-in" id="mk-label">Vendi</label><span class="tag">Pubblicare è gratis</span></div>
             <div class="box-main">
               <input id="mk-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="mk-usd">
-              <button type="button" class="tok" id="mk-give" aria-label="Scegli la moneta che dai"></button>
+              <button type="button" class="tok" id="mk-give"></button>
             </div>
             <div class="box-foot"><span id="mk-usd"></span><span>Saldo <b id="mk-bal"></b></span></div>
           </div>
-          <div class="box row-box"><span class="muted">In cambio di</span><button type="button" class="tok" id="mk-get" aria-label="Scegli la moneta che ricevi"></button></div>
+          <div class="box row-box"><span class="muted">In cambio di</span><button type="button" class="tok" id="mk-get"></button></div>
           <div class="box">
             <div class="box-top"><span id="mk-plabel">Prezzo</span><b class="price-v" id="mk-price"></b></div>
             <div class="choices" id="modes" role="group" aria-label="Scegli il prezzo"></div>

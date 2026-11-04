@@ -143,7 +143,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   // ---------------------------------------------------------------- render: ticket
   function renderSwap() {
     const pt = tok(S.pay), rt = tok(S.recv)
-    $('pay-tok').innerHTML = pt ? tokBtn(S.pay) : '—'; $('recv-tok').innerHTML = rt ? tokBtn(S.recv) : '—'
+    $('pay-tok').innerHTML = pt ? tokBtn(S.pay, 'scegli la moneta da pagare') : '—'; $('recv-tok').innerHTML = rt ? tokBtn(S.recv, 'scegli la moneta da ricevere') : '—'
     $('pay-bal').textContent = fbal(S.pay); $('recv-bal').textContent = fbal(S.recv)
     $('recip-addr').textContent = shortAddr(me())
     const pin = $i('pay-in')
@@ -195,7 +195,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
 
   function renderMake() {
     const k = S.mk, I = mkInfo(), amount = num(k.amount)
-    $('mk-give').innerHTML = tok(k.give) ? tokBtn(k.give) : '—'; $('mk-get').innerHTML = tok(k.get) ? tokBtn(k.get) : '—'
+    $('mk-give').innerHTML = tok(k.give) ? tokBtn(k.give, 'scegli la moneta che dai') : '—'; $('mk-get').innerHTML = tok(k.get) ? tokBtn(k.get, 'scegli la moneta che ricevi') : '—'
     $('mk-bal').textContent = fbal(k.give)
     const min = $i('mk-in')
     if (document.activeElement !== min) min.value = k.amount
@@ -334,9 +334,10 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     const key = (side: string, l: Level) => `${m.id}|${side}|${l.p}`
     const row = (l: Level, side: 'ask' | 'bid', depth: number, i: number) => {
       const fk = flash.get(key(side, l)), fl = fk && now - fk < 1200 ? ' flash' : ''
-      return `<button type="button" class="lvl ${side}${fl}" data-side="${side}" data-i="${i}" aria-label="${side === 'ask' ? 'Compra' : 'Vendi'} fino a ${fq(Bs, l.q)} ${Bs} a ${fp(l.p)} ${Q}">` +
+      // name = the visible cells, then the action for screen readers (WCAG 2.5.3: the name contains the visible text)
+      return `<button type="button" class="lvl ${side}${fl}" data-side="${side}" data-i="${i}">` +
         `<span class="lvl-bar" style="width:${Math.round((depth / max) * 100)}%"></span><span class="p">${fp(l.p)}${l.own ? '<span class="you-tag">TU</span>' : ''}</span>` +
-        `<span class="r">${fq(Bs, l.q)}</span><span class="r t">${fmt(l.p * l.q, tdec)}</span></button>`
+        `<span class="r">${fq(Bs, l.q)}</span><span class="r t">${fmt(l.p * l.q, tdec)}</span><span class="sr-only"> · ${side === 'ask' ? 'compra' : 'vendi'} fino a ${fq(Bs, l.q)} ${Bs} a ${fp(l.p)} ${Q}</span></button>`
     }
     $('asks').innerHTML = v.asks.length ? v.asks.map((l, i) => row(l, 'ask', ca[i] as number, i)).reverse().join('') : '<p class="empty">Nessuna offerta di vendita</p>'
     $('bids').innerHTML = v.bids.length ? v.bids.map((l, i) => row(l, 'bid', cb[i] as number, i)).join('') : '<p class="empty">Nessuna offerta di acquisto</p>'
@@ -507,8 +508,11 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   let lastFocus: HTMLElement | null = null
   function openSheet(id: string, focusEl?: HTMLElement) {
     const s = $(id); lastFocus = document.activeElement as HTMLElement | null; s.hidden = false; openSheets.add(id)
-    requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add('open')))
-    ;(focusEl || (s.querySelector('button') as HTMLElement)).focus({ preventScroll: true })
+    // focus once the sheet is shown: focusing inside a still-invisible sheet fails silently (focus stayed on the page)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      s.classList.add('open')
+      if (openSheets.has(id)) (focusEl || (s.querySelector('button') as HTMLElement)).focus({ preventScroll: true })
+    }))
   }
   function closeSheet(id: string) {
     if (!openSheets.has(id)) return
@@ -516,11 +520,31 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     setTimeout(() => { if (!openSheets.has(id)) s.hidden = true }, RM.matches ? 0 : 340)
     lastFocus?.focus?.({ preventScroll: true })
   }
+  /** Tab stops of a sheet: visible, enabled, and one per radio group (the checked one, else the first) — as the browser tabs. */
+  const tabStops = (root: HTMLElement): HTMLElement[] => {
+    const all = [...root.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),a[href],select,textarea,[tabindex]:not([tabindex="-1"])')].filter((x) => x.checkVisibility({ visibilityProperty: true }))
+    const groups = new Set<string>()
+    return all.filter((x) => {
+      if (!(x instanceof HTMLInputElement) || x.type !== 'radio' || !x.name) return true
+      if (groups.has(x.name)) return false
+      const pick = all.find((y) => y instanceof HTMLInputElement && y.type === 'radio' && y.name === x.name && y.checked) ?? x
+      if (pick !== x) return false
+      groups.add(x.name); return true
+    })
+  }
+  let tabBack = false
+  // safety net: whatever moves focus out of the open sheet (a tab stop we did not foresee), bring it back in
+  document.addEventListener('focusin', (e) => {
+    const open = [...openSheets].pop(); if (!open) return
+    const s = $(open); if (s.contains(e.target as Node)) return
+    const f = tabStops(s); (tabBack ? f[f.length - 1] : f[0])?.focus({ preventScroll: true })
+  })
   document.addEventListener('keydown', (e) => {
     const open = [...openSheets].pop()
+    if (e.key === 'Tab') tabBack = e.shiftKey
     if (e.key === 'Tab' && open) {
       // keep keyboard focus inside the open sheet
-      const f = [...$(open).querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),[href],select,textarea,[tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null)
+      const f = tabStops($(open))
       if (!f.length) return
       const first = f[0] as HTMLElement, last = f[f.length - 1] as HTMLElement
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }

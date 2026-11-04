@@ -104,7 +104,7 @@ async function session(account, label, viewport = { width: 1440, height: 900 }) 
   }, { label })
   const page = await ctx.newPage()
   page.on('pageerror', (e) => pageErrors.push(`${label}: ${e.message}`))
-  page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(`${label} console: ${m.text()}`) })
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') pageErrors.push(`${label} console ${m.type()}: ${m.text()}`) })
   await page.goto(URL_APP)
   await page.waitForSelector('#m-list .mrow, #m-list [data-mkt]', { timeout: 20_000 })
   return page

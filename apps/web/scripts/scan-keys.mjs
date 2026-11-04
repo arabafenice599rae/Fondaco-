@@ -58,6 +58,8 @@ if (dirs.length) {
   const allText = (d) => files(d).filter((f) => f.endsWith('.js')).map((f) => readFileSync(f, 'utf8')).join('\n')
   const pj = allText(prod), dj = allText(demo)
   check('K4: the simulated data source exists only in the DEMO=true build', !pj.includes('Wallet demo') && !pj.includes('app.fondaco.demo') && dj.includes('Wallet demo'), 'production bundle has no demo backend')
+  const maps = files(prod).filter((f) => f.endsWith('.map')), refs = files(prod).filter((f) => /\.(js|css)$/.test(f) && /sourceMappingURL/.test(readFileSync(f, 'utf8')))
+  check('K6: no source maps in the production build (no .map file, no sourceMappingURL)', maps.length === 0 && refs.length === 0, [...maps, ...refs].slice(0, 3).join(', ') || `${files(prod).length} files`)
   const cfg = readFileSync(join(prod, 'config.json'), 'utf8')
   check('K5: shipped config.json has no RPC with a key (empty or public RPCs only)', scan(prod).every((h) => !h.startsWith('config.json')) && JSON.parse(cfg).chains['1'].rpc === '', 'rpc ""')
 }

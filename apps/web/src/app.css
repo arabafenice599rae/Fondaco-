@@ -42,7 +42,9 @@
 @media (max-width: 520px) {
   #set-chip { display: none }
   .brand { position: relative }
-  #demo-badge:not([hidden]) { position: absolute; left: 0; top: calc(100% + 4px); z-index: 2; background: var(--bg) }
+  #demo-badge:not([hidden]) { position: absolute; left: 0; top: calc(100% + 2px); z-index: 2; background: var(--bg) }
+  /* the header grows to hold the tag: it never sits on the content below (found by test/layout.mjs) */
+  html[data-demo] header.top > .shell { padding-bottom: 20px }
 }
 
 /* private offer (Proponi) and its line in "Le mie offerte" */
@@ -54,3 +56,15 @@
 
 /* until the first render the shell stays invisible (under the splash): its first painted layout is the final one (CLS) */
 html.booting .app { visibility: hidden }
+
+/* narrow book rows: price + "TU" do not fit a third of the row; the tag becomes a dot (its text stays for screen readers) */
+@media (max-width: 400px) {
+  .you-tag { display: inline-block; width: 7px; height: 7px; padding: 0; margin-left: 4px; font-size: 0; line-height: 0; border-radius: 50%; vertical-align: 2px; overflow: hidden }
+}
+
+/* accessibility (test/a11y.mjs): chart axis labels at ≥ 4.5:1 (were --faint, 3.3:1); the CTA darkens on hover instead of
+   lightening, so white text stays ≥ 4.5:1 (the lighter hover was 4.25:1) */
+.ch-y, .ch-x { color: var(--muted) }
+:root { --cta-hi: #9C3F26 }
+/* text for screen readers only (the chips' accessible name = visible text + this) */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0 }
