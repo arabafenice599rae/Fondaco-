@@ -111,7 +111,11 @@ export function appConfig({ book, swap, rpc = FORK_URL, txTimeoutSec = 300 }) {
 
 // ------------------------------------------------------------------ browser + injected wallet
 let browser = null
-export async function launch() { browser ??= await chromium.launch(); return browser }
+// Pinned glyph rendering: without it the host decides hinting (the GitHub runner hints fully, so advances are whole
+// pixels), and line wraps, layout checks and visual baselines would depend on the machine. See test/fontconfig/fonts.conf.
+export const BROWSER_ENV = { ...process.env, FONTCONFIG_FILE: resolve(APP, 'test/fontconfig/fonts.conf') }
+export const BROWSER_ARGS = ['--font-render-hinting=none']
+export async function launch() { browser ??= await chromium.launch({ env: BROWSER_ENV, args: BROWSER_ARGS }); return browser }
 export async function closeBrowser() { await browser?.close(); browser = null }
 
 /**
