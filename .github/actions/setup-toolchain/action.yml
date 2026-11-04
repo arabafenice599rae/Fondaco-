@@ -1,0 +1,90 @@
+name: setup-toolchain
+description: >-
+  FONDACO CI toolchain with pinned versions and caches (versions in tools/ci/toolchain.json): Node from .nvmrc, pnpm from
+  package.json packageManager (pnpm install --frozen-lockfile), and optionally Foundry v1.5.1, solc 0.8.23 (checksum),
+  Playwright Chromium, Docker Buildx, kubo (CID only, no node), gitleaks. Ends by printing every version and failing on a mismatch.
+inputs:
+  foundry: { description: install forge/anvil/cast, default: "false" }
+  solc: { description: download solc 0.8.23 for tools/verify-source (checksum verified), default: "false" }
+  playwright: { description: install Playwright Chromium (and its system deps), default: "false" }
+  docker: { description: set up Docker Buildx, default: "false" }
+  kubo: { description: install the kubo (ipfs) CLI, default: "false" }
+  gitleaks: { description: install gitleaks, default: "false" }
+runs:
+  using: composite
+  steps:
+    - name: pnpm (version from package.json packageManager)
+      uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+    - name: Node (version from .nvmrc), pnpm store cache
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with: { node-version-file: .nvmrc, cache: pnpm }
+    - name: pnpm install --frozen-lockfile
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Foundry v1.5.1 (fixed release, not nightly; ~/.foundry cached by the action)
+      if: inputs.foundry == 'true'
+      uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+      with: { version: v1.5.1, cache: true }
+
+    - name: solc cache
+      if: inputs.solc == 'true'
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: .cache/verify-source
+        key: "verify-source-solc-0.8.23-${{ hashFiles('packages/contracts/compiler-settings.json') }}"
+    - name: solc 0.8.23 (checksum verified)
+      if: inputs.solc == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        build=$(node -p "require('./tools/ci/toolchain.json').solc.build"); want=$(node -p "require('./tools/ci/toolchain.json').solc.sha256")
+        mkdir -p .cache/verify-source; f=".cache/verify-source/$build"
+        [ -f "$f" ] || curl -fsSL --retry 3 -o "$f" "https://binaries.soliditylang.org/linux-amd64/$build"
+        echo "$want  $f" | sha256sum -c -; chmod +x "$f"
+
+    - name: Playwright browsers cache
+      if: inputs.playwright == 'true'
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: ~/.cache/ms-playwright
+        key: "playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}"
+    - name: Playwright Chromium (+ system dependencies), CHROME_PATH for Lighthouse
+      if: inputs.playwright == 'true'
+      shell: bash
+      run: |
+        pnpm --filter @fondaco/web exec playwright install --with-deps chromium
+        echo "CHROME_PATH=$(cd apps/web && node -e "console.log(require('playwright').chromium.executablePath())")" >> "$GITHUB_ENV"
+
+    - name: Docker Buildx
+      if: inputs.docker == 'true'
+      uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+    - name: kubo (ipfs CLI, checksum verified)
+      if: inputs.kubo == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        url=$(node -p "require('./tools/ci/toolchain.json').kubo.url"); want=$(node -p "require('./tools/ci/toolchain.json').kubo.sha512")
+        curl -fsSL --retry 3 -o /tmp/kubo.tgz "$url"; echo "$want  /tmp/kubo.tgz" | sha512sum -c -
+        mkdir -p "$HOME/.local/bin"; tar xzf /tmp/kubo.tgz -C /tmp; cp /tmp/kubo/ipfs "$HOME/.local/bin/ipfs"; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    - name: gitleaks (checksum verified)
+      if: inputs.gitleaks == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        url=$(node -p "require('./tools/ci/toolchain.json').gitleaks.url"); want=$(node -p "require('./tools/ci/toolchain.json').gitleaks.sha256")
+        curl -fsSL --retry 3 -o /tmp/gitleaks.tgz "$url"; echo "$want  /tmp/gitleaks.tgz" | sha256sum -c -
+        mkdir -p "$HOME/.local/bin"; tar xzf /tmp/gitleaks.tgz -C "$HOME/.local/bin" gitleaks; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Versions (fail on mismatch)
+      shell: bash
+      run: |
+        need=""
+        [ "${{ inputs.foundry }}" = true ] && need="$need,foundry"
+        [ "${{ inputs.solc }}" = true ] && need="$need,solc"
+        [ "${{ inputs.playwright }}" = true ] && need="$need,playwright"
+        [ "${{ inputs.docker }}" = true ] && need="$need,docker"
+        [ "${{ inputs.kubo }}" = true ] && need="$need,kubo"
+        [ "${{ inputs.gitleaks }}" = true ] && need="$need,gitleaks"
+        node tools/ci/versions.mjs --need "${need#,}"

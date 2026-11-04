@@ -4,6 +4,7 @@
 //        [--profile quick]   skip the suites marked slow (pull requests)
 //        [--retries N]       re-run a failed FORK suite up to N times (public RPCs time out; each attempt is reported)
 //        [--report name]     write reports/<name>.json (default tests.json / tests-partial.json)
+//        [--skip a,b]        leave these suites out (e.g. foundry, which has its own CI job)
 // FORK_BLOCK overrides fork.config.json; FOUNDRY_PROFILE selects the Foundry profile (ci-quick on pull requests).
 // With GITHUB_STEP_SUMMARY set, a Markdown table of the suites is appended to the job summary.
 import { spawn } from 'node:child_process'
@@ -68,13 +69,14 @@ function run(cmd, args, opts) {
 loadEnv()
 const args = process.argv.slice(2)
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null }
-const valued = new Set(['--group', '--profile', '--retries', '--report'])
+const valued = new Set(['--group', '--profile', '--retries', '--report', '--skip'])
 const only = args.filter((a, i) => !a.startsWith('--') && !valued.has(args[i - 1]))
 const groups = opt('--group')?.split(',').filter(Boolean) ?? null
 const quick = opt('--profile') === 'quick'
 const retries = Number(opt('--retries') ?? 0)
+const skip = new Set(opt('--skip')?.split(',').filter(Boolean) ?? [])
 // explicit suites (docker-smoke: needs a Docker daemon) run only when named or when their group is selected
-const suites = SUITES.filter((s) => (only.length ? only.includes(s.name) : true) && (!s.explicit || only.includes(s.name) || groups?.includes(s.group)) && (!groups || groups.includes(s.group)) && (!quick || !s.slow) &&
+const suites = SUITES.filter((s) => !skip.has(s.name) && (only.length ? only.includes(s.name) : true) && (!s.explicit || only.includes(s.name) || groups?.includes(s.group)) && (!groups || groups.includes(s.group)) && (!quick || !s.slow) &&
   (!args.includes('--unit') || s.unit) && (!args.includes('--fork') || !s.unit))
 if (!suites.length) { console.error('no suite selected'); process.exit(2) }
 const forkBlock = process.env.FORK_BLOCK ? BigInt(process.env.FORK_BLOCK) : undefined
@@ -84,7 +86,10 @@ for (const s of suites) {
   for (;;) {
     attempts++
     console.log(`\n=== ${s.name} (${s.pkg}/${s.file ?? 'forge'})${attempts > 1 ? ` — attempt ${attempts}` : ''} ===`)
-    fork = s.unit ? null : await startFork(forkBlock ? { forkBlock } : {}).catch((e) => ({ error: e }))
+    // anvil's own log of this suite: reports/anvil/<suite>.log (uploaded by the CI)
+    const anvilLog = s.unit ? null : resolve(ROOT, 'reports/anvil', `${s.name}${attempts > 1 ? '-' + attempts : ''}.log`)
+    if (anvilLog) { mkdirSync(resolve(ROOT, 'reports/anvil'), { recursive: true }); writeFileSync(anvilLog, '') }
+    fork = s.unit ? null : await startFork({ ...(forkBlock ? { forkBlock } : {}), log: (l) => appendFileSync(anvilLog, l) }).catch((e) => ({ error: e }))
     t0 = Date.now()
     if (fork?.error) { r = { code: 1, out: `anvil failed to start: ${fork.error.message}` }; console.error(r.out); fork = null } else {
       try {
