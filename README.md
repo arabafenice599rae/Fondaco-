@@ -38,14 +38,16 @@ Prova di carico (fuori da `pnpm test`, ~3 minuti): `node tools/load/load-test.mj
 
 ## Verifica
 
-Il CI è `.github/workflows/verify.yml`. È autosufficiente: lo strumentario è installato dalla composite action
+Il CI è `.github/workflows/verify.yml`, workflow `verify` in Actions (attivo su `main`; "Run workflow" e la run notturna
+usano il file del branch predefinito, e la run manuale può scegliere un altro branch). È autosufficiente: lo strumentario è installato dalla composite action
 `.github/actions/setup-toolchain`, con le versioni in `tools/ci/toolchain.json`, controllate a fine setup.
 
 | Come | Cosa gira |
 |---|---|
 | **Pull request** | profilo rapido: suite lente saltate nei job unit/fork, Foundry con il profilo `ci-quick`, RPC pubblico con 3 tentativi per suite su fork |
-| **Notte** (02:17 UTC) | tutto, Foundry completo, `FORK_RPC_URL` (RPC d'archivio a pagamento) |
+| **Notte** (02:17 UTC, `cron: "17 2 * * *"`) | tutto, Foundry completo, `FORK_RPC_URL` (RPC d'archivio a pagamento) |
 | **A mano** | Actions → verify → Run workflow, oppure `gh workflow run verify.yml -f suite=full [-f fork_block=23700000] [-f ref=<branch o commit>]`. `suite`: `quick`, `full`, `contracts`, `book-server`, `client`, `web` |
+| **Tag `v*`** | push di un tag di rilascio: tutto, poi `docker-publish` pubblica l'immagine della bacheca su GHCR |
 
 Job:
 - **toolchain**: piano della run e cache;
