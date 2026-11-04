@@ -280,3 +280,69 @@ In v4.3 solo `swap`/`swapAnySender` passano da `_check` (che reverte con `ChainI
 `DOMAIN_SEPARATOR` è fisso: dopo uno split della chain un ordine `swapLight` firmato sulla chain originale resterebbe
 eseguibile sull'altra. FONDACO non firma né esegue ordini `swapLight` (senderWallet = 0, `swapAnySender`). Fissato dal test
 `test_swapLightIgnoresChainId`. Non è tra i rilievi dell'audit.
+
+## Fase 6
+
+### D-44 · Rilevatore di sovrapposizioni scritto da zero — da notare
+La richiesta chiedeva di "portare il rilevatore a campionamento di punti del prototipo", ma né `docs/reference/mini-exchange.html`
+né la specifica ne contengono uno. L'ho scritto in `apps/web/test/layout.mjs`. Per ogni elemento con testo o controllo, campiona
+una griglia 3×3 della parte visibile (viewport ∩ contenitori che ritagliano) con `elementFromPoint`. Non conta come sovrapposizione:
+- l'intestazione, la barra inferiore e il toast, che coprono il contenuto per progetto;
+- le parti di uno stesso controllo;
+- un contenitore chiuso.
+Un autotest (L0) dimostra che rileva una copertura e un taglio iniettati.
+
+### D-45 · Avvio: il libro in un solo round trip — D
+- `public/boot.js` (1 kB, senza dipendenze, prima del CSS) chiede `/config` e `GET /books`, il nuovo endpoint batch della bacheca,
+  mentre il bundle principale si scarica; l'app prende le risposte per URL esatto, e se l'URL non coincide fa la richiesta normale.
+- Il backend live è importato staticamente; il runtime del wallet (client viem, approve, taker) è caricato all'uso.
+- Il client è diviso in moduli puri (`plan.ts`, `guards.ts`, `errors.ts`, API pubblica invariata), così il primo bundle non
+  trascina le azioni viem.
+- La shell resta invisibile fino al primo render (CLS).
+Fast 3G = profilo DevTools (562,5 ms di RTT, 1,44 Mbit/s); la misura vale con lo splash già visto nella sessione.
+
+### D-46 · Font: sottoinsiemi latini — D
+I cinque Geist (OFL, nessun Reserved Font Name) sono ridotti a Latin + Latin-1 + punteggiatura, valute e frecce usate, con tutte le
+feature OpenType: 118 kB invece di 250 kB. Lo script è `scripts/subset-fonts.sh`; il test U36 fallisce se il codice usa un
+carattere fuori dal sottoinsieme.
+
+### D-47 · Offerta privata nell'app — da notare (aggiunta di prodotto)
+Il flusso richiesto non esisteva nel prototipo. Aggiunte minime:
+- campo "Solo per un indirizzo" in Proponi, con l'offerta firmata come `senderWallet` e in una sola parte;
+- "Copia link" in Le mie offerte, che produce `#offerta=<hash>`;
+- l'apertura nel foglio di conferma, solo per quell'account.
+La bacheca già nascondeva gli ordini privati dal libro e li serviva per hash.
+
+### D-48 · Rifirma con lo stesso nonce — D (correzione di un difetto)
+Prima la rifirma usava nonce nuovi: se la fee tornava al valore precedente, ordini vecchi e nuovi erano validi insieme, e il
+firmatario era esposto due volte. Ora l'app rifirma con lo stesso nonce. La bacheca accetta il riuso solo sopra un ordine
+`invalid_fee` con le stesse condizioni (token, importi, controparte; cambiano fee, firma e scadenza) e lo sostituisce.
+La rifirma alza prima l'autorizzazione se la nuova fee lo richiede: in quel caso non è gratis, ed è una transazione.
+
+### D-49 · Soglie di prestazione — D (proposte)
+- Bundle iniziale (JS + CSS referenziati da `index.html`) ≤ 60 kB gzip, oggi 49,2 kB.
+- Font ≤ 130 kB.
+- Libro visibile su Fast 3G ≤ 2 s.
+- Lighthouse mobile ≥ 0,90 su Performance e Accessibility, mediana di 3 esecuzioni.
+Valori in `apps/web/test/perf.mjs` (`BUDGET`).
+
+### D-50 · `txTimeoutSec` in `config.json` — D
+È il tempo di attesa della conferma prima di fermarsi (default 300 s, 5–3600). Serve all'e2e del timeout ed è un parametro di
+deploy ragionevole.
+
+### D-51 · Scostamenti dal prototipo per accessibilità e layout — da notare
+- Etichette degli assi del grafico in `--muted`: erano `--faint`, a 3,33:1.
+- Hover del pulsante principale più scuro: il più chiaro dava 4,25:1.
+- Sotto i 400 px il tag "TU" nel libro è un punto: copriva la quantità; il testo resta per i lettori di schermo.
+- In demo, su telefono, l'intestazione è più alta di 20 px per contenere l'etichetta Demo: la soluzione D-37 la faceva uscire
+  sopra il contenuto.
+
+### Punti aperti (Fase 6)
+- **`page-has-heading-one`** (axe, *moderate*): l'unico `<h1>` è nello splash. Un `<h1>` stabile richiede di cambiare il markup
+  del marchio. Non è richiesto (serious/critical = 0), lo propongo per la Fase 7.
+- **LCP 2,5 s** su Lighthouse: è il marchio dello splash, la cui animazione dura 2,8 s per progetto. Accorciarla migliorerebbe il
+  punteggio, ma è una scelta di design.
+- **Console in F9**: le righe `net::ERR_CONNECTION_REFUSED` sono stampate da Chrome per le richieste fallite e non si possono
+  evitare; sono l'unica eccezione ammessa, dichiarata nel test.
+- **RPC di fork gratuito** (drpc): un timeout 408 ha fatto saltare una volta l'invariante 3 di Foundry. Per CI conviene un RPC
+  d'archivio meno limitato.

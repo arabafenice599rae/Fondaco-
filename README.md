@@ -52,7 +52,11 @@ pnpm --filter @fondaco/book-server start
   un database del server JavaScript di riferimento viene riconosciuto e migrato; uno più nuovo del codice viene rifiutato.
 - **Reorg**: il server riporta indietro gli ultimi `reorgDepth` blocchi (default 64 = finalità di Ethereum). Una reorg più profonda non viene
   corretta (comportamento documentato, test `reorg` R4): **su una chain con finalità più lenta `reorgDepth` va alzato** di conseguenza.
-- **Fail-closed**: se nessun giro di indicizzazione riesce per `maxStalenessMs` (default 120 s), `/book` risponde `503 stale`.
+- **Fail-closed**: se nessun giro di indicizzazione riesce per `maxStalenessMs` (default 120 s), `/book` (e `/books`) risponde `503 stale`.
+- **`GET /books?chainId&pairs=base:quote,…`** (fino a 10 coppie): più libri in una richiesta, per la prima schermata dell'app; una coppia
+  fuori whitelist è una voce `{ error: 'token_not_allowed' }`, non un errore HTTP.
+- **Rifirma dopo un cambio di fee**: un ordine con lo stesso nonce e le stesse condizioni di un ordine `invalid_fee` lo sostituisce
+  (un nonce → al massimo un'esecuzione, qualunque fee torni in vigore); ogni altro riuso del nonce è `nonce_reused`.
 - **Log**: JSON su stdout, un oggetto per riga (`log.level`).
 - **Metriche**: `GET /metrics` in formato Prometheus, **spento di default** (`metrics.enabled`). Acceso, risponde solo alle reti in
   `metrics.allow` (indirizzo diretto del client, mai `X-Forwarded-For`) o con `Authorization: Bearer <metrics.token>`.
