@@ -130,11 +130,14 @@ await flow('F4', async () => {
   const o = (await mine(M3)).find((x) => x.status === 'open')
   await H.send(M3, { address: SWAP, abi: swapAbi, functionName: 'authorize', args: [signatory] })
   await sync()
-  const s1 = (await bookA.api(`/orders/${o.hash}`)).body
+  // the signer events are indexed in their own pass, which can land one round after the block sync (seen once in CI run
+  // 41914373389): wait for the status instead of reading it once
+  const st = async (ok) => { let b; await H.until(async () => ok((b = (await bookA.api(`/orders/${o.hash}`)).body)), 20_000, 'order status').catch(() => {}); return b }
+  const s1 = await st((b) => b.status === 'invalid_signer')
   await H.send(M3, { address: SWAP, abi: swapAbi, functionName: 'revoke', args: [] })
   await sync()
   const ex = await waitOffer(m.page, 'Vendi 0,1 WETH', 'exec')
-  const s2 = (await bookA.api(`/orders/${o.hash}`)).body
+  const s2 = await st((b) => b.executableOnChain === true)
   const txt = await H.offersText(m.page)
   check('F4a: authorize → invalid_signer; revoke → still executable on-chain → warning and "Annulla ora" in the app',
     s1.status === 'invalid_signer' && s2.executableOnChain === true && ex && /può ancora essere eseguita/.test(txt) && /Annulla ora/.test(txt), `${s1.status}/${s1.executableOnChain} → ${s2.status}/${s2.executableOnChain}`)
