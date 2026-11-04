@@ -40,7 +40,7 @@ export function loadVerifiedFixture() {
   return art
 }
 
-async function readState(pub, abi, swap) {
+export async function readState(pub, abi, swap) {
   const read = (fn) => pub.readContract({ address: swap, abi, functionName: fn })
   return {
     owner: getAddress(await read('owner')),
@@ -56,7 +56,7 @@ async function readState(pub, abi, swap) {
 }
 
 /** Every post-deploy assertion, as a list of human-readable mismatches (empty = OK). `owner` is checked separately. */
-function mismatches(state, { chainId, swap, fee, feeWallet }) {
+export function mismatches(state, { chainId, swap, fee, feeWallet }) {
   // DOMAIN_SEPARATOR is an immutable (chainId + address) baked in at deploy: verify it rather than comparing runtime bytecode.
   const expectedDomain = domainSeparator({ domain: { name: 'SWAP_ERC20', version: '4.3', chainId, verifyingContract: swap } })
   const out = []

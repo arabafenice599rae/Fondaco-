@@ -280,3 +280,141 @@ In v4.3 solo `swap`/`swapAnySender` passano da `_check` (che reverte con `ChainI
 `DOMAIN_SEPARATOR` è fisso: dopo uno split della chain un ordine `swapLight` firmato sulla chain originale resterebbe
 eseguibile sull'altra. FONDACO non firma né esegue ordini `swapLight` (senderWallet = 0, `swapAnySender`). Fissato dal test
 `test_swapLightIgnoresChainId`. Non è tra i rilievi dell'audit.
+
+## Fase 6
+
+### D-44 · Rilevatore di sovrapposizioni scritto da zero — da notare
+La richiesta chiedeva di "portare il rilevatore a campionamento di punti del prototipo", ma né `docs/reference/mini-exchange.html`
+né la specifica ne contengono uno. L'ho scritto in `apps/web/test/layout.mjs`. Per ogni elemento con testo o controllo, campiona
+una griglia 3×3 della parte visibile (viewport ∩ contenitori che ritagliano) con `elementFromPoint`. Non conta come sovrapposizione:
+- l'intestazione, la barra inferiore e il toast, che coprono il contenuto per progetto;
+- le parti di uno stesso controllo;
+- un contenitore chiuso.
+Un autotest (L0) dimostra che rileva una copertura e un taglio iniettati.
+
+### D-45 · Avvio: il libro in un solo round trip — D
+- `public/boot.js` (1 kB, senza dipendenze, prima del CSS) chiede `/config` e `GET /books`, il nuovo endpoint batch della bacheca,
+  mentre il bundle principale si scarica; l'app prende le risposte per URL esatto, e se l'URL non coincide fa la richiesta normale.
+- Il backend live è importato staticamente; il runtime del wallet (client viem, approve, taker) è caricato all'uso.
+- Il client è diviso in moduli puri (`plan.ts`, `guards.ts`, `errors.ts`, API pubblica invariata), così il primo bundle non
+  trascina le azioni viem.
+- La shell resta invisibile fino al primo render (CLS).
+Fast 3G = profilo DevTools (562,5 ms di RTT, 1,44 Mbit/s); la misura vale con lo splash già visto nella sessione.
+
+### D-46 · Font: sottoinsiemi latini — D
+I cinque Geist (OFL, nessun Reserved Font Name) sono ridotti a Latin + Latin-1 + punteggiatura, valute e frecce usate, con tutte le
+feature OpenType: 118 kB invece di 250 kB. Lo script è `scripts/subset-fonts.sh`; il test U36 fallisce se il codice usa un
+carattere fuori dal sottoinsieme.
+
+### D-47 · Offerta privata nell'app — da notare (aggiunta di prodotto)
+Il flusso richiesto non esisteva nel prototipo. Aggiunte minime:
+- campo "Solo per un indirizzo" in Proponi, con l'offerta firmata come `senderWallet` e in una sola parte;
+- "Copia link" in Le mie offerte, che produce `#offerta=<hash>`;
+- l'apertura nel foglio di conferma, solo per quell'account.
+La bacheca già nascondeva gli ordini privati dal libro e li serviva per hash.
+
+### D-48 · Rifirma con lo stesso nonce — D (correzione di un difetto)
+Prima la rifirma usava nonce nuovi: se la fee tornava al valore precedente, ordini vecchi e nuovi erano validi insieme, e il
+firmatario era esposto due volte. Ora l'app rifirma con lo stesso nonce. La bacheca accetta il riuso solo sopra un ordine
+`invalid_fee` con le stesse condizioni (token, importi, controparte; cambiano fee, firma e scadenza) e lo sostituisce.
+La rifirma alza prima l'autorizzazione se la nuova fee lo richiede: in quel caso non è gratis, ed è una transazione.
+
+### D-49 · Soglie di prestazione — D (proposte)
+- Bundle iniziale (JS + CSS referenziati da `index.html`) ≤ 60 kB gzip, oggi 49,2 kB.
+- Font ≤ 130 kB.
+- Libro visibile su Fast 3G ≤ 2 s.
+- Lighthouse mobile ≥ 0,90 su Performance e Accessibility, mediana di 3 esecuzioni.
+Valori in `apps/web/test/perf.mjs` (`BUDGET`).
+
+### D-50 · `txTimeoutSec` in `config.json` — D
+È il tempo di attesa della conferma prima di fermarsi (default 300 s, 5–3600). Serve all'e2e del timeout ed è un parametro di
+deploy ragionevole.
+
+### D-51 · Scostamenti dal prototipo per accessibilità e layout — da notare
+- Etichette degli assi del grafico in `--muted`: erano `--faint`, a 3,33:1.
+- Hover del pulsante principale più scuro: il più chiaro dava 4,25:1.
+- Sotto i 400 px il tag "TU" nel libro è un punto: copriva la quantità; il testo resta per i lettori di schermo.
+- In demo, su telefono, l'intestazione è più alta di 20 px per contenere l'etichetta Demo: la soluzione D-37 la faceva uscire
+  sopra il contenuto.
+
+### Punti aperti (Fase 6)
+- **`page-has-heading-one`** (axe, *moderate*): l'unico `<h1>` è nello splash. Un `<h1>` stabile richiede di cambiare il markup
+  del marchio. Non è richiesto (serious/critical = 0), lo propongo per la Fase 7.
+- **LCP 2,5 s** su Lighthouse: è il marchio dello splash, la cui animazione dura 2,8 s per progetto. Accorciarla migliorerebbe il
+  punteggio, ma è una scelta di design.
+- **Console in F9**: le righe `net::ERR_CONNECTION_REFUSED` sono stampate da Chrome per le richieste fallite e non si possono
+  evitare; sono l'unica eccezione ammessa, dichiarata nel test.
+- **RPC di fork gratuito** (drpc): un timeout 408 ha fatto saltare una volta l'invariante 3 di Foundry. Per CI conviene un RPC
+  d'archivio meno limitato.
+
+### D-52 · CI: rapido su PR, completo di notte — D
+- **Su `pull_request`:** profilo `quick` (salta le suite lente), Foundry con il profilo `ci-quick`, RPC gratuito con
+  `--retries 3`.
+- **Di notte e con `workflow_dispatch suite=full`:**
+  - tutte le suite;
+  - Foundry completo;
+  - `FORK_RPC_URL` dal secret (RPC d'archivio a pagamento), con ricaduta sull'RPC pubblico se il secret manca.
+- **Permessi:** `contents: read` ovunque; `packages: write` solo in `docker-publish`, su `main` o sui tag.
+
+### D-53 · `workflow_dispatch` vive solo sul branch predefinito — da notare
+GitHub accetta il dispatch soltanto per i workflow presenti sul branch predefinito, quindi un dispatch sul branch di lavoro
+risponde 404. Per la prova della Fase 7 ho aggiunto un trigger `push` temporaneo sul branch di lavoro, che il piano tratta
+come `full`. È stato tolto dopo la run verde 41800320167, rimesso per la verifica delle correzioni della revisione e
+tolto di nuovo dopo la run 41918930214. Al suo posto c'è `push` sui tag `v*`, il trigger
+che serve a `docker-publish` per pubblicare l'immagine dei rilasci. Per abilitare il dispatch, `verify.yml` deve arrivare su `main`, e per questo
+serve la tua conferma.
+
+### D-54 · Test web dentro l'immagine Playwright ufficiale, una sola baseline — D (sostituisce la versione con baseline CI)
+- **Prima.** Il rendering del testo dipende dal sistema: font, FreeType, hinting. Sul runner GitHub V1 falliva su tutte le 20
+  schermate e L1 vedeva l'importo coprire l'etichetta. La versione precedente di questa decisione teneva quattro baseline solo per
+  il CI: **non approvata, rimossa.**
+- **Ora:**
+  - il job `web-e2e` gira nel container `mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30…4a27`;
+  - lo stesso riferimento sta in `tools/ci/toolchain.json` (`playwrightImage.ref`) e `versions.mjs` fallisce se `verify.yml`, la
+    versione dell'immagine o il pacchetto `playwright` divergono;
+  - le baseline sono **una sola serie per tutte le 20 schermate**, generate in quell'immagine;
+  - `web-visual`, lanciato fuori dall'immagine, si rilancia da solo nel container (`tools/testkit/in-playwright.mjs`); in CI
+    fallisce se non è nell'immagine;
+  - rigenerazione: `pnpm --filter @fondaco/web test:visual:update`, nello stesso container.
+- **Restano** il rendering fissato del browser di test (`--font-render-hinting=none`, `test/fontconfig/fonts.conf`) e l'attesa
+  dei font (`fontsLoaded`).
+
+### D-55 · Stima del gas del deploy su testnet — D
+Il nodo pubblico di Sepolia stima 18,2 M di gas per il deploy, mentre quello misurato sul fork è 2.578.924. Il piano usa il gas
+misurato ×1,2 e riporta anche la stima del nodo. Il deploy vero passa comunque da `estimateGas` del wallet.
+
+### D-56 · Immagine della bacheca — D
+L'immagine viene pubblicata su GHCR solo da `main` e dai tag `v*`, con il digest nel riepilogo della run. Sui branch viene
+costruita e provata con lo smoke test, ma non pubblicata.
+
+### D-57 · Ripieghi di Geist Mono con metriche tarate, preload dei woff2 — D
+- **Ripieghi.** `fonts.css` dichiara facce locali "Geist Mono Fallback …" per Menlo, Consolas, DejaVu Sans Mono, Liberation Mono
+  e Courier New:
+  - `size-adjust` iguaglia l'avanzamento di Geist Mono (600/1000 em);
+  - `ascent-override`, `descent-override` e `line-gap-override` riportano 1005/295/0 diviso `size-adjust`;
+  - i valori vengono da `apps/web/scripts/font-fallback.py`, che legge le metriche dai woff2 con fontTools;
+  - stanno nello stack subito dopo "Geist Mono": durante lo swap, o se il woff2 non arriva, a capo e righe non cambiano.
+- **Preload.** Un plugin Vite inserisce `<link rel="preload" as="font" crossorigin fetchpriority="low">` per i pesi 400, 500 e
+  600 del build, con gli URL con hash, dopo la CSP.
+  - Con priorità alta, su Fast 3G, la bacheca passava da 1,8 a 2,4 s (P3 rosso), perché i 72 kB competevano col bundle.
+  - Con priorità bassa il download parte subito ma lascia passare bundle e `/books`: P3 1,83 s.
+  - Il ripiego tarato tiene fermo il layout finché i font non arrivano.
+- **Prova** (`web-layout`):
+  - ogni vista viene campionata due volte, con i webfont (L1) e con i woff2 bloccati (L1b), ed entrambe devono essere pulite;
+  - L5 confronta i box di ogni elemento con id tra le due modalità: tolleranza 2 px, misurato 0,5 px sull'host (ripiego
+    DejaVu) e 0,4 px nell'immagine (ripiego Liberation).
+
+### D-58 · Smoke del backup anche contro MinIO, costruito dal tag — da notare
+Richiesto: MinIO da `quay.io/minio/minio`, con tag e digest. Non è possibile:
+- quay.io rifiuta il pull anonimo di `minio/minio`: il token anonimo ha `"actions": []`, e `docker pull` risponde 401 a ogni tag;
+- su Docker Hub `minio/minio` non esiste più, perché MinIO ha smesso di distribuire immagini pubbliche.
+
+Soluzione adottata:
+- `deploy/minio/Dockerfile` compila `github.com/minio/minio@RELEASE.2025-09-07T16-13-09Z` con `go install`, verificato dal
+  checksum database di Go, su `golang:1.24.7-alpine3.22@sha256:fc2cff66…dbb5`, in un'immagine `scratch`;
+- l'immagine serve solo al test, non viene pubblicata, e il CI la costruisce nel job `docker`;
+- lo smoke test, dopo S1–S6 con lo stub SigV4, esegue lo stesso `backup once/list/restore` contro MinIO:
+  - S7: un solo oggetto `book/book-*.sqlite.gz`, riletto con le credenziali di MinIO, gzip di un database SQLite;
+  - S8: list e restore con lo stesso esito dello stub;
+- con `MINIO_IMAGE=<ref@sha256:…>` il test usa un'immagine pronta, per esempio quay.io con credenziali o un mirror. Basta
+  quella variabile per tornare alla richiesta originale.

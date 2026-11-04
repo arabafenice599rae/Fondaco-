@@ -169,6 +169,26 @@ async function main() {
   const s11b = await status(hLive)
   check('E11: fee change invalidates live orders, revert revives them', s11a === 'invalid_fee' && fee11 === '50' && s11b === 'open', `${s11a} (fee ${fee11}) → ${s11b}`)
 
+  // E11b: re-sign after a fee change keeps the nonce: the invalid_fee order is replaced (one nonce → at most one fill);
+  // a different order on the same nonce, or a re-sign over a live order, is still refused
+  const old = await ask(alice, 200n * 10n ** 6n, 8n * 10n ** 16n)
+  const hOld = (await submit(old)).body.results[0].hash
+  await send(owner, { address: SWAP, abi: swapAbi, functionName: 'setProtocolFee', args: [50n] })
+  await sync()
+  const sOld = await status(hOld)
+  const re = await ask(alice, 200n * 10n ** 6n, 8n * 10n ** 16n, { nonce: BigInt(old.nonce), protocolFee: 50n })
+  const rRe = await submit(re)
+  const other = await ask(alice, 300n * 10n ** 6n, 8n * 10n ** 16n, { nonce: BigInt(old.nonce), protocolFee: 50n })
+  const rOther = await submit(other)
+  const gone = (await api('GET', `/orders/${hOld}`)).status
+  const reHash = rRe.body.results[0].hash
+  await send(owner, { address: SWAP, abi: swapAbi, functionName: 'setProtocolFee', args: [FEE] })
+  await sync()
+  const sReAfter = await status(reHash)
+  check('E11b: same-nonce re-sign replaces the invalid_fee order; other terms on that nonce refused; fee back → the re-signed one is invalid_fee',
+    sOld === 'invalid_fee' && rRe.body.results[0].status === 'open' && gone === 404 && rOther.body.results[0].error === 'nonce_reused' && sReAfter === 'invalid_fee',
+    `${sOld} → re-signed ${rRe.body.results[0].status}, old ${gone}, other ${rOther.body.results[0].error}, after fee back ${sReAfter}`)
+
   // E12: expiry → expired
   const shortO = await ask(bob, 10n * 10n ** 6n, 4n * 10n ** 15n, { expiry: (await chainNow()) + 120n })
   await giveUsdc(bob.address, 10n ** 12n)

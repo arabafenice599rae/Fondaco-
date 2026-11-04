@@ -95,7 +95,8 @@ export function toUnits(amount: number, decimals: number): bigint {
 
 // ------------------------------------------------------------------ proposing a price
 
-export interface OrderTerms { signerToken: Address; signerAmount: bigint; senderToken: Address; senderAmount: bigint }
+/** `nonce`: only to re-sign an invalid_fee order (same nonce → the old and the new order can never both fill) */
+export interface OrderTerms { signerToken: Address; signerAmount: bigint; senderToken: Address; senderAmount: bigint; nonce?: bigint }
 
 /**
  * Exact terms of a ladder: `amount` of the token given, split in `parts` equal slices (the last takes the remainder),
@@ -155,6 +156,8 @@ export interface OfferView {
   cancelNonces: string[]
   orders: MyOrder[]
   stale: boolean
+  /** private offer: the only address that can take it */
+  privateFor: string | null
 }
 export interface HistoryItem { t: string; s: string; at: number }
 
@@ -172,7 +175,7 @@ const findMarket = (markets: readonly Market[], a: string, b: string) => {
  * Groups with nothing live go to the history.
  */
 export function groupOffers(orders: readonly MyOrder[], markets: readonly Market[], mids: Record<string, number>, nowSec: number): { live: OfferView[]; history: HistoryItem[] } {
-  const groups = new Map<string, { m: Market; side: 'sell' | 'buy'; price: number; expiry: number; list: MyOrder[] }>()
+  const groups = new Map<string, { m: Market; side: 'sell' | 'buy'; price: number; expiry: number; list: MyOrder[]; privateFor: string | null }>()
   for (const o of orders) {
     const m = findMarket(markets, o.order.signerToken, o.order.senderToken)
     if (!m) continue
@@ -180,9 +183,10 @@ export function groupOffers(orders: readonly MyOrder[], markets: readonly Market
     const baseAmt = units(side === 'sell' ? o.order.signerAmount : o.order.senderAmount, m.base.decimals)
     const quoteAmt = units(side === 'sell' ? o.order.senderAmount : o.order.signerAmount, m.quote.decimals)
     const price = quoteAmt / baseAmt
-    const key = `${m.id}|${side}|${price.toPrecision(10)}|${o.order.expiry}`
+    const sw = o.order.senderWallet && !/^0x0{40}$/i.test(o.order.senderWallet) ? getAddress(o.order.senderWallet) : null
+    const key = `${m.id}|${side}|${price.toPrecision(10)}|${o.order.expiry}|${sw ?? ''}`
     const g = groups.get(key)
-    if (g) g.list.push(o); else groups.set(key, { m, side, price, expiry: Number(o.order.expiry), list: [o] })
+    if (g) g.list.push(o); else groups.set(key, { m, side, price, expiry: Number(o.order.expiry), list: [o], privateFor: sw })
   }
   const live: OfferView[] = [], history: HistoryItem[] = []
   for (const [key, g] of groups) {
@@ -206,6 +210,7 @@ export function groupOffers(orders: readonly MyOrder[], markets: readonly Market
     live.push({
       key, market: m, side, baseAmt, price: g.price, parts: list.length, filled, funded: by('open').length, status, expiry: g.expiry, orders: list,
       cancelNonces: [...liveOrders, ...exec].filter((o) => o.status !== 'used').map((o) => o.order.nonce),
+      privateFor: g.privateFor,
       stale: status === 'active' && mid > 0 && isStale({ side: side === 'sell' ? 'sell' : 'buy', price: g.price, mid }),
     })
   }

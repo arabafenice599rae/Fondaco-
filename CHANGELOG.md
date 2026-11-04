@@ -2,6 +2,90 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Fase 7] — Sicurezza e rilascio — 2026-11-04
+
+### Aggiunto
+- `docs/THREAT_MODEL.md`: asset, attori, rischi R1–R20 con il test che copre ogni mitigazione, 8 rischi residui espliciti.
+- Supply chain:
+  - `pnpm audit` a zero;
+  - lockfile bloccato verificato nel CI;
+  - gitleaks 8.24.3 sull'intera storia (`.gitleaks.toml`);
+  - SHA256SUMS per fixture, report di audit e font (`tools/checksums.mjs`, suite `checksums`).
+- CI `.github/workflows/verify.yml`:
+  - `pull_request` rapido, notturno completo, `workflow_dispatch` (`suite`, `fork_block`, `ref`);
+  - action composita `setup-toolchain` con versioni bloccate, checksum e cache, più la verifica finale delle versioni
+    (`tools/ci/versions.mjs`);
+  - riepilogo di ogni job in `GITHUB_STEP_SUMMARY` e report come artefatti.
+- Runner: gruppi, profilo `quick`, `--retries`, `--skip`, riepilogo Markdown; nuove suite `lint`, `checksums`, `backup`,
+  `reproducible-build`, `docker-smoke`.
+- Build riproducibile: `tools/build-hash.mjs` (tree hash e manifest), confronto tra due job separati del CI.
+- Bacheca:
+  - immagine Docker (`deploy/book/Dockerfile`, utente `node`, base per digest);
+  - `deploy/compose.yaml` con Caddy (TLS), backup orario S3 (SigV4, `scripts/backup.mjs`) e rotazione dei log;
+  - smoke test autosufficiente;
+  - `docs/OPERATIONS.md`.
+- IPFS ed ENS:
+  - `tools/ipfs.mjs` (`cid` offline, `contenthash` EIP-1577, `pin` solo con `--confirm`);
+  - `tools/verify-served.mjs`;
+  - procedura in `docs/RELEASE.md`.
+- Testnet (preparata, non eseguita):
+  - `testnet.mjs plan|rehearse`, `post-deploy-check.mjs` (C1–C6) e `test-fill.mjs`;
+  - prova completa su fork di Sepolia e Base Sepolia.
+- App: `<h1>` visivamente nascosto "FONDACO"; axe senza `page-has-heading-one` (A4).
+- `REPORT.md` finale.
+
+### Modificato
+- `deploy.js` esporta `readState` e `mismatches`, usati dalla checklist post-deploy.
+- Test dell'app (D-54):
+  - il job `web-e2e` gira nell'immagine Playwright ufficiale bloccata per versione e digest;
+  - le baseline visive sono una sola serie, generata in quell'immagine (`tools/testkit/in-playwright.mjs`);
+  - rendering del testo fissato nel browser di test, con screenshot e campioni di layout solo con tutti i font caricati;
+  - un V1 fallito salva lo screenshot reale tra i report.
+- App: ripieghi di Geist Mono con metriche tarate (`size-adjust` e override) e preload dei woff2 400/500/600 (D-57).
+  `web-layout` campiona ogni vista con i webfont e con i woff2 bloccati (L1, L1b) e confronta la geometria (L5).
+- Smoke Docker: backup anche contro MinIO, costruito dal tag di rilascio perché le immagini pubbliche non esistono più (S7–S8,
+  D-58).
+
+### Corretto (con il test che lo copre)
+- Nessun difetto del prodotto.
+- Test dipendenti dalla macchina sul runner del CI: l'hinting completo dei glifi cambiava a capo e sovrapposizioni
+  (web-visual V1, web-layout L1). Correzione in D-54.
+
+## [Fase 6] — Test avanzati dell'app — 2026-11-04
+
+### Aggiunto
+- Suite `web-flows` (F1–F9 con saldi on-chain, console pulita), `web-perf`, `web-layout`, `web-a11y` e `web-visual`, nel runner.
+  Harness comune `apps/web/test/harness.mjs`: fork, contratto, bacheche, build servita con gzip, wallet EIP-6963 pilotabile
+  (rifiuto, cambio chain, gara).
+- Rilevatore di sovrapposizioni a campionamento di punti (D-44), axe-core 4.14, contrasto misurato, tastiera nei fogli,
+  regressione visiva con pixelmatch e baseline aggiornabili solo con `test:visual:update`. Ogni rilevatore ha il suo autotest.
+- App: offerta privata con link (D-47) e `txTimeoutSec` (D-50).
+- Book server: `GET /books` (D-45); sostituzione di un ordine `invalid_fee` rifirmato con lo stesso nonce (D-48).
+- `docs/PHASE6-RESULTS.md` con tutti i numeri.
+
+### Modificato
+- Avvio:
+  - `boot.js` precarica `config.json`, `/config` e `/books`;
+  - runtime del wallet caricato all'uso;
+  - client diviso in `plan.ts`, `guards.ts` ed `errors.ts` (API pubblica invariata);
+  - una sola copia di viem (`resolve.dedupe`);
+  - font in sottoinsiemi latini (D-46).
+- Risultato: bundle iniziale da 81 a 49 kB gzip, libro su Fast 3G da 4,85 a 1,8 s, Lighthouse Performance da 0,45 a 0,96.
+
+### Corretto (con il test che lo copre)
+- Rifirma con nonce nuovi: doppia esposizione se la fee tornava (E11b, F3b). La rifirma non alzava l'autorizzazione (F3b).
+- Client: offerta privata scartata in verifica per `SenderAllowanceLow` (F6b); rifiuto nel wallet non riconosciuto con due copie
+  di viem (F7a).
+- Layout shift all'avvio, CLS da 0,877 a 0,013 (P4); 400 in console per coppie fuori whitelist (T10, W16).
+- Etichetta Demo e tag "TU" sopra il contenuto (L1).
+- Focus trap: `[href]` contava le `<use>`, i gruppi di radio, il focus dato a un foglio ancora invisibile (A3).
+- Label in Name (A1); contrasto delle etichette del grafico e dell'hover (A2).
+- Messaggio dell'offerta privata coperto dal toast di connessione (F6b); "Eseguite 1 parti su 4" (F1c).
+
+### Risultati
+Vedi `docs/PHASE6-RESULTS.md`: **35 suite, 320 controlli, tutti verdi.** Foundry al primo giro ha avuto un timeout dell'RPC
+gratuito di fork; rilanciato, 29/29.
+
 ## [Riferimento v4.3] — Cambio del contratto di riferimento — 2026-11-04
 
 ### Modificato

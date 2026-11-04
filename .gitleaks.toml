@@ -1,0 +1,10 @@
+# gitleaks: default rules plus two narrow exceptions. Run: gitleaks git --config .gitleaks.toml (CI job supply-chain).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "public data, not secrets"
+# Ethereum addresses (20 bytes) are public. 32-byte hex strings (possible private keys) are NOT allowlisted.
+regexes = ['''^0x[0-9a-fA-F]{40}$''']
+# the key scanner's self-test plants fake key-shaped strings on purpose
+paths = ['''apps/web/scripts/scan-keys\.mjs''']

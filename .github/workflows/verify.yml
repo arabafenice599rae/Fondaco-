@@ -1,0 +1,327 @@
+# FONDACO verification. Four ways to run it:
+#   pull_request        quick profile (slow suites skipped, Foundry ci-quick profile, public fork RPC with retries)
+#   schedule (nightly)  full profile
+#   push of a v* tag    full profile, then the image is published (docker-publish)
+#   workflow_dispatch   by hand: Actions → verify → Run workflow, or  gh workflow run verify.yml -f suite=full [-f fork_block=…] [-f ref=…]
+# Secrets: FORK_RPC_URL (archive mainnet RPC, used by the nightly and manual runs; without it a public RPC is used with
+# 3 retries per fork suite), BASE_RPC_URL (optional, verify-source step 7). Every job writes its table to the run summary.
+name: verify
+
+on:
+  pull_request:
+  push:
+    tags: ["v*"]          # releases: full profile, then docker-publish
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: what to verify
+        type: choice
+        options: [full, quick, contracts, book-server, client, web]
+        default: full
+      fork_block:
+        description: mainnet block to fork
+        default: "23700000"
+      ref:
+        description: branch, tag or commit to verify (empty = the selected branch)
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.event_name == 'pull_request' && github.head_ref || inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORK_BLOCK: ${{ inputs.fork_block || '23700000' }}
+  REF: ${{ inputs.ref || github.sha }}
+
+jobs:
+  toolchain:
+    name: toolchain
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      profile: ${{ steps.plan.outputs.profile }}
+      lint: ${{ steps.plan.outputs.lint }}
+      unit: ${{ steps.plan.outputs.unit }}
+      fork: ${{ steps.plan.outputs.fork }}
+      foundry: ${{ steps.plan.outputs.foundry }}
+      web: ${{ steps.plan.outputs.web }}
+      supply: ${{ steps.plan.outputs.supply }}
+      repro: ${{ steps.plan.outputs.repro }}
+      docker: ${{ steps.plan.outputs.docker }}
+      groups: ${{ steps.plan.outputs.groups }}
+      retries: ${{ steps.plan.outputs.retries }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}", submodules: recursive }
+      - name: plan
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          SUITE: ${{ inputs.suite }}
+          HAS_RPC: ${{ secrets.FORK_RPC_URL != '' }}
+        run: |
+          s="$SUITE"; [ "$EVENT" = pull_request ] && s=quick; [ "$EVENT" = schedule ] && s=full; [ "$EVENT" = push ] && s=full
+          prof=full; [ "$s" = quick ] && prof=quick
+          all() { for k in lint unit fork foundry web supply repro docker; do echo "$k=$1" >> "$GITHUB_OUTPUT"; done; }
+          case "$s" in
+            full|quick) all true; groups="contracts,book-server,client,tools" ;;
+            contracts)   all false; for k in lint unit fork foundry supply; do echo "$k=true" >> "$GITHUB_OUTPUT"; done; groups=contracts ;;
+            book-server) all false; for k in lint unit fork docker; do echo "$k=true" >> "$GITHUB_OUTPUT"; done; groups=book-server ;;
+            client)      all false; for k in lint unit fork; do echo "$k=true" >> "$GITHUB_OUTPUT"; done; groups=client ;;
+            web)         all false; for k in lint web repro; do echo "$k=true" >> "$GITHUB_OUTPUT"; done; groups=web ;;
+          esac
+          retries=0; [ "$HAS_RPC" != true ] && retries=3
+          { echo "profile=$prof"; echo "groups=$groups"; echo "retries=$retries"; } >> "$GITHUB_OUTPUT"
+          { echo "### Plan"; echo; echo "| event | suite | profile | groups | fork block | fork RPC | ref |"; echo "|---|---|---|---|---|---|---|";
+            echo "| $EVENT | $s | $prof | $groups | $FORK_BLOCK | $([ "$HAS_RPC" = true ] && echo 'secret FORK_RPC_URL' || echo 'public, 3 retries') | $REF |"; echo; } >> "$GITHUB_STEP_SUMMARY"
+      - name: toolchain (warms the caches the other jobs reuse)
+        uses: ./.github/actions/setup-toolchain
+        with: { foundry: "true", solc: "true", playwright: "true", docker: "true", kubo: "true", gitleaks: "true" }
+
+  lint:
+    needs: toolchain
+    if: needs.toolchain.outputs.lint == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: ./.github/actions/setup-toolchain
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm check:generated
+      - run: node tools/testkit/run-suites.mjs lint checksums --report lint
+
+  unit:
+    needs: toolchain
+    if: needs.toolchain.outputs.unit == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      MAINNET_RPC_URL: ${{ secrets.FORK_RPC_URL || 'https://eth.drpc.org' }}
+      BASE_RPC_URL: ${{ secrets.BASE_RPC_URL || 'https://mainnet.base.org' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: ./.github/actions/setup-toolchain
+        with: { solc: "true" }
+      - run: pnpm build
+      - name: unit suites (book-server, client, contracts incl. verify-source vs the AirSwap deployment)
+        run: node tools/testkit/run-suites.mjs --unit --group ${{ needs.toolchain.outputs.groups }} --skip lint,checksums --report unit
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with: { name: reports-unit, path: reports/, if-no-files-found: ignore }
+
+  fork:
+    needs: toolchain
+    if: needs.toolchain.outputs.fork == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      MAINNET_RPC_URL: ${{ secrets.FORK_RPC_URL || 'https://eth.drpc.org' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: ./.github/actions/setup-toolchain
+        with: { foundry: "true" }
+      - run: pnpm build
+      - name: fork suites (anvil at the fixed block, one fresh fork per suite)
+        run: >-
+          node tools/testkit/run-suites.mjs --fork --group ${{ needs.toolchain.outputs.groups }} --skip foundry
+          --retries ${{ needs.toolchain.outputs.retries }} ${{ needs.toolchain.outputs.profile == 'quick' && '--profile quick' || '' }} --report fork
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with: { name: reports-fork, path: reports/, if-no-files-found: ignore }
+
+  foundry:
+    needs: toolchain
+    if: needs.toolchain.outputs.foundry == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MAINNET_RPC_URL: ${{ secrets.FORK_RPC_URL || 'https://eth.drpc.org' }}
+      FOUNDRY_PROFILE: ${{ needs.toolchain.outputs.profile == 'quick' && 'ci-quick' || 'default' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}", submodules: recursive }
+      - uses: ./.github/actions/setup-toolchain
+        with: { foundry: "true" }
+      - name: forge test (${{ env.FOUNDRY_PROFILE }} profile)
+        run: node tools/testkit/run-suites.mjs foundry --retries ${{ needs.toolchain.outputs.retries }} --report foundry
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with: { name: reports-foundry, path: reports/, if-no-files-found: ignore }
+
+  web-e2e:
+    needs: toolchain
+    if: needs.toolchain.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # the official Playwright image, pinned by version and digest (= tools/ci/toolchain.json playwrightImage.ref, checked by
+    # versions.mjs): the visual baselines are generated in the same image (tools/testkit/in-playwright.mjs), D-54
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host --init
+    env:
+      MAINNET_RPC_URL: ${{ secrets.FORK_RPC_URL || 'https://eth.drpc.org' }}
+      FONDACO_PW_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: ./.github/actions/setup-toolchain
+        with: { foundry: "true", playwright: image }
+      - run: pnpm build
+      - name: web suites (model, keys, layout, a11y, visual, e2e, flows, Lighthouse)
+        run: >-
+          node tools/testkit/run-suites.mjs --group web --skip reproducible-build
+          --retries ${{ needs.toolchain.outputs.retries }} --report web
+      - name: screenshots (demo build, 390 and 1440)
+        if: always()
+        run: node apps/web/scripts/screenshots.mjs reports/screenshots
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with: { name: reports-web, path: reports/, if-no-files-found: ignore }
+
+  supply-chain:
+    needs: toolchain
+    if: needs.toolchain.outputs.supply == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}", fetch-depth: 0 }
+      - uses: ./.github/actions/setup-toolchain
+        with: { gitleaks: "true" }
+      - name: pnpm audit (fails on high/critical)
+        run: |
+          pnpm audit --json > reports-audit.json || true
+          node -e "const m=require('./reports-audit.json').metadata.vulnerabilities; console.log(m); require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### pnpm audit\n\n| critical | high | moderate | low |\n|---|---|---|---|\n| '+[m.critical,m.high,m.moderate,m.low].join(' | ')+' |\n\n'); process.exit(m.critical+m.high ? 1 : 0)"
+      - name: lockfile is frozen (install did not change it)
+        run: git diff --exit-code pnpm-lock.yaml
+      - name: gitleaks (whole history)
+        run: gitleaks git --config .gitleaks.toml --redact --report-path reports-gitleaks.json .
+      - name: SHA256SUMS (fixture, audit report, fonts)
+        run: node tools/testkit/run-suites.mjs checksums --report checksums
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with: { name: reports-supply-chain, path: "reports-*.json", if-no-files-found: ignore }
+
+  reproducible-build-a:
+    needs: toolchain
+    if: needs.toolchain.outputs.repro == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      hash: ${{ steps.h.outputs.hash }}
+      cid: ${{ steps.h.outputs.cid }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: ./.github/actions/setup-toolchain
+        with: { kubo: "true" }
+      - id: h
+        name: build a → tree hash and IPFS CID
+        run: |
+          pnpm --filter @fondaco/client build
+          out="$RUNNER_TEMP/web-a"; (cd apps/web && pnpm exec vite build --outDir "$out" --emptyOutDir)
+          hash=$(node tools/build-hash.mjs "$out"); cid=$(node tools/ipfs.mjs cid "$out")
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"; echo "cid=$cid" >> "$GITHUB_OUTPUT"
+          echo "build a: $hash · $cid" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: web-build-a-manifest, path: reports/build-manifest.txt }
+
+  reproducible-build-b:
+    needs: toolchain
+    if: needs.toolchain.outputs.repro == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      hash: ${{ steps.h.outputs.hash }}
+      cid: ${{ steps.h.outputs.cid }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: ./.github/actions/setup-toolchain
+        with: { kubo: "true" }
+      - id: h
+        name: build b → tree hash and IPFS CID
+        run: |
+          pnpm --filter @fondaco/client build
+          out="$RUNNER_TEMP/web-b"; (cd apps/web && pnpm exec vite build --outDir "$out" --emptyOutDir)
+          hash=$(node tools/build-hash.mjs "$out"); cid=$(node tools/ipfs.mjs cid "$out")
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"; echo "cid=$cid" >> "$GITHUB_OUTPUT"
+          echo "build b: $hash · $cid" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: web-build-b-manifest, path: reports/build-manifest.txt }
+
+  reproducible-compare:
+    needs: [reproducible-build-a, reproducible-build-b]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: same commit → same build (twice, separate jobs)
+        env:
+          HA: ${{ needs.reproducible-build-a.outputs.hash }}
+          HB: ${{ needs.reproducible-build-b.outputs.hash }}
+          CA: ${{ needs.reproducible-build-a.outputs.cid }}
+          CB: ${{ needs.reproducible-build-b.outputs.cid }}
+        run: |
+          { echo "### Reproducible build"; echo; echo "| | tree hash | IPFS CID |"; echo "|---|---|---|"; echo "| build a | \`$HA\` | \`$CA\` |"; echo "| build b | \`$HB\` | \`$CB\` |"; echo; } >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$HA" ] && [ "$HA" = "$HB" ] && [ -n "$CA" ] && [ "$CA" = "$CB" ] && echo "identical: $HA $CA" || { echo "builds differ"; exit 1; }
+
+  docker:
+    needs: toolchain
+    if: needs.toolchain.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: ./.github/actions/setup-toolchain
+        with: { foundry: "true", docker: "true" }
+      - name: build the book image
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        with: { context: ., file: deploy/book/Dockerfile, load: true, tags: "fondaco-book:smoke", build-args: "VERSION=${{ github.sha }}" }
+      - name: MinIO for the backup smoke (built from its release tag, D-58; never published)
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        with: { context: deploy/minio, load: true, tags: "fondaco-minio:smoke" }
+      - name: compose smoke test (book + Caddy + backup over HTTPS; backups to the SigV4 stub and to MinIO)
+        run: node tools/testkit/run-suites.mjs docker-smoke --report docker
+
+  docker-publish:
+    needs: [docker, toolchain]
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/fondaco-book
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - id: push
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        with:
+          context: .
+          file: deploy/book/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+      - run: |
+          { echo "### Image"; echo; echo "\`ghcr.io/${{ github.repository_owner }}/fondaco-book@${{ steps.push.outputs.digest }}\`"; echo; echo "${{ steps.meta.outputs.tags }}"; } >> "$GITHUB_STEP_SUMMARY"

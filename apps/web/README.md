@@ -27,6 +27,7 @@ Serve `dist/` with any static host. URLs are relative, so the app also works und
 | `defaultChain` | initial chain |
 | `chains.<id>.rpc` | public RPC for reads (empty: reads go through the wallet). **Never an RPC with a key**: the build is public |
 | `chains.<id>.swap` | SwapERC20 address; `null` = not deployed there → trading disabled with an explicit notice |
+| `txTimeoutSec` | how long to wait for a transaction to be mined before stopping the remaining orders (default 300, 5–3600) |
 | `chains.<id>.tokens` | tokens the app shows. A pair appears only if the book lists it **and** both tokens are here: a book cannot add tokens |
 
 **Impostazioni** (gear in the header; on phones, inside the Wallet sheet) lets the user change the book URL and the RPC of each chain. Changes are
@@ -51,6 +52,9 @@ only after opening an explicit warning and ticking its acknowledgement.
 | `protocolFeeLight ≠ protocolFee` in `/config`, or an SSE `governance` event | Parametri del contratto modificati | allowed, with warning |
 | no market between configured tokens | Nessun mercato (empty state) | blocked |
 
+**Private offers**: in Proponi, "Solo per un indirizzo" signs the offer for one counterparty (senderWallet): it never appears in
+the book; "Copia link" in Le mie offerte gives `…#offerta=<hash>`, which opens it in the confirmation sheet for that address only.
+
 My offers that the book considers dead (`invalid_signer`) but that are still `executableOnChain` show
 "Questa offerta può ancora essere eseguita" with **Annulla ora**, a protected on-chain `cancel`.
 
@@ -62,6 +66,11 @@ My offers that the book considers dead (`invalid_signer`) but that are still `ex
 | `pnpm --filter @fondaco/web test:unit` | state logic: indicative/verified quote, order and offer states, exact ladder terms, chart series, banners, settings, API client (stale, ETag, SSE backoff) |
 | `pnpm --filter @fondaco/web test:keys` | builds production and demo, fails on `alchemy`, `infura`, `sk_`, `apiKey=` or key-bearing RPC URLs; self-tests the scanner; checks the demo code is absent from production |
 | `node tools/testkit/run-suites.mjs web-e2e` | Playwright on anvil + **two** book servers + the static build + an injected EIP-6963 wallet (see below) |
+| `… run-suites.mjs web-flows` | Phase 6 flows F1–F9 on the fork, balances checked on-chain, clean console |
+| `… run-suites.mjs web-perf` | initial bundle ≤ 60 kB gzip, fonts ≤ 130 kB, book on screen ≤ 2 s on Fast 3G, Lighthouse mobile ≥ 0.90 |
+| `… web-layout`, `web-a11y`, `web-visual` | overlap detector (7 viewports), axe + measured contrast + keyboard, visual regression (`test:visual:update` to change baselines) |
+
+Results and numbers: [`docs/PHASE6-RESULTS.md`](../../docs/PHASE6-RESULTS.md).
 
 The e2e test (`test/e2e.mjs`) covers:
 - publishing an offer from the app (exact approve, EIP-712, POST);

@@ -1,11 +1,17 @@
 // Live backend: the book server (API + SSE) for offers, the user's wallet for everything on-chain.
 import { getAddress, type Address, type Hex } from 'viem'
-import { createTaker, createSubmitter, cancelOrders, protectionStatus, createRpcConfirmations, type ProtectionStatus, type TakerEvent, type VerifiedQuote } from '@fondaco/client'
+import { protectionStatus, createRpcConfirmations, type ProtectionStatus, type TakerEvent, type VerifiedQuote } from '@fondaco/client'
 import { BookApi, type BookChainConfig, type Trade } from './api.js'
-import { Wallet, viemChain, readFunds, approve, randomNonce } from './wallet.js'
+import { guessPairs } from './prefetch.js'
+import { Wallet, randomNonce } from './wallet.js'
+import type { PublicClient, WalletClient } from 'viem'
+
+/** viem clients, balances, approvals and execution: loaded on first use, off the path that shows the book */
+const rt = () => import('./wallet-rt.js')
 import { chainNotice, feeOf, type BookEntry, type CandleResponse, type Market, type MyOrder, type OrderTerms } from './model.js'
 import type { Effective } from './config.js'
-import type { Backend, Notice, PublishResult, TakerLike } from './backend.js'
+import type { Backend, Notice, PublishResult, SignedOrderView, TakerLike } from './backend.js'
+export type { SignedOrderView }
 
 const ORDER_TYPES = {
   OrderERC20: [
@@ -68,9 +74,22 @@ export class LiveBackend implements Backend {
 
   private async loadConfig(): Promise<void> {
     if (!this.api) { this.bookError = 'Nessuna bacheca configurata: impostane una in Impostazioni.'; this.emit('status'); return }
+    // first paint of the book in one round trip: ask /config and the books of the pairs this app can show at the same time
+    const guess = this.guessMarkets()
+    const batch = (this.api as BookApi).books(this.chain, guess.map((m) => ({ base: m.base.address, quote: m.quote.address })))
+    const early = new Map(guess.map((m) => [m.id, batch.then((b) => b?.get(`${m.base.address}:${m.quote.address}`.toLowerCase()) ?? null)] as const))
     try { this.bookCfg = await this.api.config(); this.bookError = null } catch (e) { this.bookCfg = null; this.bookError = `Bacheca non raggiungibile (${(e as Error).message}).` }
     this.rebuildMarkets()
-    await this.refreshAll()
+    let allEarly = !!this.bookCfg
+    if (this.bookCfg) {
+      for (const m of this.mkts) {
+        const r = await early.get(m.id)
+        if (r?.status === 'ok') this.books.set(m.id, { asks: r.asks, bids: r.bids }); else allEarly = false
+        if (r?.status === 'stale') this.stale = r.message
+      }
+      if (allEarly) this.emit('book')
+    }
+    await this.refreshAll(allEarly)
   }
 
   /** Markets = the book's markets whose BOTH tokens are in the app's own configuration (address match). */
@@ -105,17 +124,23 @@ export class LiveBackend implements Backend {
     }
   }
 
-  async refreshAll(): Promise<void> {
+  /** Pairs between the app's tokens, oriented like the book's default (same rule as prefetch.ts, which asked for them already). */
+  private guessMarkets(): Market[] {
+    const toks = this.cfg.chains[String(this.chain)]?.tokens ?? {}
+    return guessPairs(toks).map((p) => ({ id: p.id, base: toks[p.base as Address] as Market['base'], quote: toks[p.quote as Address] as Market['quote'] }))
+  }
+
+  async refreshAll(booksFresh = false): Promise<void> {
     if (this.api && !this.bookCfg) { await this.loadConfigQuiet() }
-    await Promise.all([this.refreshBooks(), this.refreshTrades(), this.refreshMine(), this.refreshFunds()])
+    await Promise.all([booksFresh ? Promise.resolve() : this.refreshBooks(false), this.refreshTrades(), this.refreshMine(), this.refreshFunds()])
     this.emit('all')
   }
   private async loadConfigQuiet(): Promise<void> {
     try { this.bookCfg = await (this.api as BookApi).config(); this.bookError = null; this.rebuildMarkets() } catch { /* keep the error */ }
   }
-  private async refreshBooks(): Promise<void> {
+  private async refreshBooks(withConfig = true): Promise<void> {
     if (!this.api) return
-    try { this.bookCfg = await this.api.config(); this.rebuildMarkets() } catch { /* the book call below reports it */ }
+    if (withConfig) try { this.bookCfg = await this.api.config(); this.rebuildMarkets() } catch { /* the book call below reports it */ }
     const rs = await Promise.all(this.mkts.map(async (m) => [m, await (this.api as BookApi).book(this.chain, m.base.address, m.quote.address, m.id === this.focused ? 100 : 30)] as const))
     let stale: string | null = null, anyOk = false
     for (const [m, r] of rs) {
@@ -148,10 +173,11 @@ export class LiveBackend implements Backend {
   }
   async refreshFunds(): Promise<void> {
     const me = this.account()
-    const pc = this.clients().publicClient
-    if (!me || !pc) { this.fundsByToken = null; this.emit('funds'); return }
+    if (!me) { this.fundsByToken = null; this.emit('funds'); return }
+    const r = await rt(), pc = (await this.clients()).publicClient
+    if (!pc) { this.fundsByToken = null; this.emit('funds'); return }
     const tokens = Object.keys(this.cfg.chains[String(this.chain)]?.tokens ?? {}) as Address[]
-    try { this.fundsByToken = await readFunds(pc, me, tokens, this.swapAddress()); this.emit('funds') } catch { /* keep the last values */ }
+    try { this.fundsByToken = await r.readFunds(pc, me, tokens, this.swapAddress()); this.emit('funds') } catch { /* keep the last values */ }
   }
 
   // ------------------------------------------------------------------ reads
@@ -188,9 +214,10 @@ export class LiveBackend implements Backend {
   }
 
   // ------------------------------------------------------------------ wallet
-  private clients() {
+  private async clients(): Promise<{ publicClient: PublicClient | null; walletClient: WalletClient | null }> {
     const c = this.cfg.chains[String(this.chain)] as Effective['chains'][string]
-    return this.wallet.clients(viemChain(this.chain, c.name, c.rpc))
+    const r = await rt()
+    return r.clientsFor(this.wallet, r.viemChain(this.chain, c.name, c.rpc))
   }
   wallets() { return this.wallet.state.wallets }
   selectedWallet() { return this.wallet.state.selected }
@@ -215,26 +242,30 @@ export class LiveBackend implements Backend {
   setRpcConfirmed(on: boolean): void { const r = this.wallet.state.selected?.info.rdns; if (r) this.confirmations.set(r, this.chain, on); this.emit('wallet') }
 
   // ------------------------------------------------------------------ actions
-  private need(): { pc: NonNullable<ReturnType<LiveBackend['clients']>['publicClient']>; wc: NonNullable<ReturnType<LiveBackend['clients']>['walletClient']>; swap: Address } {
-    const { publicClient, walletClient } = this.clients()
+  private async need(): Promise<{ pc: PublicClient; wc: WalletClient; swap: Address }> {
+    const { publicClient, walletClient } = await this.clients()
     const swap = this.swapAddress()
     if (!walletClient || !publicClient) throw new Error('Collega il wallet sulla rete selezionata.')
     if (!swap) throw new Error('Contratto non configurato su questa rete.')
     return { pc: publicClient, wc: walletClient, swap }
   }
   taker(onUpdate: (e: TakerEvent) => void): TakerLike {
-    const { pc, wc, swap } = this.need()
-    // a browser wallet sends through its own RPC: wallet mode (protection depends on the wallet, shown in the MEV row)
-    const submitter = createSubmitter({ publicClient: pc, walletClient: wc, chainId: this.chain })
-    const t = createTaker({ publicClient: pc, walletClient: wc, swap, submitter, onUpdate })
+    const make = async () => {
+      const [{ pc, wc, swap }, r] = await Promise.all([this.need(), rt()])
+      // a browser wallet sends through its own RPC: wallet mode (protection depends on the wallet, shown in the MEV row)
+      const submitter = r.createSubmitter({ publicClient: pc, walletClient: wc, chainId: this.chain })
+      return r.createTaker({ publicClient: pc, walletClient: wc, swap, submitter, onUpdate, timeoutMs: this.cfg.txTimeoutSec * 1000 })
+    }
+    const t = make()
+    t.catch(() => { /* reported by verify/execute */ })
     return {
-      verify: (p) => t.verify(p),
-      execute: async (q, o) => { const r = await t.execute(q, o); void this.refreshFunds(); void this.refreshMine(); return r },
+      verify: async (p) => (await t).verify(p),
+      execute: async (q, o) => { const res = await (await t).execute(q, o); void this.refreshFunds(); void this.refreshMine(); return res },
     }
   }
   async estimateGasWei(q: VerifiedQuote): Promise<bigint | null> {
     try {
-      const { pc, swap } = this.need()
+      const { pc, swap } = await this.need()
       const leg = q.legs[0]
       const me = this.account()
       if (!leg || !me) return null
@@ -246,34 +277,39 @@ export class LiveBackend implements Backend {
     } catch { return null }
   }
   async approveFor(token: Address, amount: bigint): Promise<void> {
-    const { pc, wc, swap } = this.need()
-    await approve(pc, wc, token, swap, amount, this.fundsByToken?.[token]?.allowance ?? 0n)
+    const [{ pc, wc, swap }, r] = await Promise.all([this.need(), rt()])
+    await r.approve(pc, wc, token, swap, amount, this.fundsByToken?.[token]?.allowance ?? 0n)
     await this.refreshFunds()
   }
 
   /** Sign each part (EIP-712, domain from the APP's contract and chain) and post them as one batch. */
-  async publish(terms: OrderTerms[], expirySec: number): Promise<PublishResult> {
-    const { wc, swap } = this.need()
+  async publish(terms: OrderTerms[], expirySec: number, counterparty: Address | null = null): Promise<PublishResult> {
+    const { wc, swap } = await this.need()
     const me = this.account() as Address
     const fee = this.protocolFee()
     const domain = { name: 'SWAP_ERC20', version: '4.3', chainId: this.chain, verifyingContract: swap } as const
     const signed = []
     for (const t of terms) {
-      const message = { nonce: randomNonce(), expiry: BigInt(expirySec), signerWallet: me, signerToken: t.signerToken, signerAmount: t.signerAmount, protocolFee: fee,
-        senderWallet: ZERO as Address, senderToken: t.senderToken, senderAmount: t.senderAmount }
+      const message = { nonce: t.nonce ?? randomNonce(), expiry: BigInt(expirySec), signerWallet: me, signerToken: t.signerToken, signerAmount: t.signerAmount, protocolFee: fee,
+        senderWallet: (counterparty ?? ZERO) as Address, senderToken: t.senderToken, senderAmount: t.senderAmount }
       const sig = await wc.signTypedData({ account: me, domain, types: ORDER_TYPES, primaryType: 'OrderERC20', message })
       signed.push({ ...Object.fromEntries(Object.entries(message).map(([k, v]) => [k, String(v)])), v: parseInt(sig.slice(130, 132), 16), r: `0x${sig.slice(2, 66)}` as Hex, s: `0x${sig.slice(66, 130)}` as Hex })
     }
     const res = await (this.api as BookApi).submit(this.chain, signed)
     await this.refreshMine()
     void this.refreshBooks()
-    return { ok: res.filter((r) => r.hash).length, errors: [...new Set(res.filter((r) => r.error).map((r) => r.message ?? r.error ?? 'errore'))] }
+    return { ok: res.filter((r) => r.hash).length, hashes: res.filter((r) => r.hash).map((r) => r.hash as string), errors: [...new Set(res.filter((r) => r.error).map((r) => r.message ?? r.error ?? 'errore'))] }
+  }
+  async privateOrder(hash: string) {
+    if (!this.api || !/^0x[0-9a-fA-F]{64}$/.test(hash)) return null
+    const o = await this.api.order(hash)
+    return o && o.order.senderWallet && getAddress(String(o.order.senderWallet)) !== ZERO ? o : null
   }
 
   async cancel(nonces: string[]) {
-    const { pc, wc, swap } = this.need()
-    const submitter = createSubmitter({ publicClient: pc, walletClient: wc, chainId: this.chain })
-    const r = await cancelOrders({ publicClient: pc, walletClient: wc, submitter, swap, nonces })
+    const [{ pc, wc, swap }, m] = await Promise.all([this.need(), rt()])
+    const submitter = m.createSubmitter({ publicClient: pc, walletClient: wc, chainId: this.chain })
+    const r = await m.cancelOrders({ publicClient: pc, walletClient: wc, submitter, swap, nonces })
     await this.refreshMine()
     return r
   }

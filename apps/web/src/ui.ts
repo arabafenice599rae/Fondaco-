@@ -20,7 +20,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   const S = {
     tab: 'swap' as Tab, tabDir: 0, mode: 'swap' as 'swap' | 'make', mkt: '', detail: false, at: 'book' as 'book' | 'trades', tf: 288, filter: 'all', search: '', msearch: '', psearch: '',
     ofilter: 'attive' as 'attive' | 'storico', details: false, pay: '', recv: '', amount: '',
-    mk: { give: '', get: '', amount: '', mode: 'market' as 'market' | 'fast' | 'custom', custom: '', exp: '1h' as '1h' | '24h' | '7d', partial: true, ack: false },
+    mk: { give: '', get: '', amount: '', mode: 'market' as 'market' | 'fast' | 'custom', custom: '', exp: '1h' as '1h' | '24h' | '7d', partial: true, ack: false, priv: false, cp: '' },
     confirmAll: false, rot: 0, _rk: '', _ra: 0, _mm: '', _mp: 0,
   }
   const flash = new Map<string, number>(), mflash = new Map<string, { t: number; dir: number }>(), lastMid = new Map<string, number>()
@@ -143,7 +143,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   // ---------------------------------------------------------------- render: ticket
   function renderSwap() {
     const pt = tok(S.pay), rt = tok(S.recv)
-    $('pay-tok').innerHTML = pt ? tokBtn(S.pay) : '—'; $('recv-tok').innerHTML = rt ? tokBtn(S.recv) : '—'
+    $('pay-tok').innerHTML = pt ? tokBtn(S.pay, 'scegli la moneta da pagare') : '—'; $('recv-tok').innerHTML = rt ? tokBtn(S.recv, 'scegli la moneta da ricevere') : '—'
     $('pay-bal').textContent = fbal(S.pay); $('recv-bal').textContent = fbal(S.recv)
     $('recip-addr').textContent = shortAddr(me())
     const pin = $i('pay-in')
@@ -195,7 +195,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
 
   function renderMake() {
     const k = S.mk, I = mkInfo(), amount = num(k.amount)
-    $('mk-give').innerHTML = tok(k.give) ? tokBtn(k.give) : '—'; $('mk-get').innerHTML = tok(k.get) ? tokBtn(k.get) : '—'
+    $('mk-give').innerHTML = tok(k.give) ? tokBtn(k.give, 'scegli la moneta che dai') : '—'; $('mk-get').innerHTML = tok(k.get) ? tokBtn(k.get, 'scegli la moneta che ricevi') : '—'
     $('mk-bal').textContent = fbal(k.give)
     const min = $i('mk-in')
     if (document.activeElement !== min) min.value = k.amount
@@ -233,8 +233,11 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     else { ptx.textContent = better === 1 ? '1 offerta è più conveniente della tua' : better + ' offerte sono più convenienti della tua'; ptx.className = 'pos warn' }
     setSeg($('exp-seg'), ['1h', '24h', '7d'].indexOf(k.exp)); pressed($('exp-seg'), 'exp', k.exp)
     $i('partial').checked = k.partial
-    $('partial-note').textContent = k.partial ? `In 4 parti da ${fa(k.give, amount / 4)} ${k.give}` : 'Solo in un’unica soluzione'
-    $('parts').innerHTML = '<span></span>'.repeat(k.partial ? 4 : 1)
+    $('partial-note').textContent = k.priv ? 'Un’offerta privata è in un’unica soluzione' : k.partial ? `In 4 parti da ${fa(k.give, amount / 4)} ${k.give}` : 'Solo in un’unica soluzione'
+    $i('partial').disabled = k.priv
+    $i('mk-private').checked = k.priv; $('cp-wrap').hidden = !k.priv
+    if (document.activeElement !== $('mk-cp')) $i('mk-cp').value = k.cp
+    $('parts').innerHTML = '<span></span>'.repeat(k.partial && !k.priv ? 4 : 1)
     const recv = price > 0 ? (sell ? amount * price : amount / price) : 0
     tween($('mk-recv'), recv, (v) => fa(k.get, v) + ' ' + k.get)
     const feeBps = Number(B.protocolFee()) / 10_000
@@ -253,6 +256,8 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     $('exp-note').hidden = k.exp !== '7d'
     const b = bal(k.give), block = blocking()
     const err = block ? `${block.title}: ${block.text}` : amount <= 0 ? 'Scrivi quanto vuoi ' + (sell ? 'vendere.' : 'spendere.') : price <= 0 ? 'Scrivi un prezzo valido.'
+      : k.priv && !cpAddress() ? (k.cp.trim() ? 'Indirizzo della controparte non valido.' : 'Scrivi l’indirizzo di chi può accettare l’offerta.')
+      : k.priv && me() && cpAddress() === me() ? 'La controparte non può essere il tuo stesso indirizzo.'
       : b == null ? 'Collega il wallet per pubblicare.' : amount * (1 + feeBps) > b + 1e-12 ? `Saldo insufficiente: servono ${fa(k.give, amount * (1 + feeBps))} ${k.give}, commissione inclusa.` : ''
     $('mk-error').hidden = !err; $('mk-error').textContent = err
     pub.disabled = (!!err && !(b == null && !block && amount > 0 && price > 0)) || (g.level === 'danger' && !k.ack) || busyPublish
@@ -329,9 +334,10 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     const key = (side: string, l: Level) => `${m.id}|${side}|${l.p}`
     const row = (l: Level, side: 'ask' | 'bid', depth: number, i: number) => {
       const fk = flash.get(key(side, l)), fl = fk && now - fk < 1200 ? ' flash' : ''
-      return `<button type="button" class="lvl ${side}${fl}" data-side="${side}" data-i="${i}" aria-label="${side === 'ask' ? 'Compra' : 'Vendi'} fino a ${fq(Bs, l.q)} ${Bs} a ${fp(l.p)} ${Q}">` +
+      // name = the visible cells, then the action for screen readers (WCAG 2.5.3: the name contains the visible text)
+      return `<button type="button" class="lvl ${side}${fl}" data-side="${side}" data-i="${i}">` +
         `<span class="lvl-bar" style="width:${Math.round((depth / max) * 100)}%"></span><span class="p">${fp(l.p)}${l.own ? '<span class="you-tag">TU</span>' : ''}</span>` +
-        `<span class="r">${fq(Bs, l.q)}</span><span class="r t">${fmt(l.p * l.q, tdec)}</span></button>`
+        `<span class="r">${fq(Bs, l.q)}</span><span class="r t">${fmt(l.p * l.q, tdec)}</span><span class="sr-only"> · ${side === 'ask' ? 'compra' : 'vendi'} fino a ${fq(Bs, l.q)} ${Bs} a ${fp(l.p)} ${Q}</span></button>`
     }
     $('asks').innerHTML = v.asks.length ? v.asks.map((l, i) => row(l, 'ask', ca[i] as number, i)).reverse().join('') : '<p class="empty">Nessuna offerta di vendita</p>'
     $('bids').innerHTML = v.bids.length ? v.bids.map((l, i) => row(l, 'bid', cb[i] as number, i)).join('') : '<p class="empty">Nessuna offerta di acquisto</p>'
@@ -426,7 +432,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
         : o.status === 'resign' ? '<span class="status warn">Da rifirmare</span>' : '<span class="status warn">Ancora eseguibile</span>'
       const mm = mids()[m.id] ?? 0
       const staleNote = o.stale ? `<p class="o-stale">Il mercato si è spostato: ora ${fp(mm)} ${Q}. Chi accetta guadagna ${fmt((Math.abs(mm - o.price) / mm) * 100, 1, 1)}% su di te. Valuta di annullarla e rifarla.</p>` : ''
-      const info = staleNote + (o.status === 'active' ? `<div class="o-meta"><span>${o.parts > 1 ? `Eseguite ${o.filled} parti su ${o.parts}` : 'In attesa di chi accetta'}</span><span>Scade ${esc(until(o.expiry, B.nowSec()))}</span></div>`
+      const info = staleNote + (o.status === 'active' ? `<div class="o-meta"><span>${o.parts > 1 ? `Eseguite ${o.filled} su ${o.parts}` : 'In attesa di chi accetta'}</span><span>Scade ${esc(until(o.expiry, B.nowSec()))}</span></div>`
         : o.status === 'paused' ? `<p class="o-note">Il saldo copre ${o.funded} parti su ${o.parts - o.filled}: le altre restano nascoste finché non aggiungi fondi.</p>`
         : o.status === 'resign' ? '<p class="o-note">La commissione della piattaforma è cambiata. Rifirma per rimetterla in vendita, senza costi.</p>'
         : '<p class="o-stale">Questa offerta può ancora essere eseguita: annullala. La bacheca non la mostra più, ma la firma è di nuovo valida sulla blockchain e chiunque ne abbia una copia può usarla.</p>')
@@ -434,7 +440,8 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
         : o.status === 'paused' ? `<button type="button" class="btn accent block" data-act="fund" data-key="${esc(o.key)}">Aggiungi fondi</button>`
         : o.status === 'resign' ? `<button type="button" class="btn accent block" data-act="resign" data-key="${esc(o.key)}">Rifirma · gratis</button>`
         : `<button type="button" class="btn accent block" data-act="cancel" data-key="${esc(o.key)}"><svg class="ic sm" aria-hidden="true"><use href="#i-shield"/></svg>Annulla ora</button>`
-      return `<article class="offer${o.status !== 'active' ? ' attn' : ''}" data-offer="${esc(o.status)}"><div class="o-top"><div><div class="o-mkt">${coins2(Bs, Q, 18)}${esc(Bs)} / ${esc(Q)}</div><div class="o-title">${esc(title)}</div><div class="o-sub">${esc(sub)}</div></div>${status}</div>${o.parts > 1 ? segbar(o) : ''}${info}${act}</article>`
+      const priv = o.privateFor ? `<div class="o-meta o-priv"><span>Privata per <span class="mono">${esc(shortAddr(o.privateFor))}</span></span><button type="button" class="linkbtn" data-act="link" data-hash="${esc(o.orders[0]?.hash ?? '')}">Copia link</button></div>` : ''
+      return `<article class="offer${o.status !== 'active' ? ' attn' : ''}" data-offer="${esc(o.status)}"${o.privateFor ? ' data-private="1"' : ''}><div class="o-top"><div><div class="o-mkt">${coins2(Bs, Q, 18)}${esc(Bs)} / ${esc(Q)}</div><div class="o-title">${esc(title)}</div><div class="o-sub">${esc(sub)}</div></div>${status}</div>${o.parts > 1 ? segbar(o) : ''}${info}${priv}${act}</article>`
     }).join('') + '</div>'
     h += S.confirmAll
       ? `<div class="confirm-all"><b>Annullare tutte le ${live.length} offerte?</b><span class="o-note">Una sola transazione le invalida sulla blockchain. ${esc(protNote())}</span><div class="two"><button type="button" class="btn" data-ca="no">Tieni</button><button type="button" class="btn accent" data-ca="yes">Annulla tutte</button></div></div>`
@@ -501,8 +508,11 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   let lastFocus: HTMLElement | null = null
   function openSheet(id: string, focusEl?: HTMLElement) {
     const s = $(id); lastFocus = document.activeElement as HTMLElement | null; s.hidden = false; openSheets.add(id)
-    requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add('open')))
-    ;(focusEl || (s.querySelector('button') as HTMLElement)).focus({ preventScroll: true })
+    // focus once the sheet is shown: focusing inside a still-invisible sheet fails silently (focus stayed on the page)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      s.classList.add('open')
+      if (openSheets.has(id)) (focusEl || (s.querySelector('button') as HTMLElement)).focus({ preventScroll: true })
+    }))
   }
   function closeSheet(id: string) {
     if (!openSheets.has(id)) return
@@ -510,11 +520,31 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     setTimeout(() => { if (!openSheets.has(id)) s.hidden = true }, RM.matches ? 0 : 340)
     lastFocus?.focus?.({ preventScroll: true })
   }
+  /** Tab stops of a sheet: visible, enabled, and one per radio group (the checked one, else the first) — as the browser tabs. */
+  const tabStops = (root: HTMLElement): HTMLElement[] => {
+    const all = [...root.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),a[href],select,textarea,[tabindex]:not([tabindex="-1"])')].filter((x) => x.checkVisibility({ visibilityProperty: true }))
+    const groups = new Set<string>()
+    return all.filter((x) => {
+      if (!(x instanceof HTMLInputElement) || x.type !== 'radio' || !x.name) return true
+      if (groups.has(x.name)) return false
+      const pick = all.find((y) => y instanceof HTMLInputElement && y.type === 'radio' && y.name === x.name && y.checked) ?? x
+      if (pick !== x) return false
+      groups.add(x.name); return true
+    })
+  }
+  let tabBack = false
+  // safety net: whatever moves focus out of the open sheet (a tab stop we did not foresee), bring it back in
+  document.addEventListener('focusin', (e) => {
+    const open = [...openSheets].pop(); if (!open) return
+    const s = $(open); if (s.contains(e.target as Node)) return
+    const f = tabStops(s); (tabBack ? f[f.length - 1] : f[0])?.focus({ preventScroll: true })
+  })
   document.addEventListener('keydown', (e) => {
     const open = [...openSheets].pop()
+    if (e.key === 'Tab') tabBack = e.shiftKey
     if (e.key === 'Tab' && open) {
       // keep keyboard focus inside the open sheet
-      const f = [...$(open).querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),[href],select,textarea,[tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null)
+      const f = tabStops($(open))
       if (!f.length) return
       const first = f[0] as HTMLElement, last = f[f.length - 1] as HTMLElement
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
@@ -674,12 +704,18 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     const P: Pend = { m, buy, pay: S.pay, recv: S.recv, verified: null, plan: q.plan,
       orders: q.plan.legs.map((l) => { const e = side.find((x) => x.hash === l.hash); return { hash: l.hash, p: e?.price ?? 0, base: units(buy ? l.order.signerAmount : l.order.senderAmount, m.base.decimals),
         pay: units(l.order.senderAmount, payT.decimals), out: units(l.order.signerAmount, recvT.decimals), st: 'wait' as OSt } }) }
+    await runConfirm(P)
+  })
+
+  /** Confirmation sheet for a plan (from the book, or a private offer): verify → authorize → one transaction per order. */
+  async function runConfirm(P: Pend) {
     pending = P
-    $('c-pay-tok').innerHTML = coin(S.pay, 26) + esc(S.pay); $('c-recv-tok').innerHTML = coin(S.recv, 26) + esc(S.recv)
+    if (!P.plan.legs.some((l) => l.order.senderWallet !== '0x0000000000000000000000000000000000000000')) $('c-title').textContent = 'Conferma lo scambio'
+    $('c-pay-tok').innerHTML = coin(P.pay, 26) + esc(P.pay); $('c-recv-tok').innerHTML = coin(P.recv, 26) + esc(P.recv)
     { const q0 = quoteState(null, P.orders.length); $('c-qs').className = 'qs ' + q0.cls; $('c-qs').textContent = q0.label; $('c-qs-t').textContent = q0.text }
     $('c-recip').textContent = shortAddr(me()); $('c-contract').textContent = 'SwapERC20 ' + shortAddr(B.swapAddress()); $('c-contract').title = B.swapAddress() ?? ''
     $('c-gas').textContent = '—'
-    ;($('st1').querySelector('b') as HTMLElement).textContent = 'Autorizza ' + S.pay
+    ;($('st1').querySelector('b') as HTMLElement).textContent = 'Autorizza ' + P.pay
     setStep('st0', 'busy', 'Firme, scadenze e fondi delle offerte…'); setStep('st1', 'idle', 'Una firma nel wallet'); setStep('st2', 'idle', 'In attesa')
     $('c-appr').hidden = false
     $('c-main').hidden = false; $('c-done').hidden = true; ($('c-go') as HTMLButtonElement).disabled = true; $('c-go-t').textContent = 'Verifica in corso…'
@@ -705,7 +741,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     ;($('c-go') as HTMLButtonElement).disabled = qs.go.disabled; $('c-go-t').textContent = qs.go.label
     if (spent > 0) void B.estimateGasWei(v).then((w) => { if (pending === P) $('c-gas').textContent = w == null ? '—' : `≈ ${fmt(Number(formatUnits(w, 18)), 6)} ETH per offerta` })
     $('c-go').focus({ preventScroll: true })
-  })
+  }
 
   $('c-go').addEventListener('click', async () => {
     const P = pending
@@ -772,12 +808,16 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   $('modes').addEventListener('click', (e) => { const b = (e.target as Element).closest<HTMLElement>('[data-mode]'); if (!b) return; S.mk.mode = b.dataset.mode as typeof S.mk.mode; renderMake(); if (S.mk.mode === 'custom') $('custom-in').focus() })
   $('mk-guard-ok').addEventListener('change', (e) => { S.mk.ack = (e.target as HTMLInputElement).checked; renderMake() })
   $('exp-seg').addEventListener('click', (e) => { const b = (e.target as Element).closest<HTMLElement>('[data-exp]'); if (b) { S.mk.exp = b.dataset.exp as typeof S.mk.exp; renderMake() } })
+  $('mk-private').addEventListener('change', (e) => { S.mk.priv = (e.target as HTMLInputElement).checked; renderMake(); if (S.mk.priv) $('mk-cp').focus() })
+  $('mk-cp').addEventListener('input', (e) => { S.mk.cp = (e.target as HTMLInputElement).value.trim(); renderMake() })
   $('partial').addEventListener('change', (e) => { S.mk.partial = (e.target as HTMLInputElement).checked; renderMake() })
   $('publish').addEventListener('click', async () => {
     const I = mkInfo(), k = S.mk, amount = num(k.amount)
     if (!I || !amount || !I.price || ($('publish') as HTMLButtonElement).disabled) return
     if (!me()) { openW(); return }
-    const { m, sell, price } = I, parts = k.partial ? 4 : 1
+    const { m, sell, price } = I, parts = k.partial && !k.priv ? 4 : 1
+    const cp = k.priv ? cpAddress() : null
+    if (k.priv && !cp) return
     const terms = ladderTerms(m, sell, amount, price, parts)
     const give = sell ? m.base : m.quote
     const fee = B.protocolFee()
@@ -791,18 +831,20 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
       }
       pubBtn.querySelector('span')!.textContent = parts > 1 ? `Firma ${parts} parti nel wallet…` : 'Firma nel wallet…'
       const dur = { '1h': 3600, '24h': 86_400, '7d': 7 * 86_400 }[k.exp]
-      const res = await B.publish(terms, B.nowSec() + dur)
+      const res = await B.publish(terms, B.nowSec() + dur, cp)
       if (res.ok === 0) throw new Error(res.errors.join(' · ') || 'offerta rifiutata dalla bacheca')
       S.ofilter = 'attive'; if (!MQ2.matches) S.tab = 'offers'
       k.amount = ''
       save(); render(); if (!MQ2.matches) top()
-      toast(res.ok === terms.length ? 'Offerta pubblicata' : `Pubblicate ${res.ok} parti su ${terms.length}`, res.errors.length ? res.errors.join(' · ') : 'Nessun costo finché qualcuno non accetta')
+      toast(res.ok === terms.length ? (cp ? 'Offerta privata pubblicata' : 'Offerta pubblicata') : `Pubblicate ${res.ok} parti su ${terms.length}`, res.errors.length ? res.errors.join(' · ') : cp ? 'Copia il link da Le mie offerte e mandalo alla controparte' : 'Nessun costo finché qualcuno non accetta')
+      if (cp) { k.priv = false; k.cp = '' }
     } catch (e) {
       $('mk-error').hidden = false; $('mk-error').textContent = humanError(e)
     } finally {
       busyPublish = false; pubBtn.querySelector('span')!.textContent = 'Pubblica l’offerta'; renderMake()
     }
   })
+  function cpAddress(): Address | null { const v = S.mk.cp.trim(); return /^0x[0-9a-fA-F]{40}$/.test(v) ? getAddress(v) : null }
   const humanError = (e: unknown) => {
     const m = (e as { shortMessage?: string; message?: string }).shortMessage ?? (e as Error).message ?? String(e)
     return /reject|denied|4001/i.test(m) ? 'Firma rifiutata nel wallet: nessuna offerta pubblicata.' : m
@@ -833,6 +875,12 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
       return doCancel([...new Set(offerData().live.flatMap((o) => o.cancelNonces))], 'all')
     }
     const b = t.closest<HTMLElement>('[data-act]'); if (!b) return
+    if (b.dataset.act === 'link') {
+      const url = privateLink(b.dataset.hash ?? '')
+      const ok = await copyText(url)
+      toast(ok ? 'Link copiato' : 'Copia non riuscita', ok ? 'Mandalo alla controparte: solo quell’indirizzo può accettare' : url)
+      return
+    }
     const o = offerData().live.find((x) => x.key === b.dataset.key); if (!o) return
     if (b.dataset.act === 'cancel') return doCancel(o.cancelNonces, 'one')
     const give = o.side === 'sell' ? o.market.base : o.market.quote
@@ -843,14 +891,59 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
       try { await B.approveFor(give.address, need); toast('Fondi autorizzati', 'Tutte le parti tornano visibili al prossimo controllo') } catch (err) { toast('Autorizzazione non riuscita', humanError(err)) }
       render(); return
     }
-    // resign: same terms at the current fee, new nonces; the old (invalid_fee) orders cannot fill unless the fee returns
-    const terms = o.orders.filter((x) => x.status === 'invalid_fee').map((x) => ({ signerToken: getAddress(x.order.signerToken) as Address, signerAmount: BigInt(x.order.signerAmount), senderToken: getAddress(x.order.senderToken) as Address, senderAmount: BigInt(x.order.senderAmount) }))
+    // resign: same terms and SAME nonces at the current fee. The old orders become valid again on-chain if the fee ever returns;
+    // sharing the nonce, at most one of each pair can be filled (the book replaces the invalid_fee order).
+    const terms = o.orders.filter((x) => x.status === 'invalid_fee').map((x) => ({ signerToken: getAddress(x.order.signerToken) as Address, signerAmount: BigInt(x.order.signerAmount), senderToken: getAddress(x.order.senderToken) as Address, senderAmount: BigInt(x.order.senderAmount), nonce: BigInt(x.order.nonce) }))
     try {
-      const res = await B.publish(terms, Math.max(o.expiry, B.nowSec() + 3600))
+      // a higher fee needs a larger allowance: authorize first (one transaction), otherwise the book would pause the offer
+      const fee = B.protocolFee()
+      const need = terms.reduce((s, t) => s + t.signerAmount + feeOf(t.signerAmount, fee), 0n) + B.liveNeed(give.address)
+      if (allowance(give.symbol) < need) { toast('Autorizzazione', 'La nuova commissione richiede un’autorizzazione più alta: conferma nel wallet'); await B.approveFor(give.address, need) }
+      const res = await B.publish(terms, Math.max(o.expiry, B.nowSec() + 3600), o.privateFor ? (getAddress(o.privateFor) as Address) : null)
       toast(res.ok ? 'Offerta rifirmata' : 'Rifirma non riuscita', res.ok ? 'Di nuovo in vendita, senza costi' : res.errors.join(' · '))
     } catch (err) { toast('Rifirma non riuscita', humanError(err)) }
     render()
   }
+  const privateLink = (hash: string) => `${location.href.split('#')[0]}#offerta=${hash}`
+  async function copyText(text: string): Promise<boolean> {
+    try { await navigator.clipboard.writeText(text); return true } catch {
+      try { const t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); const ok = document.execCommand('copy'); t.remove(); return ok } catch { return false }
+    }
+  }
+
+  // ---------------------------------------------------------------- private offer opened from a link (#offerta=<hash>)
+  let privHash: string | null = null, privPrompted = false, connecting = false
+  function privateFromLocation() { const m = /#offerta=(0x[0-9a-fA-F]{64})$/.exec(location.hash); privHash = m ? (m[1] as string).toLowerCase() : null }
+  async function openPrivate() {
+    if (!privHash || busy || openSheets.has('confirm')) return
+    if (!B.ready() || !markets().length) return // retried on the next data update
+    if (!me()) { if (!privPrompted) { privPrompted = true; toast('Offerta privata', 'Collega il wallet dell’indirizzo a cui è destinata'); openW() } return }
+    const hash = privHash
+    const r = await B.privateOrder(hash)
+    if (privHash !== hash) return
+    privHash = null
+    history.replaceState(null, '', location.href.split('#')[0])
+    if (!r) { toast('Offerta privata non trovata', 'Il link non corrisponde a un’offerta privata su questa bacheca'); return }
+    const o = r.order, for_ = getAddress(String(o.senderWallet))
+    if (for_ !== me()) { toast('Questa offerta non è per te', `È destinata a ${shortAddr(for_)}: collega quell’account`); return }
+    if (r.status !== 'open') { toast('Offerta non più disponibile', r.status === 'filled' ? 'È già stata eseguita' : r.status === 'cancelled' ? 'Il firmatario l’ha annullata' : `Stato: ${r.status}`); return }
+    const sT = getAddress(String(o.signerToken)), qT = getAddress(String(o.senderToken))
+    const m = markets().find((x) => (x.base.address === sT && x.quote.address === qT) || (x.base.address === qT && x.quote.address === sT))
+    if (!m) { toast('Mercato non disponibile', 'Le monete di questa offerta non sono configurate nell’app'); return }
+    const buy = sT === m.base.address, payT = buy ? m.quote : m.base, recvT = buy ? m.base : m.quote
+    const order = { nonce: BigInt(o.nonce as string), expiry: BigInt(o.expiry as string), signerWallet: getAddress(String(o.signerWallet)), signerToken: sT, signerAmount: BigInt(o.signerAmount as string),
+      protocolFee: BigInt(o.protocolFee as string), senderWallet: for_, senderToken: qT, senderAmount: BigInt(o.senderAmount as string), v: Number(o.v), r: o.r as `0x${string}`, s: o.s as `0x${string}` }
+    const base = units(buy ? order.signerAmount : order.senderAmount, m.base.decimals), quoteU = units(buy ? order.senderAmount : order.signerAmount, m.quote.decimals)
+    const P: Pend = { m, buy, pay: payT.symbol, recv: recvT.symbol, verified: null,
+      plan: { kind: 'indicative', legs: [{ hash, order }], pay: order.senderAmount, receive: order.signerAmount, left: 0n, at: Date.now() },
+      orders: [{ hash, p: quoteU / base, base, pay: units(order.senderAmount, payT.decimals), out: units(order.signerAmount, recvT.decimals), st: 'wait' }] }
+    $('c-title').textContent = 'Offerta privata per te'
+    await runConfirm(P)
+  }
+  privateFromLocation()
+  window.addEventListener('hashchange', () => { privateFromLocation(); void openPrivate() })
+  B.onChange(() => { if (privHash && !connecting) void openPrivate() })
+
   $('offers-d').addEventListener('click', (e) => void onOffers(e))
   $('offers-m-list').addEventListener('click', (e) => void onOffers(e))
 
@@ -878,7 +971,9 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   const connectSel = async (uuid?: string) => {
     const w = B.wallets().find((x) => x.info.uuid === uuid) ?? B.wallets()[0]
     if (!w) return
-    try { await B.connect(w); toast('Wallet collegato', shortAddr(me())) } catch (e) { toast('Collegamento non riuscito', humanError(e)) }
+    connecting = true
+    try { await B.connect(w); toast('Wallet collegato', shortAddr(me())) } catch (e) { toast('Collegamento non riuscito', humanError(e)) } finally { connecting = false }
+    if (privHash) { closeSheet('wsheet'); void openPrivate() } // a private-offer link waiting for the wallet: its message must not be overwritten
     renderWallet(); render()
   }
   $('w-list').addEventListener('change', (e) => { const t = e.target as HTMLInputElement; if (t.name === 'wsel') void connectSel(t.value) })
@@ -923,6 +1018,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
   setInterval(() => { if (!document.hidden && !openSheets.size) { renderPair(); renderOffers() } }, 5000) // "ago" labels, expiries
 
   render(false)
+  document.documentElement.classList.remove('booting') // the shell is painted only once it has its final layout (no layout shift)
   return { render: () => render(false), toast, openSheet, closeSheet }
 }
 

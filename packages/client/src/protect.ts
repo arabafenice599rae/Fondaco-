@@ -11,13 +11,11 @@ import { createClient, http, fallback, encodeFunctionData, getAddress, parseAbi,
   type Address, type Client, type Hex, type PublicClient, type Transport, type WalletClient, type TransactionReceipt } from 'viem'
 import { prepareTransactionRequest } from 'viem/actions'
 import type { ContractRequest, Submitter } from './taker.js'
+import { isUserRejection } from './errors.js'
 import type { SendResult, SubmitMode, SubmitWhy } from './types.js'
 
-/** Protected endpoints with revert protection, per chain. L2s with a sequencer have no public mempool to protect from. */
-export const PROTECTED_RPC: Readonly<Record<number, readonly string[]>> = {
-  1: ['https://rpc.mevblocker.io/noreverts', 'https://rpc.flashbots.net/fast'],
-}
-export const SEQUENCER_CHAINS: ReadonlySet<number> = new Set([8453, 10, 42161]) // Base, OP Mainnet, Arbitrum One
+import { PROTECTED_RPC, SEQUENCER_CHAINS } from './guards.js'
+export { PROTECTED_RPC, SEQUENCER_CHAINS, priceCheck, isStale, EXPIRY, type PriceLevel } from './guards.js'
 
 export type SubmitterEvent = { type: 'sent_private'; hash: Hex } | { type: 'private_unavailable'; error: string } | { type: 'protection_downgraded'; error: string; hash: Hex }
 
@@ -57,7 +55,7 @@ export function createSubmitter({ publicClient, walletClient, chainId, privateTr
     : !transport ? 'no_private_rpc' : 'browser_wallet' // the wallet's own RPC decides
   const priv: Client | null = transport ? createClient({ transport, chain: walletClient.chain }) : null
 
-  const rejected = (e: unknown) => (e instanceof BaseError && !!e.walk((x) => x instanceof UserRejectedRequestError)) || (e as { code?: number })?.code === 4001
+  const rejected = isUserRejection
 
   async function send(request: ContractRequest): Promise<SendResult> {
     try {
@@ -90,7 +88,7 @@ export function createSubmitter({ publicClient, walletClient, chainId, privateTr
   return { mode, why, private: mode === 'private', send }
 }
 
-const CANCEL_ABI = parseAbi(['function cancel(uint256[] nonces)', 'function nonceUsed(address signer, uint256 nonce) view returns (bool)'])
+const CANCEL_ABI = /*#__PURE__*/ parseAbi(['function cancel(uint256[] nonces)', 'function nonceUsed(address signer, uint256 nonce) view returns (bool)'])
 const CANCEL_TOPIC = '0x8dd3c361eb2366ff27c2db0eb07b9261f1d052570742ab8c9a0c326f37aa576d' // Cancel(uint256,address)
 
 export type CancelResult =
@@ -123,25 +121,3 @@ export async function cancelOrders({ publicClient, walletClient, submitter, swap
   const taken = list.filter((n) => !cancelled.has(n))
   return { status: taken.length ? 'partly_taken' : 'cancelled', hash: s.hash, receipt, taken, ...(s.downgraded ? { downgraded: s.downgraded } : {}) }
 }
-
-// ------------------------------------------------------------------ price guards (pure)
-
-export type PriceLevel = 'ok' | 'warn' | 'danger'
-/**
- * How much better than the market an offer is for whoever takes it — what a bot looks for.
- * side: 'sell' (signer gives base) or 'buy' (signer gives quote); price: quote per base; mid: book mid.
- * positive deviation = cheaper than market for the taker. Thresholds are inclusive (exactly 2.00 % → warn).
- */
-export function priceCheck({ side, price, mid, warnBps = 200, dangerBps = 1000 }: { side: 'sell' | 'buy'; price: number; mid: number; warnBps?: number; dangerBps?: number }): { level: PriceLevel; deviationBps: number } {
-  if (!(price > 0) || !(mid > 0)) return { level: 'ok', deviationBps: 0 }
-  const dev = side === 'sell' ? (mid - price) / mid : (price - mid) / mid
-  const bps = Math.round(dev * 10_000)
-  return { level: bps >= dangerBps ? 'danger' : bps >= warnBps ? 'warn' : 'ok', deviationBps: bps }
-}
-
-/** An open offer the market has moved past: takers (and bots) get it below market. */
-export const isStale = ({ side, price, mid, staleBps = 100 }: { side: 'sell' | 'buy'; price: number; mid: number; staleBps?: number }): boolean =>
-  priceCheck({ side, price, mid, warnBps: staleBps }).level !== 'ok'
-
-/** Expiry defaults: short by default, longer ones flagged (a long-lived fixed price is a free option for bots). */
-export const EXPIRY = { defaultSec: 3600, warnAboveSec: 86_400 } as const

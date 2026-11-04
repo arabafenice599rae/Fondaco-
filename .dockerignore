@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/dist-demo
+.cache
+reports
+.git
+.env
+.env.*
+!.env.example
+packages/contracts/foundry/out
+packages/contracts/foundry/cache
+packages/contracts/foundry/lib
+apps/web/test/visual
+docs/screenshots
+docs/audits

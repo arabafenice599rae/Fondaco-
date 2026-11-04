@@ -1,0 +1,18 @@
+# TLS certificates are obtained and renewed automatically for {$DOMAIN}.
+{$DOMAIN} {
+	# no buffering (the /stream event stream), no compression of the stream
+	@notstream not path /stream
+	encode @notstream zstd gzip
+	reverse_proxy book:8080 {
+		flush_interval -1
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	log {
+		output stdout
+		format json
+	}
+}

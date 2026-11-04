@@ -1,0 +1,21 @@
+{
+  "$comment": "Testnets of phase 7 (deploy only after explicit confirmation). Token addresses checked on-chain (code, symbol, decimals) by test-fill.mjs before use. RPC defaults are public endpoints; override with SEPOLIA_RPC_URL / BASE_SEPOLIA_RPC_URL.",
+  "sepolia": {
+    "chainId": 11155111,
+    "name": "Sepolia",
+    "rpcEnv": "SEPOLIA_RPC_URL",
+    "defaultRpc": "https://ethereum-sepolia-rpc.publicnode.com",
+    "explorer": "https://sepolia.etherscan.io",
+    "weth": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    "usdc": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+  },
+  "baseSepolia": {
+    "chainId": 84532,
+    "name": "Base Sepolia",
+    "rpcEnv": "BASE_SEPOLIA_RPC_URL",
+    "defaultRpc": "https://sepolia.base.org",
+    "explorer": "https://sepolia.basescan.org",
+    "weth": "0x4200000000000000000000000000000000000006",
+    "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+  }
+}

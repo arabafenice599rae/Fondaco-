@@ -129,6 +129,18 @@ check('T8: ownership transfer → SSE governance event (OwnershipTransferred)', 
 const bad = await get(`/candles?chainId=1&base=${WETH}&quote=0x6B175474E89094C44Da98b954EedeAC495271d0F`)
 check('T9: candles/trades for a non-whitelisted pair → 400', bad.status === 400)
 
+// T10 GET /books: several pairs in one request (the app's first screen); a pair outside the whitelist is an entry, not an error
+const DAI = '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+const one = await get(`/book?chainId=1&base=${WETH}&quote=${USDC}&limit=100&signed=1`)
+const many = await get(`/books?chainId=1&pairs=${WETH.toLowerCase()}:${USDC.toLowerCase()},${WETH}:${DAI}&limit=100&signed=1`)
+const k1 = `${WETH.toLowerCase()}:${USDC.toLowerCase()}`, k2 = `${WETH}:${DAI}`
+check('T10: /books → 200, same entries as /book for a whitelisted pair (any address case), token_not_allowed entry for the other',
+  many.status === 200 && JSON.stringify(many.body.books[k1].asks) === JSON.stringify(one.body.asks) && JSON.stringify(many.body.books[k1].bids) === JSON.stringify(one.body.bids) && many.body.books[k2].error === 'token_not_allowed',
+  `${Object.keys(many.body?.books ?? {}).length} entries`)
+const tooMany = await get(`/books?chainId=1&pairs=${Array.from({ length: 11 }, () => `${WETH}:${USDC}`).join(',')}`)
+const garbage = await get(`/books?chainId=1&pairs=nope:${USDC}`)
+check('T11: /books rejects more than 10 pairs and malformed pairs (400)', tooMany.status === 400 && garbage.status === 400)
+
 ctrl.abort()
 await app.stop()
 const failed = results.filter((x) => !x).length

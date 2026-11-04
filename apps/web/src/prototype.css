@@ -13,7 +13,7 @@
   --scrim: rgba(3,4,7,.62);
   --grad: linear-gradient(180deg, #4A67F7 0%, #3149E2 100%);
   --f-ui: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --f-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --f-mono: "Geist Mono", "Geist Mono Fallback Menlo", "Geist Mono Fallback Consolas", "Geist Mono Fallback DejaVu Sans Mono", "Geist Mono Fallback Liberation Mono", "Geist Mono Fallback Courier New", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --ease: cubic-bezier(.2,.8,.2,1); --spring: cubic-bezier(.16,1,.3,1);
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px;
   --pad: 16px;
@@ -400,7 +400,7 @@ main.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s
   --line: rgba(255,255,255,.09); --line-2: rgba(255,255,255,.2); --line-3: rgba(255,255,255,.4);
   --fg: #F2F2EF; --fg-2: #CFCFCA; --muted: #9A9A94; --faint: #64645F;
   --cta: #B34A2E; --cta-hi: #C9583A; --grad: var(--cta);
-  --f-ui: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --f-ui: "Geist Mono", "Geist Mono Fallback Menlo", "Geist Mono Fallback Consolas", "Geist Mono Fallback DejaVu Sans Mono", "Geist Mono Fallback Liberation Mono", "Geist Mono Fallback Courier New", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --r-sm: 0; --r: 0; --r-lg: 0; --r-xl: 0;
 }
 body { font-family: var(--f-ui); font-size: 15px; letter-spacing: -0.01em }

@@ -104,7 +104,7 @@ async function session(account, label, viewport = { width: 1440, height: 900 }) 
   }, { label })
   const page = await ctx.newPage()
   page.on('pageerror', (e) => pageErrors.push(`${label}: ${e.message}`))
-  page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(`${label} console: ${m.text()}`) })
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') pageErrors.push(`${label} console ${m.type()}: ${m.text()}`) })
   await page.goto(URL_APP)
   await page.waitForSelector('#m-list .mrow, #m-list [data-mkt]', { timeout: 20_000 })
   return page
@@ -162,7 +162,7 @@ try {
 
   const pb = await session(bob, 'bob')
   await connect(pb)
-  await until(async () => (await pb.locator('#asks .lv, #asks [data-p], #asks > *').count()) > 0, 15_000, 'book visible to bob')
+  await until(async () => (await pb.locator('#asks .lvl').count()) > 0, 15_000, 'book visible to bob')
   const done = await buy(pb, '1250')
   await shot(pb, 'e2e-taker-done')
   const aW1 = await bal(WETH, alice), aU1 = await bal(USDC, alice), bW1 = await bal(WETH, bob), bU1 = await bal(USDC, bob)

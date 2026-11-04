@@ -1,5 +1,6 @@
 // Client of the book server: JSON API with ETag caching, SSE with reconnection. Never throws on a 503 stale: reports it.
 import type { BookEntry, CandleResponse, MyOrder } from './model.js'
+import { takePrefetched, bookPath, booksPath } from './prefetch.js'
 
 export interface BookChainConfig {
   swap: string; protocolFee: string; protocolFeeLight?: string; domain: { name: string; version: string; chainId: number; verifyingContract: string }
@@ -16,7 +17,8 @@ export class BookApi {
 
   private async get<T>(path: string, cache = false): Promise<{ status: number; body: T | null }> {
     const hit = cache ? this.etags.get(path) : undefined
-    const r = await this.fetchImpl(this.base + path, { headers: hit ? { 'if-none-match': hit.etag } : {}, cache: 'no-store' })
+    const early = hit ? null : takePrefetched(this.base + path)
+    const r = (early ? await early.catch(() => null) : null) ?? await this.fetchImpl(this.base + path, { headers: hit ? { 'if-none-match': hit.etag } : {}, cache: 'no-store' })
     if (r.status === 304 && hit) return { status: 200, body: hit.body as T }
     const body = r.headers.get('content-type')?.includes('json') ? ((await r.json()) as T) : null
     const etag = r.headers.get('etag')
@@ -31,11 +33,23 @@ export class BookApi {
   }
   async book(chainId: number, base: string, quote: string, limit = 100): Promise<BookResult> {
     try {
-      const r = await this.get<{ asks: BookEntry[]; bids: BookEntry[]; error?: string; message?: string }>(`/book?chainId=${chainId}&base=${base}&quote=${quote}&limit=${limit}&signed=1`, true)
+      const r = await this.get<{ asks: BookEntry[]; bids: BookEntry[]; error?: string; message?: string }>(bookPath(chainId, base, quote, limit), true)
       if (r.status === 200 && r.body) return { status: 'ok', asks: r.body.asks, bids: r.body.bids }
       if (r.status === 503 && (r.body as { error?: string } | null)?.error === 'stale') return { status: 'stale', message: (r.body as { message?: string }).message ?? 'stale' }
       return { status: 'error', message: `HTTP ${r.status}` }
     } catch (e) { return { status: 'error', message: (e as Error).message } }
+  }
+  /** Several books in one request (GET /books); null if this book has no /books (older server): use book() per pair. */
+  async books(chainId: number, pairs: readonly { base: string; quote: string }[]): Promise<Map<string, BookResult> | null> {
+    try {
+      const r = await this.get<{ books: Record<string, { asks: BookEntry[]; bids: BookEntry[]; error?: string }>; error?: string; message?: string }>(booksPath(chainId, pairs))
+      if (r.status === 503 && (r.body as { error?: string } | null)?.error === 'stale') {
+        const msg = (r.body as { message?: string }).message ?? 'stale'
+        return new Map(pairs.map((p) => [`${p.base}:${p.quote}`.toLowerCase(), { status: 'stale', message: msg } as BookResult]))
+      }
+      if (r.status !== 200 || !r.body?.books) return null
+      return new Map(Object.entries(r.body.books).map(([k, b]) => [k.toLowerCase(), b.error ? { status: 'error', message: b.error } as BookResult : { status: 'ok', asks: b.asks, bids: b.bids } as BookResult]))
+    } catch { return null }
   }
   async trades(chainId: number, base: string, quote: string, limit = 30): Promise<Trade[] | null> {
     const r = await this.get<{ trades: Trade[] }>(`/trades?chainId=${chainId}&base=${base}&quote=${quote}&limit=${limit}`, true).catch(() => null)
@@ -43,6 +57,10 @@ export class BookApi {
   }
   async candles(chainId: number, base: string, quote: string, interval = 300, limit = 288): Promise<CandleResponse | null> {
     const r = await this.get<CandleResponse>(`/candles?chainId=${chainId}&base=${base}&quote=${quote}&interval=${interval}&limit=${limit}`, true).catch(() => null)
+    return r?.status === 200 && r.body ? r.body : null
+  }
+  async order(hash: string): Promise<{ hash: string; status: string; executableOnChain: boolean; order: Record<string, string | number> } | null> {
+    const r = await this.get<{ hash: string; status: string; executableOnChain: boolean; order: Record<string, string | number> }>(`/orders/${hash}`).catch(() => null)
     return r?.status === 200 && r.body ? r.body : null
   }
   async orders(chainId: number, signer: string): Promise<MyOrder[]> {

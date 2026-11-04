@@ -36,6 +36,45 @@ i conteggi finiscono in `reports/tests.json`, la verifica del sorgente in `repor
 Dopo il clone: `git submodule update --init` (forge-std, solo per i test Foundry).
 Prova di carico (fuori da `pnpm test`, ~3 minuti): `node tools/load/load-test.mjs` → `reports/load.json`; risultati commentati in [`docs/LOAD.md`](docs/LOAD.md).
 
+## Verifica
+
+Il CI è `.github/workflows/verify.yml`. È autosufficiente: lo strumentario è installato dalla composite action
+`.github/actions/setup-toolchain`, con le versioni in `tools/ci/toolchain.json`, controllate a fine setup.
+
+| Come | Cosa gira |
+|---|---|
+| **Pull request** | profilo rapido: suite lente saltate nei job unit/fork, Foundry con il profilo `ci-quick`, RPC pubblico con 3 tentativi per suite su fork |
+| **Notte** (02:17 UTC) | tutto, Foundry completo, `FORK_RPC_URL` (RPC d'archivio a pagamento) |
+| **A mano** | Actions → verify → Run workflow, oppure `gh workflow run verify.yml -f suite=full [-f fork_block=23700000] [-f ref=<branch o commit>]`. `suite`: `quick`, `full`, `contracts`, `book-server`, `client`, `web` |
+
+Job:
+- **toolchain**: piano della run e cache;
+- **lint**: build, typecheck, file generati, lint e checksum;
+- **unit**: book server, client e contratti, compresa la verifica del sorgente contro il deploy AirSwap;
+- **fork**: anvil al blocco fisso, un fork nuovo per suite;
+- **foundry**;
+- **web-e2e**: Playwright, Lighthouse, axe, layout (con webfont e con i woff2 bloccati), regressione visiva e flussi, dentro
+  l'immagine `mcr.microsoft.com/playwright:v1.63.0-noble` bloccata per digest;
+- **supply-chain**: `pnpm audit`, lockfile bloccato, gitleaks, SHA256SUMS;
+- **reproducible-build-a/b** e **reproducible-compare**: stesso hash dell'albero e stesso CID IPFS;
+- **docker**: immagine e smoke test del compose; backup verso lo stub SigV4 e verso MinIO, costruito dal tag;
+- **docker-publish**: solo su `main` o tag `v*`; pubblica su GHCR con tag di versione e riporta il digest nel riepilogo.
+
+**Segreti:**
+- `FORK_RPC_URL`: RPC mainnet d'archivio, usato dalla notte e dalle run manuali; senza, RPC pubblico con tentativi ripetuti;
+- `BASE_RPC_URL`: facoltativo, per il confronto con il deploy su Base.
+
+**Riepilogo:** ogni job scrive nella pagina della run una tabella con suite, controlli passati/totali, tempo ed esito,
+oltre alle versioni degli strumenti, al piano e agli hash del build. Artefatti: `reports-*` (Lighthouse, layout, a11y,
+differenze visive, screenshot, log di anvil, tabelle delle suite) e il manifest del build.
+
+In locale: `node tools/testkit/run-suites.mjs [--group …] [--profile quick] [--retries N] [suite …]`.
+
+La regressione visiva gira solo nell'immagine Playwright del CI, così le baseline sono una sola serie per tutte le macchine.
+Lanciata fuori, `web-visual` si rilancia da sola nel container (serve Docker). Per rigenerare le baseline:
+`pnpm --filter @fondaco/web test:visual:update`, nello stesso container. Qualunque comando nell'immagine:
+`node tools/testkit/in-playwright.mjs <comando>`.
+
 ## Book server
 
 TypeScript strict compilato in `packages/book-server/dist`; unica dipendenza di runtime di terzi: `viem`.
@@ -52,7 +91,11 @@ pnpm --filter @fondaco/book-server start
   un database del server JavaScript di riferimento viene riconosciuto e migrato; uno più nuovo del codice viene rifiutato.
 - **Reorg**: il server riporta indietro gli ultimi `reorgDepth` blocchi (default 64 = finalità di Ethereum). Una reorg più profonda non viene
   corretta (comportamento documentato, test `reorg` R4): **su una chain con finalità più lenta `reorgDepth` va alzato** di conseguenza.
-- **Fail-closed**: se nessun giro di indicizzazione riesce per `maxStalenessMs` (default 120 s), `/book` risponde `503 stale`.
+- **Fail-closed**: se nessun giro di indicizzazione riesce per `maxStalenessMs` (default 120 s), `/book` (e `/books`) risponde `503 stale`.
+- **`GET /books?chainId&pairs=base:quote,…`** (fino a 10 coppie): più libri in una richiesta, per la prima schermata dell'app; una coppia
+  fuori whitelist è una voce `{ error: 'token_not_allowed' }`, non un errore HTTP.
+- **Rifirma dopo un cambio di fee**: un ordine con lo stesso nonce e le stesse condizioni di un ordine `invalid_fee` lo sostituisce
+  (un nonce → al massimo un'esecuzione, qualunque fee torni in vigore); ogni altro riuso del nonce è `nonce_reused`.
 - **Log**: JSON su stdout, un oggetto per riga (`log.level`).
 - **Metriche**: `GET /metrics` in formato Prometheus, **spento di default** (`metrics.enabled`). Acceso, risponde solo alle reti in
   `metrics.allow` (indirizzo diretto del client, mai `X-Forwarded-For`) o con `Authorization: Bearer <metrics.token>`.

@@ -23,4 +23,5 @@ export const coin = (sym: string, size?: number): string => {
   return `<span class="coin" style="--c1:${l.c[0]};--c2:${l.c[1]}${size ? `;width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px` : ''}" aria-hidden="true">${l.g}</span>`
 }
 export const coins2 = (a: string, b: string, size?: number): string => `<span class="coins2">${coin(a, size)}${coin(b, size)}</span>`
-export const tokBtn = (sym: string): string => `${coin(sym)}<span>${sym}</span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>`
+/** `hint`: read by screen readers after the visible symbol (the accessible name starts with what is shown, WCAG 2.5.3) */
+export const tokBtn = (sym: string, hint = ''): string => `${coin(sym)}<span>${sym}</span>${hint ? `<span class="sr-only"> · ${hint}</span>` : ''}<svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>`

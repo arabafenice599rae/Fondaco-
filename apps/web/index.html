@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="it" class="booting">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -7,6 +7,9 @@
 <meta name="referrer" content="no-referrer">
 <!-- Static app: no inline scripts; fonts and code are served from here. The book and the RPC are user-configurable, hence connect-src https/wss + local. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: wss: http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none'">
+<!-- book requests start while the bundle downloads: before any stylesheet, so this script never waits for CSS -->
+<link rel="preload" href="./config.json" as="fetch" crossorigin="anonymous">
+<script src="./boot.js" async></script>
 <title>FONDACO</title>
 <meta name="description" content="FONDACO: exchange P2P non-custodial. Il prezzo lo fate voi.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 14'%3E%3Crect x='1' width='8' height='3' fill='%23F4AE52'/%3E%3Crect x='11' width='6' height='3' fill='%237C93FF'/%3E%3Crect x='3' y='5.5' width='6' height='3' fill='%23F4AE52'/%3E%3Crect x='11' y='5.5' width='8' height='3' fill='%237C93FF'/%3E%3Crect y='11' width='9' height='3' fill='%23F4AE52'/%3E%3Crect x='11' y='11' width='5' height='3' fill='%237C93FF'/%3E%3C/svg%3E">
@@ -46,7 +49,9 @@
   </div>
 </div>
 <div class="ambient" aria-hidden="true"></div>
-<div class="app">
+<div class="app" id="app">
+  <!-- the page's stable heading (the splash one goes away): hidden visually, read by assistive tech -->
+  <h1 class="sr-only">FONDACO</h1>
   <header class="top">
     <div class="shell top-in">
       <div class="brand">
@@ -55,8 +60,8 @@
         <span class="demo" id="demo-badge" title="Dati simulati: nessuna offerta reale" hidden>Demo</span>
       </div>
       <div class="hchips">
-        <button type="button" class="hchip" id="net-chip" aria-haspopup="dialog" aria-label="Rete e protezione MEV"><svg class="ic sm net" aria-hidden="true"><use href="#i-net"/></svg><span class="lbl" id="net-lbl">Ethereum</span></button>
-        <button type="button" class="hchip" id="wal-chip" aria-haspopup="dialog" aria-label="Wallet e protezione MEV"><span class="avatar" aria-hidden="true"></span><span class="mono" id="wal-addr">Collega</span><span class="wdot" id="wal-dot" aria-hidden="true"></span></button>
+        <button type="button" class="hchip" id="net-chip" aria-haspopup="dialog"><svg class="ic sm net" aria-hidden="true"><use href="#i-net"/></svg><span class="lbl" id="net-lbl">Ethereum</span><span class="sr-only"> · rete e protezione MEV</span></button>
+        <button type="button" class="hchip" id="wal-chip" aria-haspopup="dialog"><span class="avatar" aria-hidden="true"></span><span class="mono" id="wal-addr">Collega</span><span class="sr-only"> · wallet e protezione MEV</span><span class="wdot" id="wal-dot" aria-hidden="true"></span></button>
         <button type="button" class="hchip" id="set-chip" aria-haspopup="dialog" aria-label="Impostazioni"><svg class="ic sm" aria-hidden="true"><use href="#i-gear"/></svg></button>
       </div>
     </div>
@@ -83,8 +88,8 @@
       <button type="button" class="back" id="back" hidden><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg>Mercati</button>
 
       <div class="card ticker">
-        <button type="button" class="pair-btn" id="pair-btn" aria-haspopup="dialog" aria-label="Cambia mercato">
-          <span class="coins2" id="ph-coins"></span><span><b id="ph-name"></b><small id="ph-desc"></small></span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
+        <button type="button" class="pair-btn" id="pair-btn" aria-haspopup="dialog">
+          <span class="coins2" id="ph-coins"></span><span><b id="ph-name"></b><small id="ph-desc"></small></span><span class="sr-only"> · cambia mercato</span><svg class="ic sm chev" aria-hidden="true"><use href="#i-down"/></svg>
         </button>
         <div class="tk-price"><span class="big" id="ph-mid"></span><span class="u" id="ph-unit"></span></div>
         <dl class="tk-stats">
@@ -171,7 +176,7 @@
               </div>
               <div class="box-main">
                 <input id="pay-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="pay-usd">
-                <button type="button" class="tok" id="pay-tok" aria-label="Scegli la moneta da pagare"></button>
+                <button type="button" class="tok" id="pay-tok"></button>
               </div>
               <div class="box-foot"><span id="pay-usd"></span><span>Saldo <b id="pay-bal"></b></span></div>
             </div>
@@ -180,7 +185,7 @@
               <div class="box-top"><span>Ricevi</span><span class="tag ind" title="Calcolato dal libro offerte: diventa definitivo dopo la verifica on-chain">Indicativo</span></div>
               <div class="box-main">
                 <output id="recv-out" class="amount" for="pay-in" aria-live="polite">0</output>
-                <button type="button" class="tok" id="recv-tok" aria-label="Scegli la moneta da ricevere"></button>
+                <button type="button" class="tok" id="recv-tok"></button>
               </div>
               <div class="box-foot"><span id="recv-usd"></span><span>Saldo <b id="recv-bal"></b></span></div>
             </div>
@@ -217,11 +222,11 @@
             <div class="box-top"><label for="mk-in" id="mk-label">Vendi</label><span class="tag">Pubblicare è gratis</span></div>
             <div class="box-main">
               <input id="mk-in" class="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-describedby="mk-usd">
-              <button type="button" class="tok" id="mk-give" aria-label="Scegli la moneta che dai"></button>
+              <button type="button" class="tok" id="mk-give"></button>
             </div>
             <div class="box-foot"><span id="mk-usd"></span><span>Saldo <b id="mk-bal"></b></span></div>
           </div>
-          <div class="box row-box"><span class="muted">In cambio di</span><button type="button" class="tok" id="mk-get" aria-label="Scegli la moneta che ricevi"></button></div>
+          <div class="box row-box"><span class="muted">In cambio di</span><button type="button" class="tok" id="mk-get"></button></div>
           <div class="box">
             <div class="box-top"><span id="mk-plabel">Prezzo</span><b class="price-v" id="mk-price"></b></div>
             <div class="choices" id="modes" role="group" aria-label="Scegli il prezzo"></div>
@@ -251,6 +256,15 @@
               <span><b>Accetta acquisti parziali</b><small id="partial-note"></small><span class="parts" id="parts" aria-hidden="true"></span></span>
               <input type="checkbox" class="switch" id="partial" role="switch" checked>
             </label>
+            <div class="hr" aria-hidden="true"></div>
+            <label class="toggle" for="mk-private">
+              <span><b>Solo per un indirizzo</b><small>Offerta privata: non compare nel libro, la può accettare solo quell’indirizzo</small></span>
+              <input type="checkbox" class="switch" id="mk-private" role="switch">
+            </label>
+            <div class="cp-wrap" id="cp-wrap" hidden>
+              <label for="mk-cp" class="cp-l">Indirizzo della controparte</label>
+              <input id="mk-cp" class="field mono" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…">
+            </div>
           </div>
           <dl class="summary">
             <div class="kv big"><dt>Riceverai</dt><dd id="mk-recv"></dd></div>

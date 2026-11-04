@@ -25,3 +25,29 @@ runs = 32
 depth = 64
 fail_on_revert = false
 seed = "0x46"
+
+# Pull requests: fewer fuzz and invariant runs (FOUNDRY_PROFILE=ci-quick); the nightly run uses the default profile.
+[profile.ci-quick]
+src = "foundry/test"
+test = "foundry/test"
+out = "foundry/out"
+cache_path = "foundry/cache"
+libs = ["foundry/lib"]
+remappings = ["forge-std/=foundry/lib/forge-std/src/"]
+solc_version = "0.8.23"
+evm_version = "paris"
+optimizer = false
+fs_permissions = [
+  { access = "read", path = "./fixtures" },
+  { access = "read", path = "../../fork.config.json" },
+]
+
+[profile.ci-quick.fuzz]
+runs = 32
+seed = "0x46"
+
+[profile.ci-quick.invariant]
+runs = 8
+depth = 32
+fail_on_revert = false
+seed = "0x46"
