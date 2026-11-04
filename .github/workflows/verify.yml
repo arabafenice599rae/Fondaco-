@@ -8,6 +8,9 @@ name: verify
 
 on:
   pull_request:
+  # TEMPORARY (phase 7 trial run): workflow_dispatch works only once the file is on the default branch
+  push:
+    branches: [claude/fondaco-p2p-build-test-2glj2b]
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
@@ -62,7 +65,7 @@ jobs:
           SUITE: ${{ inputs.suite }}
           HAS_RPC: ${{ secrets.FORK_RPC_URL != '' }}
         run: |
-          s="$SUITE"; [ "$EVENT" = pull_request ] && s=quick; [ "$EVENT" = schedule ] && s=full
+          s="$SUITE"; [ "$EVENT" = pull_request ] && s=quick; [ "$EVENT" = schedule ] && s=full; [ "$EVENT" = push ] && s=full
           prof=full; [ "$s" = quick ] && prof=quick
           all() { for k in lint unit fork foundry web supply repro docker; do echo "$k=$1" >> "$GITHUB_OUTPUT"; done; }
           case "$s" in
