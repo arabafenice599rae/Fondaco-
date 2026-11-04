@@ -362,11 +362,18 @@ risponde 404. Per la prova della Fase 7 ho aggiunto un trigger `push` temporaneo
 come `full`. È stato tolto dopo le run verdi. Per abilitare il dispatch, `verify.yml` deve arrivare su `main`, e per questo
 serve la tua conferma.
 
-### D-54 · I test dell'app aspettano i font — D
-I font usano `font-display: swap` e si caricano al primo uso. Sul runner del CI uno screenshot o un campione di layout poteva
-cadere prima dell'arrivo di un peso, quindi con il font di riserva: più largo, con altre metriche. L'effetto erano a capo
-diversi (V1 dallo 0,6% al 6,7%) e l'importo che copriva l'etichetta (L1). `enter()` ora carica tutte le facce, aspetta
-`document.fonts.ready` e fallisce se una non risulta caricata. Le baseline restano le stesse.
+### D-54 · Rendering del testo fissato nei test dell'app — D
+Sul runner GitHub, V1 falliva su tutte le 20 schermate (0,6–6,7%) e L1 vedeva l'importo coprire l'etichetta. Il motivo è che
+il runner fa l'hinting completo dei glifi: avanzamenti a pixel interi, testo un po' più largo, a capo diversi. Le run 1 e 3
+hanno dato le stesse percentuali, quindi l'errore è deterministico.
+- **Correzione.** Il browser di test parte con `--font-render-hinting=none` e con `FONTCONFIG_FILE=apps/web/test/fontconfig/fonts.conf`
+  (niente hinting, antialiasing in scala di grigi). In locale i pixel non cambiano e in CI L1 passa, così come 16 schermate su 20.
+- **Residuo.** Due fogli (conferma e wallet, a 390 e 1440) mettono il testo a offset frazionari, e il runner lo rasterizza con
+  un antialiasing leggermente diverso (0,4–2,2%, posizioni identiche). Per queste quattro schermate il CI usa
+  `test/visual/baseline-ci/`, preso a mano dagli artefatti `*-actual.png` della run 4 dopo averli guardati. `--update` non le
+  scrive mai.
+- **Altre misure.** I test aspettano comunque che tutte le facce dei font siano caricate (`fontsLoaded`) e falliscono se una
+  manca: non era la causa, ma toglie una fonte di instabilità.
 
 ### D-55 · Stima del gas del deploy su testnet — D
 Il nodo pubblico di Sepolia stima 18,2 M di gas per il deploy, mentre quello misurato sul fork è 2.578.924. Il piano usa il gas

@@ -36,13 +36,16 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguo
 
 ### Modificato
 - `deploy.js` esporta `readState` e `mismatches`, usati dalla checklist post-deploy.
-- Test dell'app: screenshot e campioni di layout solo dopo il caricamento di tutti i font (D-54). Un V1 fallito salva lo
-  screenshot reale tra i report.
+- Test dell'app (D-54):
+  - rendering del testo fissato nel browser di test (niente hinting, `fonts.conf` dedicato);
+  - screenshot e campioni di layout solo con tutti i font caricati;
+  - baseline CI per i due fogli rasterizzati diversamente dal runner;
+  - un V1 fallito salva lo screenshot reale tra i report.
 
 ### Corretto (con il test che lo copre)
 - Nessun difetto del prodotto.
-- Test instabili sul runner del CI: i font con `font-display: swap` arrivavano dopo lo screenshot (web-visual V1, web-layout
-  L1). Correzione in D-54.
+- Test dipendenti dalla macchina sul runner del CI: l'hinting completo dei glifi cambiava a capo e sovrapposizioni
+  (web-visual V1, web-layout L1). Correzione in D-54.
 
 ## [Fase 6] — Test avanzati dell'app — 2026-11-04
 
