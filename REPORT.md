@@ -38,11 +38,11 @@ Branch di lavoro: `claude/fondaco-p2p-build-test-2glj2b`. Dettagli: `CHANGELOG.m
 | 5 | App web fedele al prototipo, dati reali | web-model 35, web-keys 5, web-e2e 18 con due bacheche |
 | v4.3 | Cambio del contratto di riferimento | runtime = deploy AirSwap su Ethereum e Base; Sourcify exact match; Foundry 29 |
 | 6 | Test avanzati dell'app | flussi 21/21; layout: 420 campioni puliti; axe 0 serious/critical; contrasto min 4,59:1; Lighthouse 0,96/1,00; bundle 49 kB; Fast 3G 1,8 s |
-| 7 | Sicurezza e rilascio | modello delle minacce; supply chain (0 vulnerabilità, gitleaks pulito); CI con 13 job; immagine Docker e compose con smoke 6/6; IPFS; testnet preparata e provata su fork |
+| 7 | Sicurezza e rilascio | modello delle minacce; supply chain (0 vulnerabilità, gitleaks pulito); CI con 13 job; immagine Docker e compose con smoke 8/8 (stub S3 e MinIO); IPFS; testnet preparata e provata su fork |
 
 **Regressione locale finale: 39 suite, tutte verdi** (tabella in fondo).
 
-## Deviazioni dalla specifica (tutte approvate)
+## Deviazioni dalla specifica (approvate, tranne l'8)
 
 1. **Contratto:** v4.3 invece di v5.0.0 (D-40). È il sorgente deployato da AirSwap e coperto dall'audit PeckShield; la
    differenza è in `docs/AUDIT-DIFF.md`.
@@ -58,6 +58,22 @@ Branch di lavoro: `claude/fondaco-p2p-build-test-2glj2b`. Dettagli: `CHANGELOG.m
    - etichette del grafico e hover del pulsante;
    - `<h1>` nascosto.
 7. **Limite voluto:** l'LCP di 2,5 s è il marchio dello splash, la cui animazione dura 2,8 s.
+8. **MinIO dal sorgente, non da quay.io (D-58), da approvare.** `quay.io/minio/minio` rifiuta il pull anonimo (401 a ogni
+   tag) e `minio/minio` non esiste più su Docker Hub. Lo smoke usa MinIO `RELEASE.2025-09-07T16-13-09Z` compilato dal tag
+   (`deploy/minio/Dockerfile`). Con `MINIO_IMAGE=<ref@sha256:…>` usa un'immagine pronta.
+9. **Preload a priorità bassa (D-57).** Con priorità normale P3 (Fast 3G) passava da 1,8 a 2,4 s; con `fetchpriority="low"`
+   è 1,82 s.
+
+## Correzioni della revisione (Fase 7)
+
+| # | Richiesta | Fatto | File | Test |
+|---|---|---|---|---|
+| 1 | `@font-face` di ripiego tarati su Geist Mono e preload dei woff2; L1 con webfont e con woff2 bloccati | Ripieghi per Menlo, Consolas, DejaVu Sans Mono, Liberation Mono e Courier New, con `size-adjust` e override calcolati sui woff2; preload 400/500/600 | `apps/web/src/fonts.css`, `apps/web/scripts/font-fallback.py`, `apps/web/src/prototype.css`, `apps/web/vite.config.ts` | `web-layout` L1 (webfont) e L1b (woff2 bloccati) verdi su host e immagine; L5 geometria: 0,5 px (host, DejaVu) e 0,4 px (immagine, Liberation) |
+| 2 | `web-e2e` nell'immagine Playwright ufficiale bloccata per versione e digest; baseline generate lì; script locale con lo stesso container | `mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30…4a27`; **una sola serie di 20 baseline**, quelle solo-CI rimosse; `versions.mjs` controlla workflow, immagine e pacchetto | `.github/workflows/verify.yml`, `tools/ci/toolchain.json`, `tools/testkit/in-playwright.mjs`, `apps/web/test/visual.mjs` | `web-visual` V1 20/20, max 0,000%, nell'immagine in locale e in CI |
+| 3 | Smoke del backup anche contro MinIO (quay.io, tag e digest) | MinIO costruito dal tag, perché l'immagine pubblica non esiste più (deviazione 8) | `deploy/minio/Dockerfile`, `packages/book-server/test/docker-smoke.mjs` | `docker-smoke` S7–S8 contro MinIO, stesso esito dello stub (S3–S4); 8/8 in locale e in CI |
+
+D-54 nella versione con quattro baseline solo per il CI non era approvata: è stata riscritta e le baseline doppie sono state
+rimosse.
 
 ## Bug trovati, per fase
 
@@ -98,12 +114,16 @@ Dettagli in `docs/THREAT_MODEL.md`.
   - **job:** `toolchain`, lint, unit, fork, foundry, web-e2e, supply-chain, due build riproducibili, confronto, docker e
     docker-publish (solo su `main` o tag, con `packages: write`);
   - **riepilogo:** ogni job scrive la sua tabella nel riepilogo della run.
-- **Build riproducibile:** tree hash `fdf0d326…cc766` e CID `bafybeihr4ofaniogx7w2vum4hgswa4yj2tyonuixwwexx2picookv3vasq`,
-  identici tra build separati, in locale e nei due job del CI.
+- **Build riproducibile**, app al commit `5b7b87a` (dopo le correzioni della revisione):
+  - tree hash `c9b62461e1c7cc0e15c24e8d31c00a541b033782ea84a07c3d34ea0c593f1efe`;
+  - CID `bafybeigfhaqqpvoxleq5qn5u7t3cjwafc7tjdqm35vxofjf2rukmo66n7q`;
+  - contenthash EIP-1577 `0xe30101701220c5382107d5d75921d837b4fcf624d80517e691c19bed6ee2a4ba8d14c77bcdfc`;
+  - identici tra due build locali e nei due job separati del CI (run 41914373389). I valori precedenti (`fdf0d326…`,
+    `bafybeihr4of…`) valgono per il build prima dei font di ripiego e del preload, e non vanno più usati.
 - **Bacheca:**
   - immagine `node:22.23.4-alpine3.24@sha256:fe4f…9914`, utente `node`;
   - compose con Caddy, backup orario S3 (firma verificata contro l'esempio ufficiale AWS) e rotazione dei log;
-  - smoke test autosufficiente 6/6;
+  - smoke test autosufficiente 8/8: S1–S6 con lo stub SigV4, S7–S8 backup, list e restore contro MinIO (D-58);
   - guida `docs/OPERATIONS.md`.
 - **IPFS:**
   - `tools/ipfs.mjs cid` funziona offline, `pin` richiede `--confirm` e **non è stato eseguito**;
@@ -130,8 +150,8 @@ Dettagli in `docs/THREAT_MODEL.md`.
 
 ## Tabella dei test (regressione locale finale)
 
-`node tools/testkit/run-suites.mjs --retries 2`: 39 suite, tutte verdi, exit 0. Il `docker-smoke` (6/6) è esplicito e gira
-nel job `docker` del CI.
+`node tools/testkit/run-suites.mjs --retries 2` al commit `def2674`: 39 suite, tutte verdi, exit 0. `web-visual` si è
+rilanciato da solo nell'immagine Playwright. Il `docker-smoke` (8/8) è esplicito: in locale e nel job `docker` del CI.
 
 | Gruppo | Suite (controlli) |
 |---|---|
@@ -139,9 +159,12 @@ nel job `docker` del CI.
 | contracts | verify-source 4/4 · foundry 29/29 · addresses 5/5 · deploy 8/8 · fee 2/2 |
 | book-server | backup 3/3 · config 9/9 · allocation 5/5 · migrations 7/7 · observability 5/5 · e2e 22/22 · engine 13/13 · signers 8/8 · metrics 7/7 · trades 12/12 · faults 12/12 · reorg 5/5 · pinned-read 1/1 · differential 3/3 · event-order 2/2 · http-security 11/11 |
 | client | wallet 5/5 · client-guards 9/9 · client-smoke 4/4 · taker 13/13 · protect 5/5 · taker-advanced 12/12 |
-| web | web-model 39/39 · web-keys 6/6 · web-layout 5/5 · web-a11y 4/4 · web-visual 2/2 · web-e2e 18/18 · web-flows 21/21 · web-perf 4/4 |
+| web | web-model 39/39 · web-keys 6/6 · web-layout 7/7 (L1 con webfont, L1b con woff2 bloccati, L5 geometria) · web-a11y 4/4 · web-visual 2/2 · web-e2e 18/18 · web-flows 21/21 · web-perf 4/4 |
 
-Totale: **329 controlli** su 39 suite.
+Totale: **331 controlli** su 39 suite, più `docker-smoke` 8/8.
+
+Suite web eseguite anche nell'immagine Playwright in locale: model 39, keys 6, layout 7, a11y 4, visual 2, e2e 18, flows 21,
+perf 4, tutte verdi.
 
 ## Prova del CI (`verify.yml`)
 

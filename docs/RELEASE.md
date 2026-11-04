@@ -114,8 +114,9 @@ reviewed by you.
 
 1. **Build:** the CI builds the app twice in separate jobs (`reproducible-build-a/b`) and compares the tree hash and the CID.
    Locally: `node tools/build-hash.mjs --twice`.
-2. **CID** (offline, no upload): `node tools/ipfs.mjs cid <dist>`. For the current commit it is
-   `bafybeihr4ofaniogx7w2vum4hgswa4yj2tyonuixwwexx2picookv3vasq`, the same in every build.
+2. **CID** (offline, no upload): `node tools/ipfs.mjs cid <dist>`. For the app at commit `5b7b87a` it is
+   `bafybeigfhaqqpvoxleq5qn5u7t3cjwafc7tjdqm35vxofjf2rukmo66n7q` (tree hash `c9b62461…f1efe`), the same locally and in both CI
+   builds of run 41914373389. Any change to the app (sources, fonts, build config) gives a new CID.
 3. **Pin** (publishes, after approval):
    `PINNING_ENDPOINT=… PINNING_TOKEN=… node tools/ipfs.mjs pin <dist> --confirm`.
    - It needs any provider of the IPFS Pinning Service API.
@@ -125,8 +126,8 @@ reviewed by you.
 
 ## 3. ENS contenthash of fondaco.eth (documented, not executed)
 
-1. Encoding (EIP-1577): `node tools/ipfs.mjs contenthash <cid>`. For the CID above:
-   `0xe30101701220f1e38a06a1c6bfedaad19c39a5607309d4f0e6d117b5897be9e8139caaeea094`.
+1. Encoding (EIP-1577): `node tools/ipfs.mjs contenthash <cid>`. For the CID above (commit `5b7b87a`):
+   `0xe30101701220c5382107d5d75921d837b4fcf624d80517e691c19bed6ee2a4ba8d14c77bcdfc`.
 2. The **manager** of `fondaco.eth` sets the record (ideally the Safe, with a Safe transaction):
    - in the ENS app: Records → Content hash → `ipfs://<cid>`;
    - or directly: `PublicResolver.setContenthash(namehash("fondaco.eth"), <contenthash>)`.
