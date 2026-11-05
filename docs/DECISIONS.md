@@ -539,7 +539,7 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
 | Binario | Primaria | Riserva | Stessi byte |
 |---|---|---|---|
 | solc 0.8.23 | binaries.soliditylang.org | GitHub Releases `ethereum/solidity` (`solc-static-linux`) | sì, sha256 verificato in locale |
-| kubo 0.34.1 | GitHub Releases `ipfs/kubo` | dist.ipfs.tech | da verificare sul runner (da qui dist.ipfs.tech non è raggiungibile) |
+| kubo 0.34.1 | GitHub Releases `ipfs/kubo` | 1. dist.ipfs.tech; 2. la stessa cartella tramite il gateway dweb.link (`/ipns/dist.ipfs.tech/…`) | da verificare sul runner: nella prima run manuale (42058988550) dist.ipfs.tech non rispondeva, connessione scaduta 3 volte su 3 |
 | foundry v1.5.1 | GitHub Releases (download) | stesso asset tramite l'API di GitHub (`api.github.com`) | sì per costruzione: stesso asset |
 | gitleaks 8.24.3 | GitHub Releases (download) | stesso asset tramite l'API di GitHub | sì per costruzione: stesso asset |
 
@@ -551,8 +551,11 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   - Una copia davvero indipendente richiede un host scelto dal proprietario.
 - **Foundry** non usa più `foundry-toolchain`: il tarball viene estratto in `~/.foundry/bin`. La cache RPC
   `~/.foundry/cache/rpc` resta, con una chiave per job.
-- **Controllo delle fonti:** nelle run notturne e manuali `fetch-binary.mjs --check-sources` scarica ogni fonte di ogni
-  binario, primaria e riserva, e verifica l'hash. Una riserva rotta si vede prima che serva.
+- **Controllo delle fonti:** nelle run notturne e manuali il job `toolchain-sources` lancia
+  `fetch-binary.mjs --check-sources`, che scarica ogni fonte di ogni binario, primaria e riserve, e ne verifica l'hash. Una
+  riserva rotta si vede prima che serva. È un job a parte: se fallisce, la run diventa rossa ma il job `toolchain` salva
+  comunque le cache (con il controllo dentro `toolchain`, un fallimento impediva il salvataggio). Nessun altro job dipende
+  da questo.
 - **Prova:** la suite `fetch-binary` usa un server HTTP locale, nessun host esterno. Copre sette casi:
   - F1: primaria su, usata la primaria;
   - F2: primaria 504, 3 tentativi, poi riserva con hash verificato;

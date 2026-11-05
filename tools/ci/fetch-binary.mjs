@@ -76,7 +76,7 @@ export function fetchBinary(name) {
   const tmp = mkdtempSync(join(dir, '.tmp-'))
   try {
     for (const [i, src] of e.sources.entries()) {
-      if (i > 0) log(`${name}: primary source unavailable after ${ATTEMPTS} tries, using fallback ${i}: ${label(src)}`)
+      if (i > 0) log(`${name}: ${i === 1 ? 'primary source' : `fallback ${i - 1}`} unavailable after ${ATTEMPTS} tries, using fallback ${i}: ${label(src)}`)
       const got = fromSource(name, src, tmp)
       if (got) { renameSync(got, dest); log(`${name}: ${i === 0 ? 'primary' : `fallback ${i}`} ${label(src)}, ${algo} verified`); return dest }
     }

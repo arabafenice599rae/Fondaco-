@@ -84,10 +84,6 @@ jobs:
       - name: toolchain (warms the caches the other jobs reuse)
         uses: ./.github/actions/setup-toolchain
         with: { foundry: "true", solc: "true", playwright: "true", docker: "true", kubo: "true", gitleaks: "true" }
-      - name: every source of every pinned binary gives its checksum (primary and fallback, nightly and manual runs, D-64)
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        run: node tools/ci/fetch-binary.mjs --check-sources
-        env: { GITHUB_TOKEN: "${{ github.token }}" }
 
   lint:
     needs: toolchain
@@ -192,6 +188,21 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with: { name: reports-web, path: reports/, if-no-files-found: ignore }
+
+  # nightly and manual runs only: every source of every pinned binary must give its checksum (D-64). Its own job, so a broken
+  # fallback turns the run red without stopping the toolchain job from saving the caches; nothing else depends on it.
+  toolchain-sources:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { ref: "${{ env.REF }}" }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .nvmrc }
+      - name: every source of every pinned binary gives its checksum (primary and fallbacks)
+        run: node tools/ci/fetch-binary.mjs --check-sources
+        env: { GITHUB_TOKEN: "${{ github.token }}" }
 
   supply-chain:
     needs: toolchain
