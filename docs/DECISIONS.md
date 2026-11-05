@@ -404,31 +404,39 @@ costruita e provata con lo smoke test, ma non pubblicata.
   - L5 confronta i box di ogni elemento con id tra le due modalità: tolleranza 2 px, misurato 0,5 px sull'host (ripiego
     DejaVu) e 0,4 px nell'immagine (ripiego Liberation).
 
-### D-58 · Smoke del backup anche contro MinIO — approvata con variante
-Richiesto in origine: MinIO da `quay.io/minio/minio` con tag e digest. Non è possibile:
-- quay.io rifiuta il pull anonimo di `minio/minio`: il token anonimo ha `"actions": []` e risponde 401 a ogni tag;
-- `minio/minio` non esiste più su Docker Hub.
+### D-58 · Smoke del backup anche contro MinIO, compilato dal tag — approvata (forma originale)
+MinIO non distribuisce più nulla in modo pubblico:
+- `quay.io/minio/minio` rifiuta il pull anonimo, verificato anche dal runner GitHub (run 41927262623: `unauthorized`);
+- `minio/minio` non esiste più su Docker Hub;
+- dl.min.io risponde `410 Gone` per tutte le release community.
 
-**Variante approvata:** il binario della release da dl.min.io, verificato con il suo `.sha256sum`; la compilazione dal
-sorgente solo come riserva. Così fa `deploy/minio/Dockerfile`:
-1. scarica `minio.RELEASE.2025-09-07T16-13-09Z` e `.sha256sum` da `dl.min.io/server/minio/release/linux-amd64/archive/` e
-   confronta gli hash;
-2. se il download o il confronto falliscono, esegue `go install github.com/minio/minio@RELEASE.2025-09-07T16-13-09Z`,
-   verificato dal checksum database di Go, su `golang:1.24.7-alpine3.22@sha256:fc2cff66…dbb5`;
-3. scrive in `/SOURCE` quale strada ha preso, e S7 lo riporta.
+Per questo MinIO viene **compilato dal tag di rilascio**. La variante con il download da dl.min.io e la sonda su quay.io sono
+state tolte.
 
-**Stato al 2026-11-04:** dl.min.io risponde **410 Gone** per il binario e per il `.sha256sum`: "These files are no longer
-served from this site. This applies to all community releases". Quindi oggi gira la riserva.
+`deploy/minio/Dockerfile`:
+- **pin:** in `tools/ci/toolchain.json` → `minio`, uguali agli `ARG` del Dockerfile; `versions.mjs` fallisce se divergono:
+  - immagine Go `golang:1.24.7-alpine3.22@sha256:fc2cff66…dbb5`;
+  - release `RELEASE.2025-09-07T16-13-09Z`;
+  - hash h1 del modulo `h1:deu0m9Bi…nxo=`;
+  - sha256 del `go.sum` del tag `e81f196b…316f`;
+- **build:**
+  - `GOTOOLCHAIN=local`: nessun download di toolchain (il `go.mod` del tag chiede al massimo go1.24.2), e il build fallisce se
+    `go env GOVERSION` ≠ go1.24.7;
+  - `go mod download -json` (checksum database di Go), poi confronto dell'hash del modulo con quello bloccato e
+    `sha256sum -c` del `go.sum`;
+  - `go build -trimpath` nella directory del modulo con `-mod=readonly`: ogni dipendenza è verificata contro quel `go.sum`;
+- **prova negativa:** con uno sha256 di `go.sum` sbagliato il build si ferma (`go.sum: FAILED`);
+- **provenienza:** `/SOURCE` registra tag, Go, hash del modulo e sha256 del `go.sum`, e S7 la riporta.
 
-**Verificato dal runner GitHub dopo il merge** (run manuale 41927262623): la sonda risponde `unauthorized: access to the
-requested resource is not authorized`. quay.io non è pullabile in anonimo neanche da lì, quindi resta la variante e la riserva
-compila dal tag.
-
-**Ogni run:** il job `docker` ha una sonda informativa che prova il pull anonimo di
-`quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` dal runner GitHub e scrive l'esito nel riepilogo. Se risulta pullabile, il
-test passa all'immagine con digest (`MINIO_IMAGE`) e il Dockerfile viene tolto.
+**Cache nel CI** (job `docker`):
+- lo stage `bin` del Dockerfile produce solo `minio` e `SOURCE`, salvati da `actions/cache` con chiave
+  `minio-<tag>-go<versione Go>` (oggi `minio-RELEASE.2025-09-07T16-13-09Z-go1.24.7`);
+- la compilazione (circa 3,5 minuti) avviene solo quando la cache manca;
+- l'immagine eseguibile viene poi da `deploy/minio/Dockerfile.run` sul binario in cache;
+- il riepilogo della run dice "hit" o "miss" e la provenienza.
 
 Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/list/restore` contro MinIO, con lo stesso esito.
+`MINIO_IMAGE=<ref@sha256:…>` usa un'immagine pronta, se un giorno servisse.
 
 ### D-59 · Soglia LCP — approvata
 - Il controllo `web-perf` P5 fallisce sopra **3,0 s** (mediana di 3 esecuzioni Lighthouse).
@@ -436,3 +444,13 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
 - Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, **2,67 s** con P5 nella run manuale 41927262623
   (2,60 · 2,68 · 2,67), 2,53 s in locale (2,56 · 2,45 · 2,53).
 - L'elemento LCP è il marchio dello splash, la cui animazione dura 2,8 s per progetto: è il limite voluto di PHASE6-RESULTS.
+
+### D-60 · Concorrenza del workflow — approvata
+- **Gruppo** = `workflow-evento-ref`:
+  - per `workflow_dispatch` e `schedule` al posto del ref c'è il `run_id`, quindi ogni run manuale o notturna ha un gruppo
+    suo: una run manuale non cancella mai un'altra run manuale né la notturna;
+  - per `pull_request` il ref è il branch della PR.
+- **`cancel-in-progress`** solo per `pull_request` e `push`: una run più vecchia dello stesso ref viene sostituita da quella
+  del commit più nuovo.
+- **Prima:** gruppo `verify-<ref>` per tutti gli eventi e cancellazione sempre attiva. Una seconda run manuale sullo stesso
+  branch cancellava la prima.

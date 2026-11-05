@@ -1,0 +1,11 @@
+# Runnable MinIO image from a binary built by deploy/minio/Dockerfile (--target bin): the build context is the directory
+# that holds `minio` and `SOURCE` (the CI cache). Same layout as the default stage of deploy/minio/Dockerfile.
+FROM scratch
+ARG MINIO_VERSION
+LABEL org.opencontainers.image.version="${MINIO_VERSION}" org.opencontainers.image.source="https://github.com/minio/minio"
+COPY minio SOURCE /
+WORKDIR /tmp
+WORKDIR /data
+EXPOSE 9000
+ENTRYPOINT ["/minio"]
+CMD ["server", "/data", "--address", ":9000"]

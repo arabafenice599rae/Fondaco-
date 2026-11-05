@@ -62,6 +62,9 @@ Job:
 - **docker**: immagine e smoke test del compose; backup verso lo stub SigV4 e verso MinIO, costruito dal tag;
 - **docker-publish**: solo su `main` o tag `v*`; pubblica su GHCR con tag di versione e riporta il digest nel riepilogo.
 
+**Concorrenza:** le run di PR e di push di uno stesso ref si sostituiscono con il commit più nuovo; le run manuali e quella
+notturna non si cancellano mai a vicenda (D-60).
+
 **Segreti:**
 - `FORK_RPC_URL`: RPC mainnet d'archivio, usato dalla notte e dalle run manuali; senza, RPC pubblico con tentativi ripetuti;
 - `BASE_RPC_URL`: facoltativo, per il confronto con il deploy su Base.

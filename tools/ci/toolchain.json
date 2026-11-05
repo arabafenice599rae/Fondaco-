@@ -27,5 +27,13 @@
     "version": "8.24.3",
     "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz",
     "sha256": "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c"
+  },
+  "minio": {
+    "$comment": "backup smoke only (D-58): built from the release tag in deploy/minio; the CI caches the binary under minio-<version>-go<go>",
+    "version": "RELEASE.2025-09-07T16-13-09Z",
+    "go": "1.24.7",
+    "goImage": "golang:1.24.7-alpine3.22@sha256:fc2cff6625f3c1c92e6c85938ac5bd09034ad0d4bc2dfb08278020b68540dbb5",
+    "moduleSum": "h1:deu0m9BiyqnMbGWfJi1PpVyotSXlDnTmRIme1cUXnxo=",
+    "goSumSha256": "e81f196b31076aa8928bcf74456d1a9c20113aca174089bc5c7d0642de3b316f"
   }
 }

@@ -44,9 +44,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguo
 - App: ripieghi di Geist Mono con metriche tarate (`size-adjust` e override) e preload dei woff2 400/500/600 (D-57).
   `web-layout` campiona ogni vista con i webfont e con i woff2 bloccati (L1, L1b) e confronta la geometria (L5).
 - Smoke Docker: backup anche contro MinIO (S7–S8, D-58):
-  - binario della release da dl.min.io con verifica `.sha256sum`, oppure compilazione dal tag come riserva;
-  - oggi dl.min.io risponde 410, quindi gira la riserva;
-  - una sonda nel CI prova il pull anonimo da quay.io.
+  - MinIO compilato dal tag di rilascio, con Go 1.24.7, l'hash del modulo e lo sha256 del `go.sum` bloccati;
+  - il CI tiene il binario in cache per tag e versione di Go.
 - `web-perf` P5: LCP ≤ 3,0 s, obiettivo 2,5 s, valore misurato riportato (D-59).
 
 ### Corretto (con il test che lo copre)
