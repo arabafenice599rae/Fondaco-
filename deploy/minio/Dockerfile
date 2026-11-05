@@ -1,38 +1,42 @@
 # syntax=docker/dockerfile:1.7
-# MinIO for the backup smoke test only (D-58; never deployed, never published).
-#   1. First choice: the release binary from dl.min.io, verified against its .sha256sum.
-#   2. Fallback, if the download or the check fails: built from the same release tag with `go install`, verified by the Go
-#      checksum database. On 2026-11-04 dl.min.io answers 410 Gone for every community release, so today the fallback runs.
-# The image records which path was taken in /SOURCE (read by the smoke test). MINIO_IMAGE=<ref@sha256:…> makes the smoke
-# test use a ready image instead (e.g. quay.io/minio/minio if it becomes pullable anonymously again: see the CI probe).
+# MinIO for the backup smoke test only (D-58; never deployed, never published), built from its release tag.
+# Pinned: the Go image (version and digest), GOTOOLCHAIN=local (no toolchain download; the tag's go.mod asks go1.24.2 at most),
+# the module's h1 hash, the sha256 of the tag's go.sum, and -mod=readonly (every dependency checked against that go.sum).
+# The same values are in tools/ci/toolchain.json → minio; the CI passes them as build args and caches the binary
+# (stage `bin`) under minio-<version>-go<go>, then builds the runnable image from the cache with Dockerfile.run.
 ARG GO_IMAGE=golang:1.24.7-alpine3.22@sha256:fc2cff6625f3c1c92e6c85938ac5bd09034ad0d4bc2dfb08278020b68540dbb5
 ARG MINIO_VERSION=RELEASE.2025-09-07T16-13-09Z
+ARG GO_VERSION=1.24.7
+ARG MINIO_MODULE_SUM=h1:deu0m9BiyqnMbGWfJi1PpVyotSXlDnTmRIme1cUXnxo=
+ARG MINIO_GOSUM_SHA256=e81f196b31076aa8928bcf74456d1a9c20113aca174089bc5c7d0642de3b316f
 
 # optional extra CA for a local proxy: docker build --build-context ca=<dir with ca-bundle.crt> (empty by default, as in CI)
 FROM scratch AS ca
 
 FROM ${GO_IMAGE} AS build
-ARG MINIO_VERSION
+ARG MINIO_VERSION GO_VERSION MINIO_MODULE_SUM MINIO_GOSUM_SHA256
+ENV GOTOOLCHAIN=local GOFLAGS=-mod=readonly CGO_ENABLED=0
 RUN --mount=type=bind,from=ca,target=/extra-ca \
-    set -u; mkdir -p /out; \
-    if [ -f /extra-ca/ca-bundle.crt ]; then export SSL_CERT_FILE=/extra-ca/ca-bundle.crt; fi; \
-    url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio.${MINIO_VERSION}"; \
-    if wget -q -O /out/minio "$url" && wget -q -O /tmp/minio.sha256sum "$url.sha256sum" \
-       && [ "$(cut -d' ' -f1 /tmp/minio.sha256sum)" = "$(sha256sum /out/minio | cut -d' ' -f1)" ]; then \
-      echo "dl.min.io binary, sha256 $(cut -d' ' -f1 /tmp/minio.sha256sum) verified" > /out/SOURCE; \
-    else \
-      echo "dl.min.io unavailable or checksum mismatch: building from the release tag"; rm -f /out/minio; \
-      CGO_ENABLED=0 GOBIN=/out go install -trimpath "github.com/minio/minio@${MINIO_VERSION}" \
-      && echo "go install github.com/minio/minio@${MINIO_VERSION} (dl.min.io unavailable)" > /out/SOURCE; \
-    fi; \
-    chmod +x /out/minio && /out/minio --version && cat /out/SOURCE
+    set -eu; if [ -f /extra-ca/ca-bundle.crt ]; then export SSL_CERT_FILE=/extra-ca/ca-bundle.crt; fi; \
+    test "$(go env GOVERSION)" = "go${GO_VERSION}" || { echo "Go is $(go env GOVERSION), want go${GO_VERSION}"; exit 1; }; \
+    go mod download -json "github.com/minio/minio@${MINIO_VERSION}" > /tmp/mod.json; \
+    sum=$(sed -n 's/^\t"Sum": "\(.*\)",$/\1/p' /tmp/mod.json); dir=$(sed -n 's/^\t"Dir": "\(.*\)",$/\1/p' /tmp/mod.json); \
+    test "$sum" = "$MINIO_MODULE_SUM" || { echo "module sum $sum, want $MINIO_MODULE_SUM"; exit 1; }; \
+    echo "${MINIO_GOSUM_SHA256}  $dir/go.sum" | sha256sum -c -; \
+    mkdir -p /out; cd "$dir"; go build -trimpath -o /out/minio .; \
+    echo "built from github.com/minio/minio@${MINIO_VERSION} with go${GO_VERSION}; module ${sum}; go.sum sha256 ${MINIO_GOSUM_SHA256}" > /out/SOURCE; \
+    /out/minio --version; cat /out/SOURCE
 
+# the binary and its provenance only: `docker buildx build --target bin --output type=local,dest=<dir>` (CI cache)
+FROM scratch AS bin
+COPY --from=build /out/minio /out/SOURCE /
+
+# runnable image (local default); the CI uses Dockerfile.run on the cached binary, with the same layout
 FROM scratch
 ARG MINIO_VERSION
 LABEL org.opencontainers.image.version="${MINIO_VERSION}" org.opencontainers.image.source="https://github.com/minio/minio"
-COPY --from=build /out/minio /minio
-COPY --from=build /out/SOURCE /SOURCE
-COPY --from=build /tmp /tmp
+COPY --from=bin /minio /SOURCE /
+WORKDIR /tmp
 WORKDIR /data
 EXPOSE 9000
 ENTRYPOINT ["/minio"]

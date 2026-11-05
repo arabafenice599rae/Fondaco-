@@ -31,6 +31,13 @@ if (need.has('playwright')) {
   row('playwright image (verify.yml, version)', `${ref} ${web.playwright}`, `${wf.includes(`image: ${ref}`) ? ref : 'verify.yml differs'} ${imgVer}`, wf.includes(`image: ${ref}`) && imgVer === web.playwright && /@sha256:[0-9a-f]{64}$/.test(ref))
   if (process.env.FONDACO_PW_IMAGE) row('running in the image', ref, process.env.FONDACO_PW_IMAGE)
 }
+{ // MinIO pins (D-58): deploy/minio/Dockerfile defaults = tools/ci/toolchain.json → minio (the CI passes the latter)
+  const m = T.minio, df = readFileSync(resolve(ROOT, 'deploy/minio/Dockerfile'), 'utf8')
+  const arg = (k) => (df.match(new RegExp(`^ARG ${k}=(.+)$`, 'm')) ?? [])[1] ?? 'missing'
+  const got = [arg('GO_IMAGE'), arg('MINIO_VERSION'), arg('GO_VERSION'), arg('MINIO_MODULE_SUM'), arg('MINIO_GOSUM_SHA256')].join(' ')
+  const want = [m.goImage, m.version, m.go, m.moduleSum, m.goSumSha256].join(' ')
+  row('minio pins (Dockerfile = toolchain.json)', `${m.version} go${m.go}`, got === want ? `${m.version} go${m.go}` : 'Dockerfile differs', got === want && m.goImage.includes(`golang:${m.go}-`))
+}
 if (need.has('foundry')) {
   row('forge', T.foundry.commit, sh('forge', ['--version']).replace(/\n/g, ' '))
   row('anvil', T.foundry.version.slice(1), sh('anvil', ['--version']))

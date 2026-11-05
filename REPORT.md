@@ -62,11 +62,9 @@ Branch di lavoro: `claude/fondaco-p2p-build-test-2glj2b`. Dettagli: `CHANGELOG.m
    - soglia del controllo 3,0 s, obiettivo 2,5 s;
    - misurato nell'immagine Playwright: **2,6 s** nelle run CI 6 e 7, **2,67 s** con P5 nella run manuale 41927262623,
      **2,53 s** in locale.
-8. **MinIO (D-58, approvata con variante):**
-   - prima strada: il binario della release da dl.min.io con verifica `.sha256sum`;
-   - riserva: la compilazione dal tag;
-   - oggi dl.min.io risponde 410 Gone per tutte le release community, quindi gira la riserva;
-   - verificato dal runner GitHub (run 41927262623): quay.io risponde `unauthorized` al pull anonimo.
+8. **MinIO compilato dal tag (D-58, approvata):** non esistono più immagini o binari pubblici (quay.io: `unauthorized`
+   anche dal runner; Docker Hub: rimosso; dl.min.io: 410). Il build blocca Go 1.24.7, l'hash del modulo e lo sha256 del
+   `go.sum`; il CI tiene il binario in cache per tag e versione di Go.
 9. **Preload a priorità bassa (D-57).** Con priorità normale P3 (Fast 3G) passava da 1,8 a 2,4 s; con `fetchpriority="low"`
    è 1,82 s.
 
@@ -221,7 +219,7 @@ Dopo il merge della PR #2: run manuale `workflow_dispatch` (suite `full`) sul br
   - V1 20/20;
   - F4a al primo tentativo;
   - MinIO compilato dal tag (dl.min.io: 410);
-  - sonda quay.io `unauthorized`.
+  - sonda quay.io `unauthorized` (sonda poi tolta, D-58 nella forma originale).
 
 Dopo la run 7 il trigger push sul branch è stato tolto. Restano `pull_request`, il notturno, `workflow_dispatch` (attivo
 quando `verify.yml` è su `main`) e il push dei tag `v*`.

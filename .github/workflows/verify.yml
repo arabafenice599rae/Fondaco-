@@ -287,16 +287,26 @@ jobs:
       - name: build the book image
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
         with: { context: ., file: deploy/book/Dockerfile, load: true, tags: "fondaco-book:smoke", build-args: "VERSION=${{ github.sha }}" }
-      - name: probe quay.io/minio/minio (anonymous pull, D-58; informative, never fails the job)
-        continue-on-error: true
+      - id: minio
+        name: MinIO pins (tools/ci/toolchain.json → minio)
+        run: node -e "const m=require('./tools/ci/toolchain.json').minio; for (const k of ['version','go','goImage','moduleSum','goSumSha256']) console.log(k + '=' + m[k])" >> "$GITHUB_OUTPUT"
+      - id: minio-cache
+        name: MinIO binary cache (key = release tag + Go version)
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .cache/minio
+          key: "minio-${{ steps.minio.outputs.version }}-go${{ steps.minio.outputs.go }}"
+      - name: build MinIO from the release tag (cache miss only; Go, module hash and go.sum pinned, D-58)
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        run: >-
+          docker buildx build deploy/minio --target bin --output type=local,dest=.cache/minio
+          --build-arg "GO_IMAGE=${{ steps.minio.outputs.goImage }}" --build-arg "MINIO_VERSION=${{ steps.minio.outputs.version }}"
+          --build-arg "GO_VERSION=${{ steps.minio.outputs.go }}" --build-arg "MINIO_MODULE_SUM=${{ steps.minio.outputs.moduleSum }}"
+          --build-arg "MINIO_GOSUM_SHA256=${{ steps.minio.outputs.goSumSha256 }}"
+      - name: MinIO image from the cached binary (never published)
         run: |
-          ref=quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-          if docker pull "$ref" > /tmp/quay.log 2>&1; then res="pullable: $(docker image inspect --format '{{index .RepoDigests 0}}' "$ref")"
-          else res="not pullable anonymously: $(tail -1 /tmp/quay.log)"; fi
-          echo "$res"; { echo "### quay.io/minio/minio (anonymous)"; echo; echo "\`$ref\` → $res"; echo; } >> "$GITHUB_STEP_SUMMARY"
-      - name: MinIO for the backup smoke (dl.min.io binary with sha256, else built from the release tag; D-58, never published)
-        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
-        with: { context: deploy/minio, load: true, tags: "fondaco-minio:smoke" }
+          docker build -f deploy/minio/Dockerfile.run --build-arg "MINIO_VERSION=${{ steps.minio.outputs.version }}" -t fondaco-minio:smoke .cache/minio
+          { echo "### MinIO (backup smoke)"; echo; echo "cache: ${{ steps.minio-cache.outputs.cache-hit == 'true' && 'hit' || 'miss, built now' }} · $(cat .cache/minio/SOURCE)"; echo; } >> "$GITHUB_STEP_SUMMARY"
       - name: compose smoke test (book + Caddy + backup over HTTPS; backups to the SigV4 stub and to MinIO)
         run: node tools/testkit/run-suites.mjs docker-smoke --report docker
 
