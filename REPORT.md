@@ -252,12 +252,16 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
 
 ## Immagine della bacheca
 
-Non ancora pubblicata: la pubblica il CI al push di un tag `v*` su un commit di `main`, creato dal proprietario dopo la testnet
-(D-56). Alla pubblicazione, qui vanno tag, digest e commit, presi dal riepilogo della run:
+Non ancora pubblicata. La pubblica il CI al push di un tag `v*` su un commit di `main`, creato dal proprietario, e solo con
+la run completa verde (D-56, D-62).
+- **Cosa si pubblica:** l'archivio OCI costruito una volta nel job `docker` e passato dallo smoke test, senza ricostruirlo.
+- **Digest:** quello testato e quello pubblicato devono coincidere, altrimenti il job fallisce.
 
-| Tag | Digest | Commit | Run |
-|---|---|---|---|
-| — | — | — | — |
+Alla pubblicazione, qui vanno i valori del riepilogo della run ("Image published"):
+
+| Tag | Digest | Commit | Smoke sulla stessa immagine | Run |
+|---|---|---|---|---|
+| — | — | — | — | — |
 
 ## Prossimi passi
 

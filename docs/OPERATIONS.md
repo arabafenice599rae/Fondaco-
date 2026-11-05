@@ -8,7 +8,7 @@ The stack (`deploy/`), tested end to end by `docker-smoke` (`packages/book-serve
 
 | Service | Image | Role |
 |---|---|---|
-| `book` | `ghcr.io/arabafenice599rae/fondaco-book:<git tag>`, e.g. `:v0.1.0` (published by the CI only when a `v*` tag on a commit of `main` is pushed; tag and digest in the run summary and in REPORT.md) | the book server, user `node`, data in the `book-data` volume, no published port |
+| `book` | `ghcr.io/arabafenice599rae/fondaco-book:<git tag>`, e.g. `:v0.1.0` (published by the CI only when a `v*` tag on a commit of `main` is pushed and every verification job is green; it is the very image the smoke test ran on, same digest; tag, digest and commit in the run summary and in REPORT.md) | the book server, user `node`, data in the `book-data` volume, no published port |
 | `caddy` | `caddy:2.10.2-alpine@sha256:4c6e…530d` | TLS (automatic certificates), reverse proxy, `/stream` not buffered |
 | `backup` | same image as `book` | an hourly consistent snapshot of SQLite, gzipped, uploaded to S3-compatible storage (SigV4), 168 copies kept |
 

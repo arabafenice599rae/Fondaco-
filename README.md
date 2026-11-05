@@ -118,8 +118,8 @@ e fallisce se una non corrisponde.
 | `web-e2e` | Playwright, Lighthouse, axe, layout (con webfont e con woff2 bloccati), regressione visiva, flussi; nell'immagine `mcr.microsoft.com/playwright:v1.63.0-noble` bloccata per digest |
 | `supply-chain` | `pnpm audit`, lockfile bloccato, gitleaks sull'intera storia, SHA256SUMS |
 | `reproducible-build-a/b`, `reproducible-compare` | due build separati: stesso hash dell'albero, stesso CID IPFS |
-| `docker` | immagine della bacheca e smoke test del compose; backup verso lo stub SigV4 e verso MinIO compilato dal tag (binario in cache) |
-| `docker-publish` | solo al push di un tag `v*`: pubblica su GHCR e riporta il digest |
+| `docker` | un solo build dell'immagine della bacheca (archivio OCI), smoke test del compose su quell'immagine, verifica che un push ne conservi il digest; backup verso lo stub SigV4 e verso MinIO compilato dal tag (binario in cache) |
+| `docker-publish` | solo al push di un tag `v*` e con tutti i job verdi: pubblica su GHCR l'immagine passata dallo smoke test, stesso digest |
 
 </details>
 
