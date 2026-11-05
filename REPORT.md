@@ -242,13 +242,13 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
 - la rete predefinita è la prima di `config.json` con un contratto, oggi Base Sepolia (D-61);
 - Ethereum e Base restano in elenco ma non sono selezionabili ("non ancora disponibile");
 - il foglio di conferma e Impostazioni (rete attiva) mostrano l'indirizzo completo del contratto e il link a Sourcify.
-- il build dell'app cambia di conseguenza. Al commit `d4eb782`:
-  - tree hash `a9c9e184d463f52730d25fe65e53cbb52ce4603be0aa6a836d8335086aae2df7`;
-  - CID `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4`;
-  - contenthash `0xe3010170122066abf99ef0d6f9deae80653833b84e8ffa936bd8f27aaff3a41058876dc56867`.
+- il build dell'app cambia di conseguenza. Al commit `ab6e7ab` (metadati inglesi e anteprime dei link, D-63):
+  - tree hash `1fe2237c8cb2b637ba5e0895f7d42d791fa6ac947b9a17cffd438de75fa0a839`;
+  - CID `bafybeigvo755lcthfmzkgzijvont3jwj7v4ihpytazgsaxz4ufvgevo6xa`;
+  - contenthash `0xe30101701220d577fbd58a672b32a36509ab9b3da6c9fd7883bf13064d205f3ca16a6255deb8`.
 
   Il build è riproducibile tra due build locali, e il CI lo ricontrolla nella run della PR. Questi valori sostituiscono quelli
-  dei commit `cd11d87` e `5b7b87a` per qualunque pubblicazione futura.
+  dei commit `d4eb782` (CID `bafybeidgvp4…lim4`), `cd11d87` e `5b7b87a` per qualunque pubblicazione futura.
 
 ## Immagine della bacheca
 

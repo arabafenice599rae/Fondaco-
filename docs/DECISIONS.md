@@ -523,3 +523,14 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   sul runner non voglio dipendere da un pacchetto apt senza versione fissa. Lo store containerd fa la stessa cosa con Docker
   soltanto. In locale (Docker 29, containerd) il meccanismo è stato verificato: digest del build, Id dopo il load e digest
   nel registry coincidono.
+
+### D-63 · Metadati inglesi e anteprime dei link nell'app — proposta
+- **Titolo e descrizione** di `apps/web/index.html` in inglese, con il motto: "FONDACO — the public OTC board for Ethereum" e
+  "You set the price, the contract settles it. Non-custodial, on AirSwap SwapERC20 v4.3; a 0.30% fee only when an offer is
+  filled."
+- **Anteprime:** tag `og:` (type, site_name, title, description, image con dimensioni 1280×640 e testo alternativo) e
+  `twitter:` (`summary_large_image`).
+- **Immagine:** `docs/assets/social-preview.png`, la stessa del repository. Le anteprime vogliono un URL assoluto, quindi
+  punta a `raw.githubusercontent.com/<repo>/main/…`; non entra nel build dell'app, che resta senza richieste esterne
+  (il crawler la scarica, il browser dell'utente no).
+- **Conseguenza:** cambiano tree hash e CID dell'app. Non sono ancora pinnati, quindi non c'è nulla da ritirare.
