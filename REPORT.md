@@ -242,11 +242,13 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
 - la rete predefinita è la prima di `config.json` con un contratto, oggi Base Sepolia (D-61);
 - Ethereum e Base restano in elenco ma non sono selezionabili ("non ancora disponibile");
 - il foglio di conferma e Impostazioni (rete attiva) mostrano l'indirizzo completo del contratto e il link a Sourcify.
-- il build dell'app cambia di conseguenza. Al commit `cd11d87`: tree hash
-  `c0a051cc36fcfab45043f11c147f074b4dd9a0dba444297e38da6cc7f668e324`, CID
-  `bafybeiau7cgw5rfowzq723wxjol2mjfgujxlnwpt5z46gr2pfaecrzkqji`, contenthash
-  `0xe3010170122014f88d6ec4aeb661fd6ed74b97a624a6a26eb6d9f3ee79e3474f280828e5504a`. Il build è riproducibile tra due build
-  locali; il CI lo ricontrolla alla prossima run. Sostituisce il CID del commit `5b7b87a` per qualunque pubblicazione futura.
+- il build dell'app cambia di conseguenza. Al commit `d4eb782`:
+  - tree hash `a9c9e184d463f52730d25fe65e53cbb52ce4603be0aa6a836d8335086aae2df7`;
+  - CID `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4`;
+  - contenthash `0xe3010170122066abf99ef0d6f9deae80653833b84e8ffa936bd8f27aaff3a41058876dc56867`.
+
+  Il build è riproducibile tra due build locali, e il CI lo ricontrolla nella run della PR. Questi valori sostituiscono quelli
+  dei commit `cd11d87` e `5b7b87a` per qualunque pubblicazione futura.
 
 ## Immagine della bacheca
 
@@ -283,7 +285,7 @@ rilanciato da solo nell'immagine Playwright. Il `docker-smoke` (8/8) è esplicit
 | client | wallet 5/5 · client-guards 9/9 · client-smoke 4/4 · taker 13/13 · protect 5/5 · taker-advanced 12/12 |
 | web | web-model 39/39 · web-keys 6/6 · web-layout 7/7 (L1 con webfont, L1b con woff2 bloccati, L5 geometria) · web-a11y 4/4 · web-visual 2/2 · web-e2e 18/18 · web-flows 21/21 · web-perf 5/5 (P5 LCP) |
 
-Totale: **332 controlli** su 39 suite, più `docker-smoke` 8/8.
+Totale: **334 controlli** su 39 suite, più `docker-smoke` 8/8.
 
 Suite web eseguite anche nell'immagine Playwright in locale: model 39, keys 6, layout 7, a11y 4, visual 2, e2e 18, flows 21,
 perf 5 (P5 LCP 2,53 s), tutte verdi.
