@@ -119,8 +119,8 @@ reviewed by you.
 
 1. **Build:** the CI builds the app twice in separate jobs (`reproducible-build-a/b`) and compares the tree hash and the CID.
    Locally: `node tools/build-hash.mjs --twice`.
-2. **CID** (offline, no upload): `node tools/ipfs.mjs cid <dist>`. For the app at commit `ab6e7ab` (testnet addresses, English
-   link-preview metadata) it is `bafybeigvo755lcthfmzkgzijvont3jwj7v4ihpytazgsaxz4ufvgevo6xa` (tree hash `1fe2237c…a839`); at commit
+2. **CID** (offline, no upload): `node tools/ipfs.mjs cid <dist>`. For the app at commit `6956bf5` (testnet addresses, English link-preview
+   metadata, social-preview.png in the build) it is `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai` (tree hash `e5d897cd…1bca`); at commit
    `d4eb782` it was `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4` (tree hash `a9c9e184…2df7`); before, at commit `5b7b87a`, it was
    `bafybeigfhaqqpvoxleq5qn5u7t3cjwafc7tjdqm35vxofjf2rukmo66n7q` (tree hash `c9b62461…f1efe`), the same locally and in both CI
    builds of run 41914373389. Any change to the app (sources, fonts, build config) gives a new CID.
@@ -133,8 +133,8 @@ reviewed by you.
 
 ## 3. ENS contenthash of fondaco.eth (documented, not executed)
 
-1. Encoding (EIP-1577): `node tools/ipfs.mjs contenthash <cid>`. For commit `ab6e7ab`:
-   `0xe30101701220d577fbd58a672b32a36509ab9b3da6c9fd7883bf13064d205f3ca16a6255deb8`; for the older commits `d4eb782`:
+1. Encoding (EIP-1577): `node tools/ipfs.mjs contenthash <cid>`. For commit `6956bf5`:
+   `0xe30101701220a6bf68f3490ec29e6298bc6d5715c25b42a032ba17e27fc5dc8530bcb14d3702`; for the older commits `d4eb782`:
    `0xe3010170122066abf99ef0d6f9deae80653833b84e8ffa936bd8f27aaff3a41058876dc56867` and `5b7b87a`:
    `0xe30101701220c5382107d5d75921d837b4fcf624d80517e691c19bed6ee2a4ba8d14c77bcdfc`.
 2. The **manager** of `fondaco.eth` sets the record (ideally the Safe, with a Safe transaction):

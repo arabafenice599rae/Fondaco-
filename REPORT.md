@@ -242,10 +242,10 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
 - la rete predefinita è la prima di `config.json` con un contratto, oggi Base Sepolia (D-61);
 - Ethereum e Base restano in elenco ma non sono selezionabili ("non ancora disponibile");
 - il foglio di conferma e Impostazioni (rete attiva) mostrano l'indirizzo completo del contratto e il link a Sourcify.
-- il build dell'app cambia di conseguenza. Al commit `ab6e7ab` (metadati inglesi e anteprime dei link, D-63):
-  - tree hash `1fe2237c8cb2b637ba5e0895f7d42d791fa6ac947b9a17cffd438de75fa0a839`;
-  - CID `bafybeigvo755lcthfmzkgzijvont3jwj7v4ihpytazgsaxz4ufvgevo6xa`;
-  - contenthash `0xe30101701220d577fbd58a672b32a36509ab9b3da6c9fd7883bf13064d205f3ca16a6255deb8`.
+- il build dell'app cambia di conseguenza. Al commit `6956bf5` (metadati inglesi, anteprime dei link e `social-preview.png` nel build, D-63):
+  - tree hash `e5d897cd329a2a6cf81d2db409a2118890a2ae4685648ded863659feb5551bca`;
+  - CID `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai`;
+  - contenthash `0xe30101701220a6bf68f3490ec29e6298bc6d5715c25b42a032ba17e27fc5dc8530bcb14d3702`.
 
   Il build è riproducibile tra due build locali, e il CI lo ricontrolla nella run della PR. Questi valori sostituiscono quelli
   dei commit `d4eb782` (CID `bafybeidgvp4…lim4`), `cd11d87` e `5b7b87a` per qualunque pubblicazione futura.
@@ -269,8 +269,8 @@ Pubblicata dal CI al push del tag `v1.0.0-rc1`, creato dal proprietario il 2026-
   - CID `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4`;
   - tree hash `a9c9e184…2df7`;
   - `apps/web` non cambia tra i due commit.
-- **Prossimo tag:** l'app con i metadati inglesi (D-63, commit `ab6e7ab`, CID
-  `bafybeigvo755lcthfmzkgzijvont3jwj7v4ihpytazgsaxz4ufvgevo6xa`) non è in rc1 e andrà nel prossimo tag. `v1.0.0-rc1` non
+- **Prossimo tag:** l'app con i metadati inglesi (D-63, commit `6956bf5`, CID
+  `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai`) non è in rc1 e andrà nel prossimo tag. `v1.0.0-rc1` non
   va ricreato né spostato.
 
 ## Prossimi passi

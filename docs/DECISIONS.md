@@ -534,8 +534,9 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   punta a `raw.githubusercontent.com/<repo>/main/…`; non entra nel build dell'app, che resta senza richieste esterne
   (il crawler la scarica, il browser dell'utente no).
 - **Conseguenza:** cambiano tree hash e CID dell'app. Non sono ancora pinnati, quindi non c'è nulla da ritirare.
-- **Limite noto:** finché il repository è privato, `raw.githubusercontent.com` risponde 404 a chi non ha fatto login, quindi
-  le anteprime restano senza immagine. Per ora resta così.
-- **Soluzione definitiva**, quando il repository sarà pubblico o l'app sarà su IPFS: l'immagine entra nel build come
-  `/social-preview.png`, servita dall'app stessa, e `og:image`/`twitter:image` puntano a quel file con un URL assoluto sul
-  dominio dell'app, quando sarà noto. Anche questa modifica cambierà il CID.
+- **Immagine nel build:** `social-preview.png` è anche in `apps/web/public`, quindi l'app la serve da `/social-preview.png`
+  (stesso file di `docs/assets`, stesso sha256 `ce237c07…6048`). Per ora `og:image`/`twitter:image` restano sull'URL
+  `raw.githubusercontent.com`, che funziona perché il repository è pubblico. Quando l'app sarà su IPFS con un dominio noto,
+  i due tag punteranno a `https://<dominio>/social-preview.png`.
+- **Nuovi valori del build** (commit `6956bf5`): tree hash `e5d897cd…1bca`, CID
+  `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai`.
