@@ -5,7 +5,7 @@
 export const PROTECTED_RPC: Readonly<Record<number, readonly string[]>> = {
   1: ['https://rpc.mevblocker.io/noreverts', 'https://rpc.flashbots.net/fast'],
 }
-export const SEQUENCER_CHAINS: ReadonlySet<number> = new Set([8453, 10, 42161]) // Base, OP Mainnet, Arbitrum One
+export const SEQUENCER_CHAINS: ReadonlySet<number> = new Set([8453, 10, 42161, 84532]) // Base, OP Mainnet, Arbitrum One, Base Sepolia
 
 // ------------------------------------------------------------------ price guards (pure)
 

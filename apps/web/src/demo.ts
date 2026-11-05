@@ -149,7 +149,7 @@ export class DemoBackend implements Backend {
   private emit(w: string) { for (const f of this.listeners) try { f(w) } catch (e) { console.error(e) } }
   onChange(f: (what: string) => void): void { this.listeners.add(f) }
   chainId(): number { return 1 }
-  chains() { return [{ id: 1, name: 'Ethereum' }, { id: 8453, name: 'Base' }] }
+  chains() { return [{ id: 1, name: 'Ethereum', available: true }, { id: 8453, name: 'Base', available: true }] }
   swapAddress(): Address { return fakeAddr(0xfee) }
   protocolFee(): bigint { return FEE }
   markets(): Market[] { return this.sims.map((s) => s.m) }

@@ -1,6 +1,7 @@
 // Entry point: load config.json, apply the user's settings, start the live backend (or the simulated one in a DEMO=true
 // build), the interface and the splash. Impostazioni: book URL and RPC per chain, the contract only behind an explicit warning.
 import './fonts.css'
+import { contractHTML } from './contract-link.js'
 import './prototype.css'
 import './app.css'
 import { getAddress, isAddress } from 'viem'
@@ -40,14 +41,14 @@ async function boot(): Promise<void> {
     void live.start()
   }
   let ui: UIHandle | null = null
-  ui = startUI(B, { openSettings: () => { renderSettings(cfg, eff, readSettings(store)); ui?.openSheet('ssheet', $('s-book')) } })
+  ui = startUI(B, { openSettings: () => { renderSettings(cfg, eff, readSettings(store), B.chainId()); ui?.openSheet('ssheet', $('s-book')) } })
   wireSettings(cfg, () => ui?.closeSheet('ssheet'))
   ;(window as unknown as { __fondaco?: unknown }).__fondaco = { backend: B, config: eff }
 }
 
 // ------------------------------------------------------------------ Impostazioni
 
-function renderSettings(cfg: AppConfig, eff: Effective, s: Settings): void {
+function renderSettings(cfg: AppConfig, eff: Effective, s: Settings, activeChain: number): void {
   ;($('s-book') as HTMLInputElement).value = s.book ?? ''
   ;($('s-book') as HTMLInputElement).placeholder = cfg.book || 'https://…'
   $('s-error').hidden = true
@@ -59,7 +60,7 @@ function renderSettings(cfg: AppConfig, eff: Effective, s: Settings): void {
       <input id="s-rpc-${id}" class="field" data-k="rpc" type="url" inputmode="url" autocomplete="off" spellcheck="false" value="${esc(o.rpc ?? '')}" placeholder="${esc(c.rpc || 'vuoto: le letture passano dal wallet')}">
       <div class="s-contract">
         <span class="s-lbl">Contratto</span>
-        <span class="mono s-addr" id="s-addr-${id}">${swapNow ? esc(swapNow) : 'non configurato'}${eff.overridden.swap[id] ? ' <b class="s-mod">modificato</b>' : ''}</span>
+        <span class="mono s-addr" id="s-addr-${id}">${Number(id) === activeChain ? contractHTML(swapNow ?? null, Number(id)) : swapNow ? esc(swapNow) : 'non configurato'}${eff.overridden.swap[id] ? ' <b class="s-mod">modificato</b>' : ''}${Number(id) === activeChain ? ' <b class="s-active">rete attiva</b>' : ''}</span>
         <button type="button" class="link" data-edit="${id}">Modifica</button>
       </div>
       <div class="s-danger" id="s-swap-wrap-${id}" hidden>

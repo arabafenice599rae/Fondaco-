@@ -195,10 +195,14 @@ Il modello delle minacce, con ogni mitigazione collegata al test che la copre, �
 
 ## Rilascio
 
+> [!NOTE]
+> **Testnet:** SwapERC20 v4.3 è deployato su **Sepolia** e **Base Sepolia** a
+> `0xf86E2c4789F45A8a7AAA2CA98379716070B80131`, con owner e fee wallet un Safe 1/1 di test. Checklist C1–C6 e fill di prova
+> sono verdi, il contratto è un *exact match* su Sourcify; hash e numeri sono in [`REPORT.md`](REPORT.md#testnet-sepolia-e-base-sepolia--2026-11-05).
+
 > [!WARNING]
-> **Nessun deploy è mai stato eseguito su una rete reale.** Lo script è stato provato solo su fork locali di Sepolia e Base
-> Sepolia. Deploy su testnet, pubblicazione su IPFS e record ENS richiedono la conferma esplicita del responsabile, con la
-> procedura di [`docs/RELEASE.md`](docs/RELEASE.md).
+> **Mainnet esclusa.** Nessun deploy su mainnet, nessuna pubblicazione su IPFS e nessun record ENS senza la conferma esplicita
+> del responsabile, con la procedura di [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ```bash
 # prova a vuoto: legge soltanto, non firma e non invia nulla
@@ -228,7 +232,8 @@ indirizzo al nonce 0, runtime, owner = Safe, fee 30/30, staking e bonus a 0, `DO
 ## Stato del progetto
 
 - **Fasi 0–7 completate:** contratto verificato, bacheca, client, app, test avanzati, sicurezza e rilascio.
-- **In attesa:** deploy su Sepolia e Base Sepolia, pubblicazione su IPFS, contenthash ENS di `fondaco.eth`.
+- **Testnet fatta:** Sepolia e Base Sepolia, `0xf86E2c4789F45A8a7AAA2CA98379716070B80131`.
+- **In attesa:** verifica su Etherscan e Basescan, pubblicazione su IPFS, contenthash ENS di `fondaco.eth`, rilascio `v*`.
 - **Prossimi passi:**
   - EIP-5792 per approvare e scambiare con una sola conferma;
   - un wallet integrato opzionale;

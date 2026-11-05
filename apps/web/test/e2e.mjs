@@ -137,7 +137,7 @@ async function buy(page, usdc) {
   await until(async () => !(await page.isDisabled('#review')), 15_000, 'review enabled')
   await page.click('#review')
   await until(async () => !(await page.isDisabled('#c-go')), 20_000, 'confirm ready (verified)')
-  lastConfirm = { qs: (await page.textContent('#c-qs'))?.trim(), mev: (await page.textContent('#c-mev'))?.replace(/\s+/g, ' ').trim(), contract: await page.getAttribute('#c-contract', 'title') }
+  lastConfirm = { qs: (await page.textContent('#c-qs'))?.trim(), mev: (await page.textContent('#c-mev'))?.replace(/\s+/g, ' ').trim(), contract: await page.getAttribute('#c-contract', 'title'), contractText: (await page.textContent('#c-contract'))?.trim(), sourcify: await page.getAttribute('#c-contract a.src-link', 'href').catch(() => null) }
   await page.click('#c-go')
   await until(async () => (await page.isVisible('#c-done')) && (await page.textContent('#c-done-h')), 90_000, 'swap done')
   return (await page.textContent('#c-done-h'))?.trim()
@@ -169,7 +169,16 @@ try {
   const feeW = (5n * 10n ** 17n * FEE) / 10_000n
   check('W3: bob bought it from the app: done screen', done === 'Scambio completato', done)
   check('W3b: confirmation showed the verified quote, the real MEV status of this wallet and the app’s own contract',
-    lastConfirm.qs === 'Verificato' && /Mempool pubblica/.test(lastConfirm.mev) && lastConfirm.contract === SWAP, `${lastConfirm.qs} · MEV "${lastConfirm.mev}" · ${lastConfirm.contract}`)
+    lastConfirm.qs === 'Verificato' && /Mempool pubblica/.test(lastConfirm.mev) && lastConfirm.contract === SWAP && lastConfirm.contractText?.startsWith(SWAP) && lastConfirm.sourcify === `https://repo.sourcify.dev/1/${SWAP}`, `${lastConfirm.qs} · MEV "${lastConfirm.mev}" · ${lastConfirm.contractText} · ${lastConfirm.sourcify}`)
+  // W3c (D-61): Impostazioni shows the active network's contract in full with its Sourcify page; the other networks no link
+  await pb.keyboard.press('Escape')
+  await until(async () => !(await pb.evaluate(() => document.querySelector('#confirm')?.classList.contains('open'))), 10_000, 'confirmation closed')
+  await pb.click('#wal-chip'); await pb.click('#w-settings')
+  await until(async () => (await pb.locator('#s-addr-1').count()) > 0, 10_000, 'settings open')
+  const sAct = { text: (await pb.textContent('#s-addr-1'))?.replace(/\s+/g, ' ').trim(), href: await pb.getAttribute('#s-addr-1 a.src-link', 'href').catch(() => null), others: await pb.locator('.s-chain:not([data-chain="1"]) a.src-link').count() }
+  await pb.click('#s-close')
+  check('W3c: Impostazioni shows the contract of the active network in full, "rete attiva", and its Sourcify page; other networks no link',
+    sAct.text?.startsWith(SWAP) && /rete attiva/.test(sAct.text ?? '') && sAct.href === `https://repo.sourcify.dev/1/${SWAP}` && sAct.others === 0, `${sAct.text} · ${sAct.href} · others ${sAct.others}`)
   check('W4: balances exact — bob +0,5 WETH −1250 USDC; alice +1250 USDC −(0,5 + fee) WETH',
     bW1 - bW0 === 5n * 10n ** 17n && bU0 - bU1 === 1250n * 10n ** 6n && aU1 - aU0 === 1250n * 10n ** 6n && aW0 - aW1 === 5n * 10n ** 17n + feeW,
     `bob ΔWETH ${formatUnits(bW1 - bW0, 18)}, ΔUSDC −${formatUnits(bU0 - bU1, 6)}; alice ΔUSDC ${formatUnits(aU1 - aU0, 6)}, ΔWETH −${formatUnits(aW0 - aW1, 18)}`)

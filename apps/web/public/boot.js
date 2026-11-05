@@ -24,7 +24,10 @@
   config.then((cfg) => {
     const book = (userBook() || cfg.book || '').replace(/\/+$/, '')
     if (!/^https?:\/\//.test(book)) return
-    const chain = Number(cfg.defaultChain || 1)
+    // same rule as pickDefaultChain() in src/config.ts: the first chain with a contract, else defaultChain, else the first
+    const chains = cfg.chains || {}
+    const withSwap = Object.keys(chains).find((id) => typeof chains[id].swap === 'string' && chains[id].swap !== '')
+    const chain = Number(withSwap || cfg.defaultChain || Object.keys(chains)[0] || 1)
     const get = (path) => { const p = fetch(book + path, { cache: 'no-store' }); p.catch(() => {}); store.set(book + path, p) }
     get('/config')
     const pairs = guessPairs(((cfg.chains || {})[String(chain)] || {}).tokens).slice(0, 10)

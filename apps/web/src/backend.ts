@@ -10,7 +10,8 @@ export interface TakerLike {
   execute(q: VerifiedQuote, opts: { approval: 'exact' | 'max' }): Promise<ExecuteResult>
 }
 export interface Notice { id: string; level: 'warn' | 'danger' | 'info'; title: string; text: string; blocksTrading: boolean }
-export interface ChainOption { id: number; name: string }
+/** `available`: the chain has a contract configured, so the user can select it (D-61) */
+export interface ChainOption { id: number; name: string; available: boolean }
 export interface PublishResult { ok: number; errors: string[]; hashes: string[] }
 export interface SignedOrderView { hash: string; status: string; executableOnChain: boolean; order: Record<string, string | number> }
 

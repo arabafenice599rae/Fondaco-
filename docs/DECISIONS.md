@@ -379,9 +379,28 @@ serve la tua conferma.
 - **Restano** il rendering fissato del browser di test (`--font-render-hinting=none`, `test/fontconfig/fonts.conf`) e l'attesa
   dei font (`fontsLoaded`).
 
-### D-55 · Stima del gas del deploy su testnet — D
-Il nodo pubblico di Sepolia stima 18,2 M di gas per il deploy, mentre quello misurato sul fork è 2.578.924. Il piano usa il gas
-misurato ×1,2 e riporta anche la stima del nodo. Il deploy vero passa comunque da `estimateGas` del wallet.
+### D-55 · Gas su Sepolia — corretta il 2026-11-05
+**La versione precedente era sbagliata.** Diceva che il nodo pubblico di Sepolia *sovrastimava* il gas del deploy: 18,2 M
+stimati contro i 2.578.924 misurati sul fork locale. In realtà la stima era giusta: il deploy vero su Sepolia ha consumato
+**18.068.336** gas (ricevuta `0x869dbc09…`).
+
+**Cosa vale ora:**
+- **I fork locali non riproducono Sepolia.** anvil applica regole di gas più vecchie di quelle attive su Sepolia, quindi le
+  misure fatte sui fork valgono per Base Sepolia (lì il gas coincide al singolo gas) ma non per Sepolia.
+- **Il fork attivo su Sepolia** risulta da `eth_config` (EIP-7910) su publicnode (Geth 1.17.9): attivato il 2026-10-06
+  13:53:36 UTC, forkId `0x6c1d9423`. Tra i contratti di sistema compaiono `BUILDER_DEPOSIT_CONTRACT` e
+  `BUILDER_EXIT_CONTRACT`.
+- **Cosa costa di più:** solo la creazione di stato. +183.600 per un account nuovo, circa +82–88 mila per uno slot di storage
+  nuovo, circa +1.340 gas per byte di codice depositato. Una sovrascrittura di uno slot esistente costa quasi uguale
+  (+1.200). Il quadro è compatibile con un aumento del costo della creazione di stato introdotto da quel fork. Il nome del
+  fork e le EIP coinvolte non sono confermati da una fonte primaria, perché `eth_config` non li espone.
+- **Due nodi pubblici danno lo stesso `gasUsed`:** publicnode (Geth) e il gateway Tenderly, per la ricevuta del deploy. Gli
+  altri nodi provati (drpc, 1rpc, blockpi, blast, rpc.sepolia.org) richiedono una chiave o non rispondono.
+
+**Conseguenze:**
+- su Sepolia i budget si calcolano dalla stima del nodo, non dalle misure sul fork;
+- `testnet.mjs plan` deve usare `estimateGas` della rete quando supera la misura locale;
+- la soglia di stop usata per il deploy è stata 0,85 gwei (approvata).
 
 ### D-56 · Immagine della bacheca — D
 L'immagine viene pubblicata su GHCR **solo al push di un tag `v*`**, con il digest nel riepilogo della run. Prima la
@@ -466,3 +485,16 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   del commit più nuovo.
 - **Prima:** gruppo `verify-<ref>` per tutti gli eventi e cancellazione sempre attiva. Una seconda run manuale sullo stesso
   branch cancellava la prima.
+
+### D-61 · Rete predefinita e contratto visibile — approvata
+- **Rete predefinita:** è la prima rete di `config.json` che ha un contratto. L'ordine è quello delle chiavi del JSON, cioè
+  chainId crescente per le chiavi numeriche. Oggi è Base Sepolia (84532).
+  - `defaultChain` non è più nel file distribuito: vale solo se nessuna rete ha un contratto.
+  - La regola sta in `pickDefaultChain()` (`config.ts`) e, identica, in `public/boot.js` per il prefetch; web-model U40
+    controlla che coincidano.
+- **Reti senza contratto:** restano in elenco nel foglio Wallet, ma non sono selezionabili (radio disabilitato, "non ancora
+  disponibile"). Se il wallet è già su una di quelle reti, l'app la segue e mostra l'avviso "Contratto non configurato";
+  quel comportamento non cambia (F8).
+- **Contratto visibile:** il foglio di conferma e Impostazioni (riga della rete attiva, "rete attiva") mostrano l'indirizzo
+  completo del contratto con il link alla sua pagina Sourcify (`repo.sourcify.dev/<chainId>/<indirizzo>`). Nella build demo
+  l'indirizzo è simulato, quindi il link non c'è. Controlli: web-e2e W3b e W3c.

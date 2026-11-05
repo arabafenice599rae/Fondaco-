@@ -137,7 +137,118 @@ Dettagli in `docs/THREAT_MODEL.md`.
   - preparati `testnet.mjs` (plan e rehearse), `post-deploy-check.mjs` (C1–C6) e `test-fill.mjs`;
   - prova completa su fork locali delle due testnet: stesso indirizzo, C1–C6 verdi su entrambe, fill di prova con saldi
     esatti; gas misurato: deploy 2.578.924, `transferOwnership` 28.521;
-  - **il deploy non è stato eseguito**: serve la tua conferma (vedi `docs/RELEASE.md`).
+  - **deploy eseguito il 2026-11-05** su Sepolia e Base Sepolia: vedi la sezione "Testnet".
+
+## Testnet (Sepolia e Base Sepolia) — 2026-11-05
+
+Deploy eseguito con chiavi di test usa-e-getta (in `.env` locale, mai nel repository). Prima Sepolia, poi Base Sepolia, solo
+dopo C1–C6 e fill di prova verdi. Mainnet esclusa. Nessun tag, nessuna pubblicazione IPFS.
+
+**SwapERC20 v4.3: `0xf86E2c4789F45A8a7AAA2CA98379716070B80131`**, lo stesso indirizzo sulle due reti (CREATE dal deployer al nonce 0).
+
+| | Sepolia (11155111) | Base Sepolia (84532) |
+|---|---|---|
+| Contratto | [`0xf86E…0131`](https://sepolia.etherscan.io/address/0xf86E2c4789F45A8a7AAA2CA98379716070B80131) | [`0xf86E…0131`](https://sepolia.basescan.org/address/0xf86E2c4789F45A8a7AAA2CA98379716070B80131) |
+| Owner e fee wallet: Safe 1/1 1.4.1 | `0xc5ec52f78D049760c41c6223ECC8755B64371F31` | `0xc5ec52f78D049760c41c6223ECC8755B64371F31` |
+| Sourcify | [exact match](https://repo.sourcify.dev/11155111/0xf86E2c4789F45A8a7AAA2CA98379716070B80131) (creazione e runtime) | [exact match](https://repo.sourcify.dev/84532/0xf86E2c4789F45A8a7AAA2CA98379716070B80131) (creazione e runtime) |
+| Etherscan / Basescan | preparato, non eseguito (serve `ETHERSCAN_API_KEY`) | preparato, non eseguito |
+
+> [!IMPORTANT]
+> **Il deployer di test (`0xf0dA…8D5d`) è ora a nonce 2** su entrambe le reti: nonce 0 per il deploy, nonce 1 per
+> `transferOwnership`. Non può più produrre un indirizzo deterministico nuovo e non va riusato.
+> **Per la mainnet servirà un deployer nuovo, generato su una macchina del responsabile e non in questo container.** Questo
+> container è temporaneo, e le chiavi usa-e-getta in `.env` sono state viste da un processo automatico. Il deployer va
+> verificato a nonce 0 su tutte le reti di destinazione prima del primo invio (`docs/RELEASE.md`, checklist).
+
+**Account di test:** DEPLOYER `0xf0dA07f530B412d8FBc10AfDFa59b97772328D5d`, FUNDER `0x22b357Eae06aE0E8813eF03ae1F657D1281BD5F9`,
+SIGNER `0xEe07C06d7DD66aCf8d66dc9b338CB5307de51840`, TAKER `0x7f6Bfad4C79665F146c190d714Af499caE7929b2`. FUNDER esiste
+per lasciare il deployer al nonce 0: riceve i fondi, li distribuisce e crea i Safe.
+
+**Preparazione verificata prima di inviare**
+- **Bridge di Base:** `L1StandardBridge` `0xfd0Bf71F60660E2f608ed56e1659C450eB113120`, preso da docs.base.org (Base Sepolia
+  non compare più nel Superchain registry attuale) e verificato on-chain da entrambi i lati: `messenger()` =
+  `L1CrossDomainMessenger` `0xC34855F4…1f20`, `OTHER_BRIDGE` = `0x4200…0010`, `portal` `0x49f53e41…9e85`, `l2ChainId` =
+  84532; su L2 `0x…10.OTHER_BRIDGE()` = `0xfd0B…3120`.
+- **Safe:** `SafeProxyFactory` `0x4e1D…ec67`, `SafeL2` `0x29fc…C762` e `CompatibilityFallbackHandler` `0xfd07…Ec99` hanno il
+  codehash di `@safe-global/safe-deployments` 1.37.32 su entrambe le reti. Il Safe creato ha owner = DEPLOYER, soglia 1,
+  versione 1.4.1, singleton SafeL2 e il fallback handler canonico.
+
+**Transazioni, con `gasUsed` dalle ricevute**
+
+| Transazione | Da | Sepolia | gas | Base Sepolia | gas |
+|---|---|---|---|---|---|
+| Bridge ETH (L1 deposito → L2 accredito. 303 s) | FUNDER | [`0x4c70089f…`](https://sepolia.etherscan.io/tx/0x4c70089faa3e40662db6f92d29ba469cfd62ebd4683626d6692dce529a266194) | 634.136 | [`0xcb9efcb8…`](https://sepolia.basescan.org/tx/0xcb9efcb86b82157ed22ce8f703872ca74740fb87291927bd7de162b18cc1239f) | 123.940 |
+| Safe 1/1 (SafeProxyFactory 1.4.1. owner DEPLOYER) | FUNDER | [`0x8f952694…`](https://sepolia.etherscan.io/tx/0x8f952694dcc6d1b1fac5308995679349882bea3e92277110ae3d9eb3d9cfc40c) | 1.260.365 | [`0x65867bf0…`](https://sepolia.basescan.org/tx/0x65867bf0dc3f2201cbba71af66764f3fb271ec3f962419cd7eb45a345e1cc8df) | 258.859 |
+| ETH → DEPLOYER | FUNDER | [`0x18886b18…`](https://sepolia.etherscan.io/tx/0x18886b18cf56930a6886907c577a5e0b2692ce1b78e44c3f2a15dfbc43f975c1) | 204.600 | [`0x665e1374…`](https://sepolia.basescan.org/tx/0x665e13742807955b98a8f0fbd8970399a7a200abda060946c6bf9ea600864c22) | 21.000 |
+| ETH → SIGNER | FUNDER | [`0x92f7c391…`](https://sepolia.etherscan.io/tx/0x92f7c391db75a624ea000c75ca842b086d1021a16bff550bd2991c5e3b0c92ee) | 204.600 | [`0x44034b9e…`](https://sepolia.basescan.org/tx/0x44034b9eeb02f4afce746fb49d3bc8620345b85fc5e6df80e8d4662698bf0649) | 21.000 |
+| ETH → TAKER | FUNDER | [`0x13e0958f…`](https://sepolia.etherscan.io/tx/0x13e0958f293338f272d331b11017b19ee5251481e672e55a3bdd19d73a6b3292) | 204.600 | [`0xde0ee275…`](https://sepolia.basescan.org/tx/0xde0ee275737170da680f51b2b10dca87a289a9ffe8840cbc1d65088274ae7465) | 21.000 |
+| **deploy SwapERC20 v4.3** (nonce 0) | DEPLOYER | [`0x869dbc09…`](https://sepolia.etherscan.io/tx/0x869dbc09308676cf09c92f448d7eb356bd92960720feb89e8ffe83c38277bd85) | 18.068.336 | [`0xdbf94e57…`](https://sepolia.basescan.org/tx/0xdbf94e5788c34abd107dacc39523cde3825254600d463743c4f4bc0b19d3988e) | 2.578.924 |
+| **transferOwnership(Safe)** (nonce 1) | DEPLOYER | [`0x97a0e2e5…`](https://sepolia.etherscan.io/tx/0x97a0e2e5a68c35ba4393b0d0590381e48ea12c6da302c0a0f6d077d59e4cc384) | 29.721 | [`0xd47cdefa…`](https://sepolia.basescan.org/tx/0xd47cdefa8c2b6ddd15ce8eb50acb7a38788152e0fd95160aed3ebdf7ad4a039e) | 28.521 |
+| WETH.deposit 0.001003 | SIGNER | [`0x12d528e0…`](https://sepolia.etherscan.io/tx/0x12d528e02755f8d96ba896969e9f8b835c7156a26299c72dd0df970f82bf2b69) | 133.058 | [`0xb78aea20…`](https://sepolia.basescan.org/tx/0xb78aea20c4e6dfc6481624f339dab9382ac9463be2067caccec70e1caaaf38cd) | 44.866 |
+| WETH.approve(Swap) | SIGNER | [`0x76a05c3f…`](https://sepolia.etherscan.io/tx/0x76a05c3f1127652821e80e16713112312622c312e0215ae99cb3587aee2346d7) | 127.972 | [`0xd45641d5…`](https://sepolia.basescan.org/tx/0xd45641d5adb96172e24132484a7ac0391ca1aeaa7246d9d662ccb9be41512d47) | 46.031 |
+| USDC.approve(Swap. 1) | TAKER | [`0xccded7cd…`](https://sepolia.etherscan.io/tx/0xccded7cd6da6ed74dcd404f56adb9bf8247c36721ddec0590fb19aa546aa7029) | 137.757 | [`0x613b6a5f…`](https://sepolia.basescan.org/tx/0x613b6a5f44dab89127ce67a7a04fffe05b42a81fb81d741220eb8313675fe365) | 55.437 |
+| **swapAnySender** 0.001 WETH ↔ 1 USDC | TAKER | [`0xf8757cd3…`](https://sepolia.etherscan.io/tx/0xf8757cd3b69107814d37a8bb29386e5b5ceb649d81a97a022ac303d82db5c6f3) | 520.129 | [`0x9eb084b3…`](https://sepolia.basescan.org/tx/0x9eb084b31eb845bc238421ae1f5b4bb83e4558aaa3df56b41d3bfe57dc324d48) | 163.797 |
+
+**Checklist post-deploy (`post-deploy-check.mjs`): verde su entrambe le reti**
+
+| | Controllo | Sepolia | Base Sepolia |
+|---|---|---|---|
+| C6 | indirizzo = CREATE(deployer, nonce 0), identico | ✅ | ✅ |
+| C1 | runtime = fixture (11.264 byte, immutabili mascherate) | ✅ | ✅ |
+| C2 | owner = Safe, ed è un contratto | ✅ | ✅ |
+| C3 | protocolFee = protocolFeeLight = 30, fee wallet = Safe | ✅ | ✅ |
+| C4 | stakingToken 0, bonusMax 0, bonusScale 0 | ✅ | ✅ |
+| C5 | DOMAIN_SEPARATOR (`0x2747d32b…` / `0x42e93286…`), DOMAIN_CHAIN_ID, ORDER_TYPEHASH | ✅ | ✅ |
+
+**Fill di prova** (SIGNER vende 0,001 WETH a TAKER per 1 USDC, fee 0,30% pagata dal SIGNER in WETH): saldi esatti su
+entrambe le reti.
+
+| | WETH prima | WETH dopo | USDC prima | USDC dopo |
+|---|---|---|---|---|
+| SIGNER | 0 (+0,001003 dal wrap) | 0 (−0,001003) | 0 | **1** |
+| TAKER | 0 | **0,001** | 20 | **19** |
+| Safe (fee wallet) | 0 | **0,000003** | 0 | 0 |
+
+**Gas su Sepolia (D-55 corretta).**
+- **Base Sepolia** ha esattamente il gas misurato sui fork locali.
+- **Sepolia** costa di più solo dove si crea stato nuovo:
+
+  | Cosa | Costo in più su Sepolia |
+  |---|---|
+  | invio a un account vuoto | 204.600 invece di 21.000 |
+  | slot di storage nuovo | circa +82–88 mila |
+  | byte di codice depositato | circa +1.340 gas |
+  | sovrascrittura di uno slot esistente (`transferOwnership`) | +1.200 |
+
+- **Il fork attivo** (da `eth_config`): attivato il 2026-10-06 13:53:36 UTC, forkId `0x6c1d9423`, con contratti di sistema
+  per i builder (`BUILDER_DEPOSIT`, `BUILDER_EXIT`). Il quadro è compatibile con un aumento del costo della creazione di stato
+  in quel fork, ma il nome e le EIP non sono esposti da `eth_config` e restano da confermare.
+- **Due nodi diversi**, publicnode (Geth 1.17.9) e il gateway Tenderly, riportano lo stesso `gasUsed` del deploy (18.068.336).
+- **Costo totale del deploy su Sepolia:** circa 0,00000002 ETH, con il gas a ~0,000001 gwei; soglia di stop 0,85 gwei, mai
+  raggiunta.
+
+**Verifica su Etherscan e Basescan, quando `ETHERSCAN_API_KEY` sarà in `.env`:**
+
+```bash
+cd packages/contracts
+node scripts/verify-etherscan.mjs all                                  # dry run: controlla Sourcify e prepara la richiesta
+set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
+```
+
+**Configurazione dell'app:**
+- `apps/web/public/config.json` e `packages/contracts/src/addresses.ts` contengono le due testnet: contratto, WETH, USDC ed
+  explorer;
+- Base Sepolia è tra le reti a sequencer (`SEQUENCER_CHAINS`, stato MEV "L2");
+- la rete predefinita è la prima di `config.json` con un contratto, oggi Base Sepolia (D-61);
+- Ethereum e Base restano in elenco ma non sono selezionabili ("non ancora disponibile");
+- il foglio di conferma e Impostazioni (rete attiva) mostrano l'indirizzo completo del contratto e il link a Sourcify.
+- il build dell'app cambia di conseguenza. Al commit `d4eb782`:
+  - tree hash `a9c9e184d463f52730d25fe65e53cbb52ce4603be0aa6a836d8335086aae2df7`;
+  - CID `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4`;
+  - contenthash `0xe3010170122066abf99ef0d6f9deae80653833b84e8ffa936bd8f27aaff3a41058876dc56867`.
+
+  Il build è riproducibile tra due build locali, e il CI lo ricontrolla nella run della PR. Questi valori sostituiscono quelli
+  dei commit `cd11d87` e `5b7b87a` per qualunque pubblicazione futura.
 
 ## Immagine della bacheca
 
@@ -174,7 +285,7 @@ rilanciato da solo nell'immagine Playwright. Il `docker-smoke` (8/8) è esplicit
 | client | wallet 5/5 · client-guards 9/9 · client-smoke 4/4 · taker 13/13 · protect 5/5 · taker-advanced 12/12 |
 | web | web-model 39/39 · web-keys 6/6 · web-layout 7/7 (L1 con webfont, L1b con woff2 bloccati, L5 geometria) · web-a11y 4/4 · web-visual 2/2 · web-e2e 18/18 · web-flows 21/21 · web-perf 5/5 (P5 LCP) |
 
-Totale: **332 controlli** su 39 suite, più `docker-smoke` 8/8.
+Totale: **334 controlli** su 39 suite, più `docker-smoke` 8/8.
 
 Suite web eseguite anche nell'immagine Playwright in locale: model 39, keys 6, layout 7, a11y 4, visual 2, e2e 18, flows 21,
 perf 5 (P5 LCP 2,53 s), tutte verdi.

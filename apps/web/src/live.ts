@@ -182,7 +182,7 @@ export class LiveBackend implements Backend {
 
   // ------------------------------------------------------------------ reads
   chainId(): number { return this.chain }
-  chains() { return Object.entries(this.cfg.chains).map(([id, c]) => ({ id: Number(id), name: c.name })) }
+  chains() { return Object.entries(this.cfg.chains).map(([id, c]) => ({ id: Number(id), name: c.name, available: c.swap != null })) }
   swapAddress(): Address | null { return this.cfg.chains[String(this.chain)]?.swap ?? null }
   protocolFee(): bigint { return BigInt(this.bookCfg?.[String(this.chain)]?.protocolFee ?? '30') }
   markets(): Market[] { return this.mkts }

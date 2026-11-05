@@ -1,4 +1,9 @@
-# Release procedures (prepared, NOT executed)
+# Release procedures
+
+**Status (2026-11-05):** section 1, the testnets, is **done**: SwapERC20 `0xf86E2c4789F45A8a7AAA2CA98379716070B80131` on Sepolia
+and Base Sepolia, C1–C6 and the test fill green, every hash in REPORT.md ("Testnet"). Sections 2–4 (IPFS, ENS, domain) are
+still prepared and not executed. Source verification on Etherscan and Basescan: `node packages/contracts/scripts/verify-etherscan.mjs all --confirm`
+with `ETHERSCAN_API_KEY` in `.env` (prepared, not run).
 
 Everything here costs money, is irreversible or publishes something: each step needs explicit approval first.
 
@@ -114,7 +119,8 @@ reviewed by you.
 
 1. **Build:** the CI builds the app twice in separate jobs (`reproducible-build-a/b`) and compares the tree hash and the CID.
    Locally: `node tools/build-hash.mjs --twice`.
-2. **CID** (offline, no upload): `node tools/ipfs.mjs cid <dist>`. For the app at commit `5b7b87a` it is
+2. **CID** (offline, no upload): `node tools/ipfs.mjs cid <dist>`. For the app at commit `d4eb782` (testnet addresses, default network
+   with a contract) it is `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4` (tree hash `a9c9e184…2df7`); before, at commit `5b7b87a`, it was
    `bafybeigfhaqqpvoxleq5qn5u7t3cjwafc7tjdqm35vxofjf2rukmo66n7q` (tree hash `c9b62461…f1efe`), the same locally and in both CI
    builds of run 41914373389. Any change to the app (sources, fonts, build config) gives a new CID.
 3. **Pin** (publishes, after approval):
@@ -126,7 +132,8 @@ reviewed by you.
 
 ## 3. ENS contenthash of fondaco.eth (documented, not executed)
 
-1. Encoding (EIP-1577): `node tools/ipfs.mjs contenthash <cid>`. For the CID above (commit `5b7b87a`):
+1. Encoding (EIP-1577): `node tools/ipfs.mjs contenthash <cid>`. For commit `d4eb782`:
+   `0xe3010170122066abf99ef0d6f9deae80653833b84e8ffa936bd8f27aaff3a41058876dc56867`; for the older commit `5b7b87a`:
    `0xe30101701220c5382107d5d75921d837b4fcf624d80517e691c19bed6ee2a4ba8d14c77bcdfc`.
 2. The **manager** of `fondaco.eth` sets the record (ideally the Safe, with a Safe transaction):
    - in the ENS app: Records → Content hash → `ipfs://<cid>`;
