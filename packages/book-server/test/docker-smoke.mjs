@@ -110,7 +110,10 @@ try {
   const mk = await m3('PUT', '/fondaco')
   // the release: the image label (deploy/minio builds with `go install`, so the binary itself reports DEVELOPMENT.GOGET)
   const label = execFileSync('docker', ['image', 'inspect', minioImage, '--format', '{{index .Config.Labels "org.opencontainers.image.version"}}'], { encoding: 'utf8' }).trim()
-  const version = label && label !== '<no value>' ? `${minioImage} ${label}` : execFileSync('docker', ['exec', `${project}-minio`, '/minio', '--version'], { encoding: 'utf8' }).split('\n')[0]
+  // how the MinIO image was made (deploy/minio writes /SOURCE: dl.min.io binary or go install); absent in other images
+  let origin = ''
+  try { const id = execFileSync('docker', ['create', minioImage], { encoding: 'utf8' }).trim(); try { execFileSync('docker', ['cp', `${id}:/SOURCE`, join(dir, 'minio-source')], { stdio: 'ignore' }); origin = readFileSync(join(dir, 'minio-source'), 'utf8').trim() } finally { execFileSync('docker', ['rm', id], { stdio: 'ignore' }) } } catch {}
+  const version = (label && label !== '<no value>' ? `${minioImage} ${label}` : execFileSync('docker', ['exec', `${project}-minio`, '/minio', '--version'], { encoding: 'utf8' }).split('\n')[0]) + (origin ? `, ${origin}` : '')
   const menv = ['-e', `S3_ENDPOINT=http://host.docker.internal:${mport}`, '-e', 'S3_BUCKET=fondaco', '-e', `S3_ACCESS_KEY_ID=${MINIO.accessKeyId}`, '-e', `S3_SECRET_ACCESS_KEY=${MINIO.secretAccessKey}`]
   const once = await composeAsync('exec', '-T', ...menv, 'backup', 'node', 'scripts/backup.mjs', 'once')
   const xml = await (await m3('GET', '/fondaco?list-type=2&prefix=book%2F')).text()

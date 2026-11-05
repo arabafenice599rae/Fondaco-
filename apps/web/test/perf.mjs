@@ -4,6 +4,7 @@
 //   P3 "Fast 3G" (DevTools: 562.5 ms RTT, 1.44 Mbit/s down, 675 kbit/s up): the book (an ask row) is on screen
 //      ≤ 2000 ms after navigation — splash already seen in the session; median of 3 cold loads
 //   P4 Lighthouse mobile (default: simulated slow 4G, 4× CPU): Performance ≥ 0.90 and Accessibility ≥ 0.90, median of 3
+//   P5 Lighthouse LCP ≤ 3.0 s (median of the same 3 runs); the objective is 2.5 s, and the measured value is reported
 // Numbers are written to reports/perf.json (docs/PHASE6-RESULTS.md quotes them).
 import { spawn } from 'node:child_process'
 import { gzipSync } from 'node:zlib'
@@ -11,7 +12,9 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import * as H from './harness.mjs'
 
-export const BUDGET = { initialGzip: 60 * 1024, fontsBytes: 130 * 1024, fast3gMs: 2000, lighthouse: 0.9 }
+// lcpMs: the check's limit (3.0 s, approved); lcpTargetMs: the documented objective (2.5 s). The LCP element is the splash
+// wordmark, whose animation lasts 2.8 s by design (PHASE6-RESULTS, limite voluto): 2.4–2.6 s measured; the value is reported.
+export const BUDGET = { initialGzip: 60 * 1024, fontsBytes: 130 * 1024, fast3gMs: 2000, lighthouse: 0.9, lcpMs: 3000, lcpTargetMs: 2500 }
 const { check, finish } = H.reporter()
 const report = { budget: BUDGET }
 
@@ -97,6 +100,8 @@ report.lighthouse = { runs: lhRuns, median: ok.length ? { performance: median('p
 const m = report.lighthouse.median
 check(`P4: Lighthouse mobile — Performance ${m?.performance} and Accessibility ${m?.accessibility} ≥ ${BUDGET.lighthouse} (median of ${ok.length})`, ok.length === 3 && m.performance >= BUDGET.lighthouse && m.accessibility >= BUDGET.lighthouse,
   m ? `FCP ${(m.fcp / 1000).toFixed(1)} s, LCP ${(m.lcp / 1000).toFixed(1)} s (splash wordmark), TBT ${Math.round(m.tbt)} ms, CLS ${m.cls.toFixed(3)}, SI ${(m.si / 1000).toFixed(1)} s` : 'lighthouse failed')
+check(`P5: Lighthouse LCP ${m ? (m.lcp / 1000).toFixed(2) : '?'} s ≤ ${BUDGET.lcpMs / 1000} s (median of ${ok.length}; objective ${BUDGET.lcpTargetMs / 1000} s)`, ok.length === 3 && m.lcp <= BUDGET.lcpMs,
+  m ? `${m.lcp <= BUDGET.lcpTargetMs ? 'within' : 'above'} the ${BUDGET.lcpTargetMs / 1000} s objective by ${Math.abs(m.lcp - BUDGET.lcpTargetMs).toFixed(0)} ms; runs ${lhRuns.map((r) => (r ? (r.lcp / 1000).toFixed(2) : 'failed')).join(', ')} s` : 'lighthouse failed')
 
 writeFileSync(resolve(H.ROOT, 'reports/perf.json'), JSON.stringify(report, null, 2))
 await srv.close(); await book.stop()

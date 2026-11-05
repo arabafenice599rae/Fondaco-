@@ -287,7 +287,14 @@ jobs:
       - name: build the book image
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
         with: { context: ., file: deploy/book/Dockerfile, load: true, tags: "fondaco-book:smoke", build-args: "VERSION=${{ github.sha }}" }
-      - name: MinIO for the backup smoke (built from its release tag, D-58; never published)
+      - name: probe quay.io/minio/minio (anonymous pull, D-58; informative, never fails the job)
+        continue-on-error: true
+        run: |
+          ref=quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+          if docker pull "$ref" > /tmp/quay.log 2>&1; then res="pullable: $(docker image inspect --format '{{index .RepoDigests 0}}' "$ref")"
+          else res="not pullable anonymously: $(tail -1 /tmp/quay.log)"; fi
+          echo "$res"; { echo "### quay.io/minio/minio (anonymous)"; echo; echo "\`$ref\` → $res"; echo; } >> "$GITHUB_STEP_SUMMARY"
+      - name: MinIO for the backup smoke (dl.min.io binary with sha256, else built from the release tag; D-58, never published)
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
         with: { context: deploy/minio, load: true, tags: "fondaco-minio:smoke" }
       - name: compose smoke test (book + Caddy + backup over HTTPS; backups to the SigV4 stub and to MinIO)
