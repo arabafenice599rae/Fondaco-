@@ -524,7 +524,7 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   soltanto. In locale (Docker 29, containerd) il meccanismo è stato verificato: digest del build, Id dopo il load e digest
   nel registry coincidono.
 
-### D-63 · Metadati inglesi e anteprime dei link nell'app — proposta
+### D-63 · Metadati inglesi e anteprime dei link nell'app — approvata
 - **Titolo e descrizione** di `apps/web/index.html` in inglese, con il motto: "FONDACO — the public OTC board for Ethereum" e
   "You set the price, the contract settles it. Non-custodial, on AirSwap SwapERC20 v4.3; a 0.30% fee only when an offer is
   filled."
@@ -534,3 +534,8 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   punta a `raw.githubusercontent.com/<repo>/main/…`; non entra nel build dell'app, che resta senza richieste esterne
   (il crawler la scarica, il browser dell'utente no).
 - **Conseguenza:** cambiano tree hash e CID dell'app. Non sono ancora pinnati, quindi non c'è nulla da ritirare.
+- **Limite noto:** finché il repository è privato, `raw.githubusercontent.com` risponde 404 a chi non ha fatto login, quindi
+  le anteprime restano senza immagine. Per ora resta così.
+- **Soluzione definitiva**, quando il repository sarà pubblico o l'app sarà su IPFS: l'immagine entra nel build come
+  `/social-preview.png`, servita dall'app stessa, e `og:image`/`twitter:image` puntano a quel file con un URL assoluto sul
+  dominio dell'app, quando sarà noto. Anche questa modifica cambierà il CID.

@@ -252,16 +252,26 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
 
 ## Immagine della bacheca
 
-Non ancora pubblicata. La pubblica il CI al push di un tag `v*` su un commit di `main`, creato dal proprietario, e solo con
-la run completa verde (D-56, D-62).
+Pubblicata dal CI al push del tag `v1.0.0-rc1`, creato dal proprietario il 2026-11-05 alle 14:54 UTC sul commit di `main`
+`758dd7a` (merge della PR #8). È una release immutabile, segnata come pre-release (D-56, D-62).
 - **Cosa si pubblica:** l'archivio OCI costruito una volta nel job `docker` e passato dallo smoke test, senza ricostruirlo.
-- **Digest:** quello testato e quello pubblicato devono coincidere, altrimenti il job fallisce.
-
-Alla pubblicazione, qui vanno i valori del riepilogo della run ("Image published"):
+- **Digest:** quello testato e quello pubblicato devono coincidere, altrimenti il job fallisce. In questa run i controlli
+  prima e dopo il push sono passati.
 
 | Tag | Digest | Commit | Smoke sulla stessa immagine | Run |
 |---|---|---|---|---|
-| — | — | — | — | — |
+| `v1.0.0-rc1` | `sha256:2121ad4c83f628f111df0a0143e4e64e902c97efc0bbb38e730b952f3f90bda4` | `758dd7a64fdc77109d206b0ab9778ee79f5fe1ab` | passato (job `docker`) | [42049480368](https://github.com/arabafenice599rae/Fondaco-/actions/runs/42049480368) |
+
+- **Immagine:** `ghcr.io/arabafenice599rae/fondaco-book:v1.0.0-rc1@sha256:2121ad4c83f628f111df0a0143e4e64e902c97efc0bbb38e730b952f3f90bda4`.
+  Il primo pacchetto su GHCR è privato per impostazione predefinita.
+- **Run:** tutti i 12 job sono verdi; `docker-publish` è partito per ultimo, dopo tutti gli altri.
+- **App in rc1:** l'app di `758dd7a` è lo stesso build di `d4eb782`:
+  - CID `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4`;
+  - tree hash `a9c9e184…2df7`;
+  - `apps/web` non cambia tra i due commit.
+- **Prossimo tag:** l'app con i metadati inglesi (D-63, commit `ab6e7ab`, CID
+  `bafybeigvo755lcthfmzkgzijvont3jwj7v4ihpytazgsaxz4ufvgevo6xa`) non è in rc1 e andrà nel prossimo tag. `v1.0.0-rc1` non
+  va ricreato né spostato.
 
 ## Prossimi passi
 
