@@ -1,15 +1,29 @@
 {
-  "$comment": "Single source of the CI toolchain versions (.github/actions/setup-toolchain). tools/ci/versions.mjs fails if what is installed differs.",
+  "$comment": "Single source of the CI toolchain versions (.github/actions/setup-toolchain). tools/ci/versions.mjs fails if what is installed differs. Downloaded binaries: tools/ci/fetch-binary.mjs (cache key name+version+checksum; sources in order, primary then fallback; the checksum is the only authority, D-64).",
   "node": "from .nvmrc",
   "pnpm": "from package.json packageManager",
   "foundry": {
     "version": "v1.5.1",
-    "commit": "b0a9dd9ceda36f63e2326ce530c10e6916f4b8a2"
+    "commit": "b0a9dd9ceda36f63e2326ce530c10e6916f4b8a2",
+    "file": "foundry_v1.5.1_linux_amd64.tar.gz",
+    "sha256": "73640b01bd9ed29fdb4965085099371f8cf0dbbec3e2086cf54564efc4dcfe88",
+    "sources": [
+      "https://github.com/foundry-rs/foundry/releases/download/v1.5.1/foundry_v1.5.1_linux_amd64.tar.gz",
+      {
+        "github": "foundry-rs/foundry",
+        "tag": "v1.5.1"
+      }
+    ]
   },
   "solc": {
     "version": "0.8.23",
     "build": "solc-linux-amd64-v0.8.23+commit.f704f362",
-    "sha256": "28726a452290c70e1984f15c53ad3088e7d98783ee3070b11b3664da77415732"
+    "file": "solc-linux-amd64-v0.8.23+commit.f704f362",
+    "sha256": "28726a452290c70e1984f15c53ad3088e7d98783ee3070b11b3664da77415732",
+    "sources": [
+      "https://binaries.soliditylang.org/linux-amd64/solc-linux-amd64-v0.8.23+commit.f704f362",
+      "https://github.com/ethereum/solidity/releases/download/v0.8.23/solc-static-linux"
+    ]
   },
   "playwright": "from apps/web/package.json",
   "playwrightImage": {
@@ -20,13 +34,24 @@
   "axe-core": "from apps/web/package.json",
   "kubo": {
     "version": "0.34.1",
-    "url": "https://github.com/ipfs/kubo/releases/download/v0.34.1/kubo_v0.34.1_linux-amd64.tar.gz",
-    "sha512": "4e4b13c600d5a9422f2d0a03e674b65e14defa65dfc6048facdea3a195f967ece0573b8a2292800d902d69fd6ef5aad825b95d8147cbf902f55b60ee0b4c419e"
+    "file": "kubo_v0.34.1_linux-amd64.tar.gz",
+    "sha512": "4e4b13c600d5a9422f2d0a03e674b65e14defa65dfc6048facdea3a195f967ece0573b8a2292800d902d69fd6ef5aad825b95d8147cbf902f55b60ee0b4c419e",
+    "sources": [
+      "https://github.com/ipfs/kubo/releases/download/v0.34.1/kubo_v0.34.1_linux-amd64.tar.gz",
+      "https://dist.ipfs.tech/kubo/v0.34.1/kubo_v0.34.1_linux-amd64.tar.gz"
+    ]
   },
   "gitleaks": {
     "version": "8.24.3",
-    "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz",
-    "sha256": "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c"
+    "file": "gitleaks_8.24.3_linux_x64.tar.gz",
+    "sha256": "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c",
+    "sources": [
+      "https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz",
+      {
+        "github": "gitleaks/gitleaks",
+        "tag": "v8.24.3"
+      }
+    ]
   },
   "minio": {
     "$comment": "backup smoke only (D-58): built from the release tag in deploy/minio; the CI caches the binary under minio-<version>-go<go>",

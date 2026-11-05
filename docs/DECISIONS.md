@@ -523,3 +523,41 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   sul runner non voglio dipendere da un pacchetto apt senza versione fissa. Lo store containerd fa la stessa cosa con Docker
   soltanto. In locale (Docker 29, containerd) il meccanismo è stato verificato: digest del build, Id dopo il load e digest
   nel registry coincidono.
+
+### D-64 · Binari della CI: cache, fonte di riserva, il checksum decide — proposta
+- **Origine:** il 2026-11-05 il job `toolchain` della PR #9 è fallito perché il download di kubo da GitHub Releases ha
+  risposto 504 a tutti i tentativi (run 42055978983).
+- **Un solo script**, `tools/ci/fetch-binary.mjs`, per kubo, foundry, solc e gitleaks. In `tools/ci/toolchain.json` ogni
+  binario ha `file`, checksum (`sha256` o `sha512`) e `sources` in ordine.
+- **Cache di Actions** per binario, con chiave `bin-<nome>-<versione>-<checksum>`. Se il file è in cache e l'hash torna, non
+  si scarica nulla. Un file in cache con un hash diverso viene scartato e riscaricato.
+- **Fonte di riserva:** si usa solo dopo 3 tentativi falliti sulla primaria, con backoff di 2 s e poi 4 s.
+- **Il checksum è l'unica autorità:**
+  - qualunque fonte deve dare lo stesso hash di `toolchain.json`;
+  - una fonte che risponde con byte diversi fa fallire subito il job, senza provare altre fonti e senza tenere nulla.
+
+| Binario | Primaria | Riserva | Stessi byte |
+|---|---|---|---|
+| solc 0.8.23 | binaries.soliditylang.org | GitHub Releases `ethereum/solidity` (`solc-static-linux`) | sì, sha256 verificato in locale |
+| kubo 0.34.1 | GitHub Releases `ipfs/kubo` | dist.ipfs.tech | da verificare sul runner (da qui dist.ipfs.tech non è raggiungibile) |
+| foundry v1.5.1 | GitHub Releases (download) | stesso asset tramite l'API di GitHub (`api.github.com`) | sì per costruzione: stesso asset |
+| gitleaks 8.24.3 | GitHub Releases (download) | stesso asset tramite l'API di GitHub | sì per costruzione: stesso asset |
+
+- **Limite:** foundry e gitleaks esistono solo su GitHub Releases.
+  - Le immagini ufficiali `ghcr.io/foundry-rs/foundry:v1.5.1` e `ghcr.io/gitleaks/gitleaks:v8.24.3` contengono binari con
+    hash diversi da quelli delle release (verificato), quindi non possono fare da riserva.
+  - La riserva via API passa per un altro ingresso, ma lo storage è quello di GitHub. Contro un guasto di quello storage
+    protegge soltanto la cache.
+  - Una copia davvero indipendente richiede un host scelto dal proprietario.
+- **Foundry** non usa più `foundry-toolchain`: il tarball viene estratto in `~/.foundry/bin`. La cache RPC
+  `~/.foundry/cache/rpc` resta, con una chiave per job.
+- **Controllo delle fonti:** nelle run notturne e manuali `fetch-binary.mjs --check-sources` scarica ogni fonte di ogni
+  binario, primaria e riserva, e verifica l'hash. Una riserva rotta si vede prima che serva.
+- **Prova:** la suite `fetch-binary` usa un server HTTP locale, nessun host esterno. Copre sette casi:
+  - F1: primaria su, usata la primaria;
+  - F2: primaria 504, 3 tentativi, poi riserva con hash verificato;
+  - F3: riserva con byte diversi, fallisce;
+  - F4: primaria con byte diversi, fallisce subito;
+  - F5: entrambe giù, fallisce;
+  - F6: cache, nessuna richiesta;
+  - F7: cache corrotta, riscaricata.

@@ -84,6 +84,10 @@ jobs:
       - name: toolchain (warms the caches the other jobs reuse)
         uses: ./.github/actions/setup-toolchain
         with: { foundry: "true", solc: "true", playwright: "true", docker: "true", kubo: "true", gitleaks: "true" }
+      - name: every source of every pinned binary gives its checksum (primary and fallback, nightly and manual runs, D-64)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: node tools/ci/fetch-binary.mjs --check-sources
+        env: { GITHUB_TOKEN: "${{ github.token }}" }
 
   lint:
     needs: toolchain
