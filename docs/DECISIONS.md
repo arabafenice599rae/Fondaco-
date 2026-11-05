@@ -498,3 +498,28 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
 - **Contratto visibile:** il foglio di conferma e Impostazioni (riga della rete attiva, "rete attiva") mostrano l'indirizzo
   completo del contratto con il link alla sua pagina Sourcify (`repo.sourcify.dev/<chainId>/<indirizzo>`). Nella build demo
   l'indirizzo è simulato, quindi il link non c'è. Controlli: web-e2e W3b e W3c.
+
+### D-62 · Si pubblica l'immagine testata, solo con la run completa verde — approvata
+- **Dipendenze:** `docker-publish` ha in `needs` tutti i job di verifica: toolchain, lint, unit, fork, foundry, web-e2e,
+  supply-chain, reproducible-build-a/b, reproducible-compare e docker. Se uno fallisce o viene saltato, la pubblicazione
+  viene saltata.
+- **Un solo build** nel job `docker`, esportato come archivio OCI senza attestazioni (`provenance: false`, `sbom: false`).
+  Il digest del manifest viene da `index.json` dell'archivio.
+- **Smoke sull'immagine caricata da quell'archivio:**
+  - lo store delle immagini di Docker è containerd (`containerd-snapshotter` in `daemon.json`);
+  - con questo store `docker load` e `docker push` conservano il manifest originale, e l'`Id` caricato coincide con il digest;
+  - a ogni run lo stesso job fa anche un push a un registry locale (`registry:2` per digest) e verifica che il digest resti
+    uguale, così il percorso di pubblicazione è provato anche nelle PR.
+- **Artefatto:** sui tag `v*` l'archivio e il digest vengono salvati come artefatto `book-image-tested` (7 giorni).
+- **Pubblicazione** (`docker-publish`), nell'ordine:
+  1. il commit deve essere su `main`;
+  2. lo smoke deve risultare passato;
+  3. il digest dell'artefatto, quello del manifest e quello dell'immagine caricata devono coincidere con quello testato:
+     questi controlli avvengono prima di qualunque push;
+  4. push di `ghcr.io/<owner>/fondaco-book:<tag git>`;
+  5. il digest letto dal registry deve coincidere, altrimenti il job fallisce.
+- **Riepilogo della run:** tag, digest, commit e l'esito dello smoke sulla stessa immagine.
+- **Perché non `crane`/`skopeo`:** scaricare ed eseguire un binario esterno non è stato consentito in questa sessione, e
+  sul runner non voglio dipendere da un pacchetto apt senza versione fissa. Lo store containerd fa la stessa cosa con Docker
+  soltanto. In locale (Docker 29, containerd) il meccanismo è stato verificato: digest del build, Id dopo il load e digest
+  nel registry coincidono.
