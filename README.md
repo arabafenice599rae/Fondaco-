@@ -119,7 +119,7 @@ e fallisce se una non corrisponde.
 | `supply-chain` | `pnpm audit`, lockfile bloccato, gitleaks sull'intera storia, SHA256SUMS |
 | `reproducible-build-a/b`, `reproducible-compare` | due build separati: stesso hash dell'albero, stesso CID IPFS |
 | `docker` | immagine della bacheca e smoke test del compose; backup verso lo stub SigV4 e verso MinIO compilato dal tag (binario in cache) |
-| `docker-publish` | solo su `main` o tag `v*`: pubblica su GHCR e riporta il digest |
+| `docker-publish` | solo al push di un tag `v*`: pubblica su GHCR e riporta il digest |
 
 </details>
 

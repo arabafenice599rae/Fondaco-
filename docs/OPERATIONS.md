@@ -8,7 +8,7 @@ The stack (`deploy/`), tested end to end by `docker-smoke` (`packages/book-serve
 
 | Service | Image | Role |
 |---|---|---|
-| `book` | `ghcr.io/arabafenice599rae/fondaco-book:<version>` (published by the CI on `main` and on `v*` tags, with its digest in the run summary) | the book server, user `node`, data in the `book-data` volume, no published port |
+| `book` | `ghcr.io/arabafenice599rae/fondaco-book:<version>` (published by the CI only when a `v*` tag is pushed, with its digest in the run summary) | the book server, user `node`, data in the `book-data` volume, no published port |
 | `caddy` | `caddy:2.10.2-alpine@sha256:4c6e…530d` | TLS (automatic certificates), reverse proxy, `/stream` not buffered |
 | `backup` | same image as `book` | an hourly consistent snapshot of SQLite, gzipped, uploaded to S3-compatible storage (SigV4), 168 copies kept |
 

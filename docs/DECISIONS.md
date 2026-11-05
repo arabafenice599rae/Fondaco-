@@ -384,8 +384,11 @@ Il nodo pubblico di Sepolia stima 18,2 M di gas per il deploy, mentre quello mis
 misurato ×1,2 e riporta anche la stima del nodo. Il deploy vero passa comunque da `estimateGas` del wallet.
 
 ### D-56 · Immagine della bacheca — D
-L'immagine viene pubblicata su GHCR solo da `main` e dai tag `v*`, con il digest nel riepilogo della run. Sui branch viene
-costruita e provata con lo smoke test, ma non pubblicata.
+L'immagine viene pubblicata su GHCR **solo al push di un tag `v*`**, con il digest nel riepilogo della run. Prima la
+condizione comprendeva anche `main`: una run manuale o la notturna su `main` avrebbe pubblicato senza approvazione. Una run
+manuale su `main` (41987858011) è stata cancellata prima di arrivare a `docker-publish`, quindi non è stato pubblicato nulla.
+Su `main`, sui branch, nelle run manuali e nella notturna l'immagine viene costruita e provata con lo smoke test, ma non
+pubblicata.
 
 ### D-57 · Ripieghi di Geist Mono con metriche tarate, preload dei woff2 — D
 - **Ripieghi.** `fonts.css` dichiara facce locali "Geist Mono Fallback …" per Menlo, Consolas, DejaVu Sans Mono, Liberation Mono
