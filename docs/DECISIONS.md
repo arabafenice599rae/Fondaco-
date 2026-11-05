@@ -539,11 +539,16 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
 | Binario | Primaria | Riserva | Stessi byte |
 |---|---|---|---|
 | solc 0.8.23 | binaries.soliditylang.org | GitHub Releases `ethereum/solidity` (`solc-static-linux`) | sì, sha256 verificato in locale |
-| kubo 0.34.1 | GitHub Releases `ipfs/kubo` | 1. dist.ipfs.tech; 2. la stessa cartella tramite il gateway dweb.link (`/ipns/dist.ipfs.tech/…`) | da verificare sul runner: nella prima run manuale (42058988550) dist.ipfs.tech non rispondeva, connessione scaduta 3 volte su 3 |
+| kubo 0.34.1 | GitHub Releases `ipfs/kubo` | stesso asset tramite l'API di GitHub | sì per costruzione: stesso asset |
 | foundry v1.5.1 | GitHub Releases (download) | stesso asset tramite l'API di GitHub (`api.github.com`) | sì per costruzione: stesso asset |
 | gitleaks 8.24.3 | GitHub Releases (download) | stesso asset tramite l'API di GitHub | sì per costruzione: stesso asset |
 
-- **Limite:** foundry e gitleaks esistono solo su GitHub Releases.
+- **kubo, fonti scartate:** dal runner non funzionano, quindi non le uso.
+  - dist.ipfs.tech: connessione scaduta, 3 tentativi su 3, nelle run 42058988550 e 42060974863.
+  - Il gateway dweb.link (`/ipns/dist.ipfs.tech/…`): risponde HTTP 429.
+  - Una riserva che non risponde fa solo diventare rossa la notte senza proteggere nulla. Per kubo resta l'asset via API,
+    come per foundry e gitleaks, finché non c'è la terza fonte IPFS con il CID del file.
+- **Limite:** foundry, gitleaks e, nei fatti, kubo hanno solo GitHub Releases.
   - Le immagini ufficiali `ghcr.io/foundry-rs/foundry:v1.5.1` e `ghcr.io/gitleaks/gitleaks:v8.24.3` contengono binari con
     hash diversi da quelli delle release (verificato), quindi non possono fare da riserva.
   - La riserva via API passa per un altro ingresso, ma lo storage è quello di GitHub. Contro un guasto di quello storage
