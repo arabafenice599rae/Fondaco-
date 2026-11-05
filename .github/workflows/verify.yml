@@ -314,7 +314,8 @@ jobs:
 
   docker-publish:
     needs: [docker, toolchain]
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    # publishes only from a v* tag push (D-56): never from main, a manual run or the nightly
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -322,25 +323,34 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - name: the tagged commit must be on main (else fail, nothing is published)
+        run: |
+          git fetch --no-tags origin main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then echo "$GITHUB_REF_NAME ($GITHUB_SHA) is on main"
+          else echo "::error::tag $GITHUB_REF_NAME points to $GITHUB_SHA, which is not contained in main: not publishing"; exit 1; fi
+      - id: ref
+        name: image reference = ghcr.io/<owner>/fondaco-book:<git tag>
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/$owner/fondaco-book" >> "$GITHUB_OUTPUT"
+          echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
-      - id: meta
-        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/fondaco-book
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
       - id: push
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
         with:
           context: .
           file: deploy/book/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ steps.meta.outputs.version }}
-      - run: |
-          { echo "### Image"; echo; echo "\`ghcr.io/${{ github.repository_owner }}/fondaco-book@${{ steps.push.outputs.digest }}\`"; echo; echo "${{ steps.meta.outputs.tags }}"; } >> "$GITHUB_STEP_SUMMARY"
+          tags: "${{ steps.ref.outputs.image }}:${{ steps.ref.outputs.tag }}"
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.ref.outputs.tag }}
+          build-args: VERSION=${{ steps.ref.outputs.tag }}
+      - name: tag and digest in the run summary (copy them into REPORT.md, "Immagine della bacheca")
+        run: |
+          { echo "### Image"; echo; echo "| tag | digest | commit |"; echo "|---|---|---|"
+            echo "| \`${{ steps.ref.outputs.image }}:${{ steps.ref.outputs.tag }}\` | \`${{ steps.push.outputs.digest }}\` | \`${{ github.sha }}\` |"; echo; } >> "$GITHUB_STEP_SUMMARY"

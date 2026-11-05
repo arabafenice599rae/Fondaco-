@@ -116,7 +116,7 @@ Dettagli in `docs/THREAT_MODEL.md`.
 - **CI** (`.github/workflows/verify.yml`):
   - **trigger:** `pull_request` rapido, notturno completo, `workflow_dispatch` (`suite`, `fork_block`, `ref`);
   - **job:** `toolchain`, lint, unit, fork, foundry, web-e2e, supply-chain, due build riproducibili, confronto, docker e
-    docker-publish (solo su `main` o tag, con `packages: write`);
+    docker-publish (solo al push di un tag `v*`, con `packages: write`; D-56);
   - **riepilogo:** ogni job scrive la sua tabella nel riepilogo della run.
 - **Build riproducibile**, app al commit `5b7b87a` (dopo le correzioni della revisione):
   - tree hash `c9b62461e1c7cc0e15c24e8d31c00a541b033782ea84a07c3d34ea0c593f1efe`;
@@ -138,6 +138,15 @@ Dettagli in `docs/THREAT_MODEL.md`.
   - prova completa su fork locali delle due testnet: stesso indirizzo, C1–C6 verdi su entrambe, fill di prova con saldi
     esatti; gas misurato: deploy 2.578.924, `transferOwnership` 28.521;
   - **il deploy non è stato eseguito**: serve la tua conferma (vedi `docs/RELEASE.md`).
+
+## Immagine della bacheca
+
+Non ancora pubblicata: la pubblica il CI al push di un tag `v*` su un commit di `main`, creato dal proprietario dopo la testnet
+(D-56). Alla pubblicazione, qui vanno tag, digest e commit, presi dal riepilogo della run:
+
+| Tag | Digest | Commit | Run |
+|---|---|---|---|
+| — | — | — | — |
 
 ## Prossimi passi
 
@@ -188,7 +197,7 @@ Zero `FAIL` e nessuna suite ripetuta.
 | reproducible-build-a / -b | ✅ / ✅ | 34 s / 32 s |
 | reproducible-compare (tree hash `c9b62461…f1efe`, CID `bafybeigfhaq…66n7q`, uguali) | ✅ | 3 s |
 | docker (immagine, MinIO dal tag, compose smoke 8/8) | ✅ | 5 min 45 s |
-| docker-publish | saltato, come previsto (solo `main` o tag `v*`) | — |
+| docker-publish | saltato, come previsto (solo al push di un tag `v*`) | — |
 
 Valori principali di `web-e2e` nella run 7:
 - **Layout:** L1 e L1b puliti su 420 campioni ciascuno; L5 al massimo 0,4 px.

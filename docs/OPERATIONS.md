@@ -8,7 +8,7 @@ The stack (`deploy/`), tested end to end by `docker-smoke` (`packages/book-serve
 
 | Service | Image | Role |
 |---|---|---|
-| `book` | `ghcr.io/arabafenice599rae/fondaco-book:<version>` (published by the CI on `main` and on `v*` tags, with its digest in the run summary) | the book server, user `node`, data in the `book-data` volume, no published port |
+| `book` | `ghcr.io/arabafenice599rae/fondaco-book:<git tag>`, e.g. `:v0.1.0` (published by the CI only when a `v*` tag on a commit of `main` is pushed; tag and digest in the run summary and in REPORT.md) | the book server, user `node`, data in the `book-data` volume, no published port |
 | `caddy` | `caddy:2.10.2-alpine@sha256:4c6e…530d` | TLS (automatic certificates), reverse proxy, `/stream` not buffered |
 | `backup` | same image as `book` | an hourly consistent snapshot of SQLite, gzipped, uploaded to S3-compatible storage (SigV4), 168 copies kept |
 
@@ -78,7 +78,7 @@ except those offers.
 ## 4. Upgrade
 
 ```bash
-# deploy/.env: BOOK_VERSION=<new version>   (images are immutable; the run summary of the release lists the digest)
+# deploy/.env: BOOK_VERSION=<git tag of the release, e.g. v0.2.0>   (images are immutable; the run summary lists the digest)
 docker compose -f deploy/compose.yaml --env-file deploy/.env pull book backup
 docker compose -f deploy/compose.yaml --env-file deploy/.env exec backup node scripts/backup.mjs once   # a fresh backup first
 docker compose -f deploy/compose.yaml --env-file deploy/.env up -d book backup
