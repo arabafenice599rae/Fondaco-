@@ -139,6 +139,15 @@ Dettagli in `docs/THREAT_MODEL.md`.
     esatti; gas misurato: deploy 2.578.924, `transferOwnership` 28.521;
   - **il deploy non è stato eseguito**: serve la tua conferma (vedi `docs/RELEASE.md`).
 
+## Immagine della bacheca
+
+Non ancora pubblicata: la pubblica il CI al push di un tag `v*` su un commit di `main`, creato dal proprietario dopo la testnet
+(D-56). Alla pubblicazione, qui vanno tag, digest e commit, presi dal riepilogo della run:
+
+| Tag | Digest | Commit | Run |
+|---|---|---|---|
+| — | — | — | — |
+
 ## Prossimi passi
 
 1. **EIP-5792 (`wallet_sendCalls`):** approve + swap in un'unica conferma nei wallet che lo supportano, e invio atomico

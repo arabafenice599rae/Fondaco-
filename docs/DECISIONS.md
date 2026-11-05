@@ -390,6 +390,15 @@ manuale su `main` (41987858011) è stata cancellata prima di arrivare a `docker-
 Su `main`, sui branch, nelle run manuali e nella notturna l'immagine viene costruita e provata con lo smoke test, ma non
 pubblicata.
 
+Vincoli del job `docker-publish`:
+- **Commit su `main`:** il commit del tag deve essere contenuto in `main` (`git merge-base --is-ancestor $GITHUB_SHA
+  origin/main`). Altrimenti il job fallisce prima del login al registry, e non viene pubblicato nulla.
+- **Tag dell'immagine** = tag git, per esempio `v0.1.0` → `ghcr.io/arabafenice599rae/fondaco-book:v0.1.0`. Non ci sono altri
+  tag: niente `latest`, niente semver ridotti, niente `sha-…`. Le etichette OCI `source`, `revision` e `version` vengono dal
+  commit e dal tag.
+- **Digest:** il riepilogo della run riporta tag, digest e commit. Il digest va poi copiato in REPORT.md, sezione "Immagine
+  della bacheca", con un commit rivisto dal proprietario.
+
 ### D-57 · Ripieghi di Geist Mono con metriche tarate, preload dei woff2 — D
 - **Ripieghi.** `fonts.css` dichiara facce locali "Geist Mono Fallback …" per Menlo, Consolas, DejaVu Sans Mono, Liberation Mono
   e Courier New:
