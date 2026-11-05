@@ -444,3 +444,13 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
 - Misurato nell'immagine Playwright: 2,6 s nelle run CI 6 e 7, **2,67 s** con P5 nella run manuale 41927262623
   (2,60 · 2,68 · 2,67), 2,53 s in locale (2,56 · 2,45 · 2,53).
 - L'elemento LCP è il marchio dello splash, la cui animazione dura 2,8 s per progetto: è il limite voluto di PHASE6-RESULTS.
+
+### D-60 · Concorrenza del workflow — approvata
+- **Gruppo** = `workflow-evento-ref`:
+  - per `workflow_dispatch` e `schedule` al posto del ref c'è il `run_id`, quindi ogni run manuale o notturna ha un gruppo
+    suo: una run manuale non cancella mai un'altra run manuale né la notturna;
+  - per `pull_request` il ref è il branch della PR.
+- **`cancel-in-progress`** solo per `pull_request` e `push`: una run più vecchia dello stesso ref viene sostituita da quella
+  del commit più nuovo.
+- **Prima:** gruppo `verify-<ref>` per tutti gli eventi e cancellazione sempre attiva. Una seconda run manuale sullo stesso
+  branch cancellava la prima.

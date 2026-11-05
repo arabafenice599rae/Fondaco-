@@ -30,9 +30,11 @@ on:
 permissions:
   contents: read
 
+# One group per workflow + event + ref; manual and nightly runs get their own run id, so a manual run never cancels another
+# manual run or the nightly. Only pull_request and push runs replace an older run of the same ref (a newer commit).
 concurrency:
-  group: verify-${{ github.event_name == 'pull_request' && github.head_ref || inputs.ref || github.ref }}
-  cancel-in-progress: true
+  group: "${{ github.workflow }}-${{ github.event_name }}-${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id || (github.event_name == 'pull_request' && github.head_ref || github.ref) }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 env:
   FORK_BLOCK: ${{ inputs.fork_block || '23700000' }}
