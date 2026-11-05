@@ -242,26 +242,36 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
 - la rete predefinita è la prima di `config.json` con un contratto, oggi Base Sepolia (D-61);
 - Ethereum e Base restano in elenco ma non sono selezionabili ("non ancora disponibile");
 - il foglio di conferma e Impostazioni (rete attiva) mostrano l'indirizzo completo del contratto e il link a Sourcify.
-- il build dell'app cambia di conseguenza. Al commit `d4eb782`:
-  - tree hash `a9c9e184d463f52730d25fe65e53cbb52ce4603be0aa6a836d8335086aae2df7`;
-  - CID `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4`;
-  - contenthash `0xe3010170122066abf99ef0d6f9deae80653833b84e8ffa936bd8f27aaff3a41058876dc56867`.
+- il build dell'app cambia di conseguenza. Al commit `6956bf5` (metadati inglesi, anteprime dei link e `social-preview.png` nel build, D-63):
+  - tree hash `e5d897cd329a2a6cf81d2db409a2118890a2ae4685648ded863659feb5551bca`;
+  - CID `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai`;
+  - contenthash `0xe30101701220a6bf68f3490ec29e6298bc6d5715c25b42a032ba17e27fc5dc8530bcb14d3702`.
 
   Il build è riproducibile tra due build locali, e il CI lo ricontrolla nella run della PR. Questi valori sostituiscono quelli
-  dei commit `cd11d87` e `5b7b87a` per qualunque pubblicazione futura.
+  dei commit `d4eb782` (CID `bafybeidgvp4…lim4`), `cd11d87` e `5b7b87a` per qualunque pubblicazione futura.
 
 ## Immagine della bacheca
 
-Non ancora pubblicata. La pubblica il CI al push di un tag `v*` su un commit di `main`, creato dal proprietario, e solo con
-la run completa verde (D-56, D-62).
+Pubblicata dal CI al push del tag `v1.0.0-rc1`, creato dal proprietario il 2026-11-05 alle 14:54 UTC sul commit di `main`
+`758dd7a` (merge della PR #8). È una release immutabile, segnata come pre-release (D-56, D-62).
 - **Cosa si pubblica:** l'archivio OCI costruito una volta nel job `docker` e passato dallo smoke test, senza ricostruirlo.
-- **Digest:** quello testato e quello pubblicato devono coincidere, altrimenti il job fallisce.
-
-Alla pubblicazione, qui vanno i valori del riepilogo della run ("Image published"):
+- **Digest:** quello testato e quello pubblicato devono coincidere, altrimenti il job fallisce. In questa run i controlli
+  prima e dopo il push sono passati.
 
 | Tag | Digest | Commit | Smoke sulla stessa immagine | Run |
 |---|---|---|---|---|
-| — | — | — | — | — |
+| `v1.0.0-rc1` | `sha256:2121ad4c83f628f111df0a0143e4e64e902c97efc0bbb38e730b952f3f90bda4` | `758dd7a64fdc77109d206b0ab9778ee79f5fe1ab` | passato (job `docker`) | [42049480368](https://github.com/arabafenice599rae/Fondaco-/actions/runs/42049480368) |
+
+- **Immagine:** `ghcr.io/arabafenice599rae/fondaco-book:v1.0.0-rc1@sha256:2121ad4c83f628f111df0a0143e4e64e902c97efc0bbb38e730b952f3f90bda4`.
+  Il primo pacchetto su GHCR è privato per impostazione predefinita.
+- **Run:** tutti i 12 job sono verdi; `docker-publish` è partito per ultimo, dopo tutti gli altri.
+- **App in rc1:** l'app di `758dd7a` è lo stesso build di `d4eb782`:
+  - CID `bafybeidgvp4z54gw7hpk5adfhaz3qtup7kjwxwhspkx7hjaqlcdw3rlim4`;
+  - tree hash `a9c9e184…2df7`;
+  - `apps/web` non cambia tra i due commit.
+- **Prossimo tag:** l'app con i metadati inglesi (D-63, commit `6956bf5`, CID
+  `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai`) non è in rc1 e andrà nel prossimo tag. `v1.0.0-rc1` non
+  va ricreato né spostato.
 
 ## Prossimi passi
 

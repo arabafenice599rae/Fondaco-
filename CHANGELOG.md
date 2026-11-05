@@ -16,6 +16,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguo
   - la rete predefinita è la prima con un contratto, oggi Base Sepolia;
   - le reti senza contratto restano in elenco ma non sono selezionabili ("non ancora disponibile");
   - indirizzo completo del contratto con link Sourcify, nel foglio di conferma e in Impostazioni per la rete attiva.
+- README in inglese con logo e motto "The public OTC board for Ethereum. You set the price, the contract settles it.";
+  immagine social `docs/assets/social-preview.png` (1280×640).
+- App (D-63): titolo, descrizione e tag `og:`/`twitter:` in inglese con il motto e l'immagine social, che è anche nel build (`/social-preview.png`). Nuovo CID
+  `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai`, non pinnato; andrà nel prossimo tag, non in `v1.0.0-rc1`.
 
 ### Corretto
 - D-55: su Sepolia il gas è più alto per la creazione di stato. La stima del nodo era giusta e il fork locale no.
