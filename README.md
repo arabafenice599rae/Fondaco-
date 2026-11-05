@@ -1,183 +1,236 @@
-# FONDACO
+<div align="center">
 
-Exchange **P2P non-custodial multi-moneta** su AirSwap **SwapERC20 v4.3** (contratto invariato).
-Chi propone firma gratis e paga lo 0,30% solo se l'offerta viene eseguita; chi accetta paga prezzo e gas.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/fondaco-logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/fondaco-logo-light.svg">
+  <img alt="FONDACO" src="docs/assets/fondaco-logo-light.svg" width="440">
+</picture>
 
-## Struttura (monorepo pnpm)
+### Exchange P2P non-custodial multi-moneta. Il prezzo lo fate voi.
 
-| Percorso | Contenuto |
-|---|---|
-| `packages/contracts` | fixture SwapERC20 (bytecode verificato), script di deploy, test fee e deploy |
-| `packages/book-server` | book server (Node, viem, `node:sqlite` WAL) |
-| `packages/client` | `taker`, `protect`, `wallet-protection` |
-| `apps/web` | app web statica (Vite, TypeScript senza framework): `apps/web/README.md` |
-| `tools/verify-source` | ricompila SwapERC20 dal tag e confronta il bytecode |
-| `tools/testkit` | fork di mainnet con anvil a blocco fisso, wallet casuali, saldi di test, runner delle suite |
-| `docs/reference` | materiale di partenza: prototipo `mini-exchange.html`, README originale |
-| `docs/DECISIONS.md` | decisioni prese e punti aperti |
+[![verify](https://github.com/arabafenice599rae/Fondaco-/actions/workflows/verify.yml/badge.svg)](https://github.com/arabafenice599rae/Fondaco-/actions/workflows/verify.yml)
+![contratto](https://img.shields.io/badge/contratto-AirSwap%20SwapERC20%20v4.3-7C93FF)
+![fee](https://img.shields.io/badge/fee-0%2C30%25%20solo%20se%20eseguita-F4AE52)
+![node](https://img.shields.io/badge/node-22.23.4-3c873a)
+![pnpm](https://img.shields.io/badge/pnpm-10-f69220)
 
-## Requisiti
+[Come funziona](#come-funziona) · [Avvio rapido](#avvio-rapido) · [Verifica](#verifica-e-ci) · [Contratto e audit](#contratto-e-audit) · [Rilascio](#rilascio) · [Documentazione](#documentazione)
 
-- Node ≥ 22.13, pnpm 10 (`corepack enable`)
-- Foundry (`anvil`) — testato con 1.5.1-stable; `ANVIL_BIN` per un percorso diverso
-- git, tar
-- un RPC mainnet **con stato archivio** solo per il fork locale (sola lettura): `MAINNET_RPC_URL` in `.env`
+</div>
 
-```bash
-cp .env.example .env        # MAINNET_RPC_URL (il blocco del fork è in fork.config.json)
-pnpm install --frozen-lockfile
-pnpm verify-source          # bytecode del fixture = sorgente v4.3 ricompilato = codice deployato da AirSwap (Ethereum, Base)
-pnpm test                   # build, ABI, unit, verify-source (positivo e negativo), tutte le suite su fork
-pnpm test:fork e2e engine   # solo alcune suite
+---
+
+## Cos'è
+
+FONDACO è un exchange **peer-to-peer** in cui nessuno custodisce i fondi di nessuno.
+
+- **Chi propone** firma un'offerta gratis, fuori catena (EIP-712), e paga lo **0,30%** solo se l'offerta viene eseguita.
+- **Chi accetta** paga il prezzo e il gas: lo scambio avviene in una sola transazione, direttamente tra i due wallet.
+- **Il contratto** è AirSwap **SwapERC20 v4.3**, **non modificato**: lo stesso bytecode deployato da AirSwap su Ethereum e Base.
+- **La bacheca** raccoglie e verifica le offerte, ma non custodisce nulla e non firma nulla. Chiunque può farne girare una.
+
+## Come funziona
+
+```
+ browser ──────────────── app statica (apps/web: TypeScript + DOM, Vite) ── IPFS / hosting classico, stesso build
+   │  EIP-6963 wallet           │ boot.js: /config + /books in un round trip
+   │  (firma EIP-712, tx)       ▼
+   │                      bacheca (packages/book-server)  ── Caddy (TLS) ── backup orario S3 (SigV4)
+   │                        node:sqlite (WAL, migrazioni), indicizzazione,
+   │                        fail-closed, SSE, /trades /candles, Prometheus
+   ▼                              │ RPC con riserva
+ SwapERC20 v4.3 (AirSwap, invariato) ◄──────────┘
+   owner = Safe, fee 30/30, staking 0, bonus 0
+ client (packages/client): plan / verify / execute, invio protetto, guardie di prezzo e destinatario, MEV per wallet
 ```
 
-Il runner (`tools/testkit/run-suites.mjs`) esegue le suite unitarie senza chain e quelle su fork con un anvil nuovo per suite;
-i conteggi finiscono in `reports/tests.json`, la verifica del sorgente in `reports/verify-source.json`.
-Dopo il clone: `git submodule update --init` (forge-std, solo per i test Foundry).
-Prova di carico (fuori da `pnpm test`, ~3 minuti): `node tools/load/load-test.mjs` → `reports/load.json`; risultati commentati in [`docs/LOAD.md`](docs/LOAD.md).
-
-## Verifica
-
-Il CI è `.github/workflows/verify.yml`, workflow `verify` in Actions (attivo su `main`; "Run workflow" e la run notturna
-usano il file del branch predefinito, e la run manuale può scegliere un altro branch). È autosufficiente: lo strumentario è installato dalla composite action
-`.github/actions/setup-toolchain`, con le versioni in `tools/ci/toolchain.json`, controllate a fine setup.
-
-| Come | Cosa gira |
+| Principio | In pratica |
 |---|---|
-| **Pull request** | profilo rapido: suite lente saltate nei job unit/fork, Foundry con il profilo `ci-quick`, RPC pubblico con 3 tentativi per suite su fork |
-| **Notte** (02:17 UTC, `cron: "17 2 * * *"`) | tutto, Foundry completo, `FORK_RPC_URL` (RPC d'archivio a pagamento) |
-| **A mano** | Actions → verify → Run workflow, oppure `gh workflow run verify.yml -f suite=full [-f fork_block=23700000] [-f ref=<branch o commit>]`. `suite`: `quick`, `full`, `contracts`, `book-server`, `client`, `web` |
-| **Tag `v*`** | push di un tag di rilascio: tutto, poi `docker-publish` pubblica l'immagine della bacheca su GHCR |
+| **Nessun Solidity di produzione nostro** | Il fixture è ricompilato dal tag v4.3 e confrontato byte per byte con il deploy AirSwap. |
+| **La bacheca non è fidata** | Può nascondere o ritardare offerte, non cambiarle: l'app verifica ogni offerta on-chain prima di eseguirla. |
+| **L'app si fida solo della propria configurazione** | Contratto e monete vengono da `config.json`, mai dalla bacheca. |
+| **Build riproducibile** | Lo stesso commit dà lo stesso hash dell'albero e lo stesso CID IPFS, verificato da due job separati del CI. |
 
-Job:
-- **toolchain**: piano della run e cache;
-- **lint**: build, typecheck, file generati, lint e checksum;
-- **unit**: book server, client e contratti, compresa la verifica del sorgente contro il deploy AirSwap;
-- **fork**: anvil al blocco fisso, un fork nuovo per suite;
-- **foundry**;
-- **web-e2e**: Playwright, Lighthouse, axe, layout (con webfont e con i woff2 bloccati), regressione visiva e flussi, dentro
-  l'immagine `mcr.microsoft.com/playwright:v1.63.0-noble` bloccata per digest;
-- **supply-chain**: `pnpm audit`, lockfile bloccato, gitleaks, SHA256SUMS;
-- **reproducible-build-a/b** e **reproducible-compare**: stesso hash dell'albero e stesso CID IPFS;
-- **docker**: immagine e smoke test del compose; backup verso lo stub SigV4 e verso MinIO, costruito dal tag;
-- **docker-publish**: solo su `main` o tag `v*`; pubblica su GHCR con tag di versione e riporta il digest nel riepilogo.
+## Avvio rapido
 
-**Concorrenza:** le run di PR e di push di uno stesso ref si sostituiscono con il commit più nuovo; le run manuali e quella
-notturna non si cancellano mai a vicenda (D-60).
+**Requisiti**
+- Node 22.23.4 (`.nvmrc`) e pnpm 10 (`corepack enable`);
+- Foundry (`anvil`), testato con 1.5.1-stable; `ANVIL_BIN` per un percorso diverso;
+- un RPC mainnet **con stato archivio**, in sola lettura e solo per il fork locale: `MAINNET_RPC_URL` in `.env`.
 
-**Segreti:**
-- `FORK_RPC_URL`: RPC mainnet d'archivio, usato dalla notte e dalle run manuali; senza, RPC pubblico con tentativi ripetuti;
-- `BASE_RPC_URL`: facoltativo, per il confronto con il deploy su Base.
+```bash
+git clone https://github.com/arabafenice599rae/Fondaco-.git && cd Fondaco-
+git submodule update --init           # forge-std, solo per i test Foundry
+cp .env.example .env                  # MAINNET_RPC_URL (il blocco del fork è in fork.config.json)
+pnpm install --frozen-lockfile
 
-**Riepilogo:** ogni job scrive nella pagina della run una tabella con suite, controlli passati/totali, tempo ed esito,
-oltre alle versioni degli strumenti, al piano e agli hash del build. Artefatti: `reports-*` (Lighthouse, layout, a11y,
-differenze visive, screenshot, log di anvil, tabelle delle suite) e il manifest del build.
+pnpm verify-source                    # fixture = sorgente v4.3 ricompilato = codice deployato da AirSwap (Ethereum, Base)
+pnpm test                             # build, ABI, unit, verify-source, tutte le suite su fork
+pnpm test:fork e2e engine             # solo alcune suite
+```
 
-In locale: `node tools/testkit/run-suites.mjs [--group …] [--profile quick] [--retries N] [suite …]`.
-
-La regressione visiva gira solo nell'immagine Playwright del CI, così le baseline sono una sola serie per tutte le macchine.
-Lanciata fuori, `web-visual` si rilancia da sola nel container (serve Docker). Per rigenerare le baseline:
-`pnpm --filter @fondaco/web test:visual:update`, nello stesso container. Qualunque comando nell'immagine:
-`node tools/testkit/in-playwright.mjs <comando>`.
-
-## Book server
-
-TypeScript strict compilato in `packages/book-server/dist`; unica dipendenza di runtime di terzi: `viem`.
+**Bacheca in locale**
 
 ```bash
 pnpm build
-cp packages/book-server/config.example.json packages/book-server/config.json   # indirizzo del contratto, RPC, token
+cp packages/book-server/config.example.json packages/book-server/config.json   # contratto, RPC, token
 pnpm --filter @fondaco/book-server start
 ```
 
-- **Configurazione**: validata all'avvio; chiavi sconosciute e valori errati sono elencati tutti insieme con il loro percorso.
-  Riferimento completo con i default: [`docs/CONFIG.md`](docs/CONFIG.md) (generato dallo schema).
-- **Database**: SQLite in WAL, migrazioni versionate (`PRAGMA user_version` + tabella `schema_migrations`) applicate all'avvio;
-  un database del server JavaScript di riferimento viene riconosciuto e migrato; uno più nuovo del codice viene rifiutato.
-- **Reorg**: il server riporta indietro gli ultimi `reorgDepth` blocchi (default 64 = finalità di Ethereum). Una reorg più profonda non viene
-  corretta (comportamento documentato, test `reorg` R4): **su una chain con finalità più lenta `reorgDepth` va alzato** di conseguenza.
-- **Fail-closed**: se nessun giro di indicizzazione riesce per `maxStalenessMs` (default 120 s), `/book` (e `/books`) risponde `503 stale`.
-- **`GET /books?chainId&pairs=base:quote,…`** (fino a 10 coppie): più libri in una richiesta, per la prima schermata dell'app; una coppia
-  fuori whitelist è una voce `{ error: 'token_not_allowed' }`, non un errore HTTP.
-- **Rifirma dopo un cambio di fee**: un ordine con lo stesso nonce e le stesse condizioni di un ordine `invalid_fee` lo sostituisce
-  (un nonce → al massimo un'esecuzione, qualunque fee torni in vigore); ogni altro riuso del nonce è `nonce_reused`.
-- **Log**: JSON su stdout, un oggetto per riga (`log.level`).
-- **Metriche**: `GET /metrics` in formato Prometheus, **spento di default** (`metrics.enabled`). Acceso, risponde solo alle reti in
-  `metrics.allow` (indirizzo diretto del client, mai `X-Forwarded-For`) o con `Authorization: Bearer <metrics.token>`.
-  Serie principali: `fondaco_tick_rpc_requests` e `fondaco_tick_duration_seconds` per tipo di giro (idle, incremental, full),
-  `fondaco_orders` per stato, `fondaco_reorgs_total`, `fondaco_http_request_duration_seconds` per route, `fondaco_rpc_requests_total`.
+Per l'app web vedi [`apps/web/README.md`](apps/web/README.md); per far girare una bacheca in produzione (Docker, Caddy,
+backup) vedi [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
-## Riproducibilità del bytecode
+## Struttura del repository
 
-Il contratto deployato è AirSwap **SwapERC20 v4.3, non modificato**. Le impostazioni ufficiali di compilazione sono
-registrate in [`packages/contracts/compiler-settings.json`](packages/contracts/compiler-settings.json) e usate da
-`tools/verify-source`, dallo script di deploy e dalla libreria (`COMPILER_SETTINGS`, `EVM_VERSION`):
+| Percorso | Contenuto |
+|---|---|
+| [`apps/web`](apps/web) | app web statica: Vite, TypeScript senza framework, wallet EIP-6963 |
+| [`packages/book-server`](packages/book-server) | bacheca: Node, `viem`, `node:sqlite` in WAL |
+| [`packages/client`](packages/client) | libreria del taker: `plan`, `verify`, `execute`, invio protetto, guardie |
+| [`packages/contracts`](packages/contracts) | fixture SwapERC20 verificato, script di deploy e di rilascio, test Foundry |
+| [`deploy`](deploy) | immagine Docker della bacheca, compose con Caddy e backup, MinIO per lo smoke test |
+| [`tools`](tools) | `verify-source`, testkit (fork anvil, runner delle suite), build riproducibile, IPFS, CI |
+| [`docs`](docs) | decisioni, modello delle minacce, operazioni, rilascio, audit |
+
+## Verifica e CI
+
+Il CI è il workflow [`verify`](.github/workflows/verify.yml), autosufficiente: la composite action
+[`setup-toolchain`](.github/actions/setup-toolchain) installa versioni bloccate (in [`tools/ci/toolchain.json`](tools/ci/toolchain.json))
+e fallisce se una non corrisponde.
+
+| Quando | Cosa gira |
+|---|---|
+| **Pull request** | profilo rapido: suite lente saltate nei job unit e fork, Foundry `ci-quick`, RPC pubblico con 3 tentativi per suite |
+| **Notte**, 02:17 UTC (`cron: "17 2 * * *"`) | tutto, Foundry completo, RPC d'archivio dal secret `FORK_RPC_URL` |
+| **A mano** | Actions → verify → Run workflow, oppure `gh workflow run verify.yml -f suite=full [-f fork_block=23700000] [-f ref=<branch o commit>]`; `suite`: `quick`, `full`, `contracts`, `book-server`, `client`, `web` |
+| **Tag `v*`** | tutto, poi `docker-publish` pubblica l'immagine della bacheca su GHCR |
+
+<details>
+<summary><b>Job del workflow</b></summary>
+
+| Job | Cosa fa |
+|---|---|
+| `toolchain` | piano della run, cache riscaldate |
+| `lint` | build, typecheck, file generati, lint, checksum |
+| `unit` | bacheca, client e contratti, compresa la verifica del sorgente contro il deploy AirSwap |
+| `fork` | anvil al blocco fisso, un fork nuovo per suite |
+| `foundry` | test e invarianti del contratto |
+| `web-e2e` | Playwright, Lighthouse, axe, layout (con webfont e con woff2 bloccati), regressione visiva, flussi; nell'immagine `mcr.microsoft.com/playwright:v1.63.0-noble` bloccata per digest |
+| `supply-chain` | `pnpm audit`, lockfile bloccato, gitleaks sull'intera storia, SHA256SUMS |
+| `reproducible-build-a/b`, `reproducible-compare` | due build separati: stesso hash dell'albero, stesso CID IPFS |
+| `docker` | immagine della bacheca e smoke test del compose; backup verso lo stub SigV4 e verso MinIO compilato dal tag (binario in cache) |
+| `docker-publish` | solo su `main` o tag `v*`: pubblica su GHCR e riporta il digest |
+
+</details>
+
+- **Concorrenza:** le run di PR e di push di uno stesso ref si sostituiscono con il commit più nuovo; le run manuali e quella
+  notturna non si cancellano mai a vicenda (D-60).
+- **Segreti:** `FORK_RPC_URL` (RPC mainnet d'archivio; senza, RPC pubblico con tentativi ripetuti) e `BASE_RPC_URL`
+  (facoltativo, per il confronto con il deploy su Base).
+- **Riepilogo:** ogni job scrive nella pagina della run suite, controlli, tempi, versioni degli strumenti e hash del build;
+  gli artefatti `reports-*` contengono Lighthouse, layout, accessibilità, differenze visive, screenshot e log di anvil.
+
+**In locale**
+
+```bash
+node tools/testkit/run-suites.mjs [--group …] [--profile quick] [--retries N] [suite …]
+node tools/testkit/in-playwright.mjs <comando>      # qualunque comando nell'immagine Playwright del CI
+pnpm --filter @fondaco/web test:visual:update       # rigenera le baseline visive, nello stesso container
+```
+
+La regressione visiva gira solo nell'immagine Playwright del CI, così le baseline sono una sola serie per tutte le
+macchine; lanciata fuori, `web-visual` si rilancia da sola nel container (serve Docker). La prova di carico (circa 3 minuti)
+è fuori da `pnpm test`: `node tools/load/load-test.mjs`, risultati in [`docs/LOAD.md`](docs/LOAD.md).
+
+## La bacheca
+
+TypeScript strict compilato in `packages/book-server/dist`; unica dipendenza di runtime di terzi: `viem`.
+
+| Aspetto | Comportamento |
+|---|---|
+| **Configurazione** | validata all'avvio; chiavi sconosciute e valori errati elencati tutti insieme, con il percorso. Riferimento: [`docs/CONFIG.md`](docs/CONFIG.md) |
+| **Database** | SQLite in WAL, migrazioni versionate applicate all'avvio; un database più nuovo del codice viene rifiutato |
+| **Reorg** | rollback degli ultimi `reorgDepth` blocchi (default 64); su chain con finalità più lenta va alzato. Una reorg più profonda si ripara da backup |
+| **Fail-closed** | se l'indicizzazione non riesce per `maxStalenessMs` (default 120 s), `/book` e `/books` rispondono `503 stale` |
+| **`GET /books`** | fino a 10 coppie in una richiesta, per la prima schermata dell'app |
+| **Cambio di fee** | un ordine rifirmato con lo stesso nonce sostituisce quello `invalid_fee`: al massimo un'esecuzione per nonce |
+| **Log e metriche** | JSON su stdout; `GET /metrics` Prometheus **spento di default**, accessibile solo da allow-list o con token |
+
+## Contratto e audit
+
+Il contratto deployato è AirSwap **SwapERC20 v4.3, non modificato**. Le impostazioni di compilazione sono in
+[`packages/contracts/compiler-settings.json`](packages/contracts/compiler-settings.json).
 
 | Parametro | Valore |
 |---|---|
 | Sorgente | `airswap-protocols`, tag `v4.3`, commit `6ad0137fa62ab2bd9eead257b77b8f77962d0bf3` |
 | File | `source/swap-erc20/contracts/SwapERC20.sol`, SHA-256 `4103d213…3a36` |
 | Dipendenze | solady 0.0.173 (integrità dallo `yarn.lock` del tag) |
-| Compilatore | solc **0.8.23** (`commit.f704f362`, SHA-256 `28726a45…5732`) |
-| Ottimizzatore | attivo, **999999** run |
-| **evmVersion** | **`paris`** |
-| Nomi delle unità | come Hardhat (`contracts/SwapERC20.sol`, `solady/src/…`): entrano nell'hash dei metadati |
-| Risultato | bytecode di creazione di 12 123 byte, SHA-256 `45dffc57…6109`; runtime di 11 264 byte |
+| Compilatore | solc **0.8.23** (`commit.f704f362`, SHA-256 `28726a45…5732`), ottimizzatore attivo, **999999** run |
+| **evmVersion** | **`paris`**: con il default `shanghai` il bytecode è diverso (11 930 byte, con `PUSH0`); un test lo verifica |
+| Risultato | creazione 12 123 byte (SHA-256 `45dffc57…6109`), runtime 11 264 byte |
 
-`evmVersion: paris` è obbligatorio: è il default di Hardhat per solc 0.8.23 nel repository AirSwap al tag (che non lo imposta),
-mentre il default di solc è `shanghai` e produce un bytecode diverso (11 930 byte, con `PUSH0`). La regola è fissata da un test:
-`pnpm test:verify-source` controlla che con `paris` il bytecode coincida e che con `shanghai` la verifica **fallisca**.
-Effetto pratico: senza `PUSH0`, lo stesso bytecode si può deployare anche su chain che non hanno Shanghai.
+**È il contratto che AirSwap ha deployato** come "V5.0" a `0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46`. `verify-source`
+confronta il runtime ricompilato con `eth_getCode` su Ethereum e su Base: identico, metadati compresi. Sourcify riporta
+*exact match* su entrambe le chain (D-40).
 
-### È il contratto che AirSwap ha deployato
-
-Questo sorgente è quello che AirSwap ha deployato come **"V5.0"** a `0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46`.
-`verify-source` (passo 7) confronta il runtime ricompilato con `eth_getCode` su **Ethereum** e su **Base**: è identico, e lo
-è anche l'hash dei metadati (11 264 byte su entrambe). Le due immutabili lette on-chain sono `DOMAIN_CHAIN_ID` (1 e 8453) e
-`DOMAIN_SEPARATOR`, ricalcolato da `SWAP_ERC20` / `4.3` / chain / indirizzo. Sourcify riporta *exact match* per creazione e
-runtime su entrambe le chain. Il confronto è registrato in [`docs/DECISIONS.md`](docs/DECISIONS.md) (D-40).
-
-### Audit
-
-[PeckShield, report #2024-047 "AirSwap V4.3"](docs/audits/), 23 aprile 2024, linkato da AirSwap nella pagina dei deployment.
-SHA-256 del PDF: `d1ccb9b3b56d88f6c96a744d5992ec023aeeb20b9b00b7246ffed36b000503e2` (`docs/audits/SHA256SUMS`).
-
-| | |
-|---|---|
-| Commit esaminato | `bcd4c48` (SwapERC20, Swap, adapter, Staking, Registry) |
-| Commit dopo le correzioni | `27b60da` |
-| Differenza con il sorgente deployato (`6ad0137`) | **solo la stringa di versione del dominio EIP-712 `"4.2"` → `"4.3"`** (più commenti); interfaccia invariata; solady 0.0.172 → 0.0.173 con i sei file importati identici byte per byte. Diff in [`docs/audits/`](docs/audits/) |
+**Audit:** [PeckShield, report #2024-047 "AirSwap V4.3"](docs/audits/), 23 aprile 2024 (SHA-256 del PDF in
+`docs/audits/SHA256SUMS`).
 
 | Rilievo | Gravità | Oggetto | Stato |
 |---|---|---|---|
-| PVE-001 Repeated `available()` calculation | Low | Staking (non lo usiamo) | Resolved (fix `d16d85c`) |
-| PVE-002 Revisited staking duration update | Informational | Staking (non lo usiamo) | "Resolved" nella tabella, "confirmed" nel dettaglio |
-| PVE-003 Improved order validation in `check()` | Informational | Swap, SwapERC20 | Resolved (fix `bcd4c48`) |
+| PVE-001 Repeated `available()` calculation | Low | Staking (non usato) | Resolved |
+| PVE-002 Revisited staking duration update | Informational | Staking (non usato) | Resolved / confirmed |
+| PVE-003 Improved order validation in `check()` | Informational | Swap, SwapERC20 | Resolved |
+
+Dal commit esaminato dopo le correzioni (`27b60da`) al sorgente deployato (`6ad0137`) cambia **solo la stringa di versione
+del dominio EIP-712**, `"4.2"` → `"4.3"`.
 
 > [!IMPORTANT]
-> **Riserva.** Il passaggio da OpenZeppelin a solady (#1293, `a145565`) sta **tra** il commit esaminato (`bcd4c48`) e quello
-> post-correzioni (`27b60da`). Il report indica `27b60da` come commit finale ma **non dice se quel cambio è stato riesaminato**.
-> Il diff completo `bcd4c48` → `6ad0137` è in `docs/audits/swap-erc20-bcd4c48-to-6ad0137.diff`.
+> **Riserva sull'audit.** Il passaggio da OpenZeppelin a solady (#1293, `a145565`) sta tra il commit esaminato (`bcd4c48`)
+> e quello post-correzioni (`27b60da`); il report non dice se quel cambio è stato riesaminato. Il diff completo è in
+> [`docs/audits/`](docs/audits/), le differenze con la v5.0.0 in [`docs/AUDIT-DIFF.md`](docs/AUDIT-DIFF.md).
 
-Le differenze tra questa versione e la v5.0.0 (che il progetto usava in precedenza) sono in [`docs/AUDIT-DIFF.md`](docs/AUDIT-DIFF.md).
+Il modello delle minacce, con ogni mitigazione collegata al test che la copre, è in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
 
-Lo script di deploy rifiuta un fixture il cui SHA-256 non coincide con quello registrato.
-
-## Deploy (solo dopo conferma esplicita)
+## Rilascio
 
 > [!WARNING]
-> **Lo script di deploy non è mai stato eseguito su una rete reale.** È stato provato solo su fork locali (anvil).
-> Il primo deploy su testnet (Sepolia o Base Sepolia) richiede la conferma esplicita del responsabile del progetto (Fase 7),
-> con la checklist di verifica post-deploy. Nessun deploy su mainnet senza la conferma del responsabile, tenuto conto della riserva sull'audit (vedi sopra).
+> **Nessun deploy è mai stato eseguito su una rete reale.** Lo script è stato provato solo su fork locali di Sepolia e Base
+> Sepolia. Deploy su testnet, pubblicazione su IPFS e record ENS richiedono la conferma esplicita del responsabile, con la
+> procedura di [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ```bash
-# prova a vuoto: legge soltanto, non firma e non invia nulla (basta l'indirizzo del deployer)
+# prova a vuoto: legge soltanto, non firma e non invia nulla
 RPC_URL=… DEPLOYER=0x… FEE_BPS=30 FEE_WALLET=0xSafeFee OWNER=0xSafe pnpm --filter @fondaco/contracts run deploy --dry-run
-# deploy vero: chiave dedicata al nonce 0, CONFIRM_CHAIN_ID deve coincidere con la chain dell'RPC
+# deploy vero: chiave dedicata al nonce 0; CONFIRM_CHAIN_ID deve coincidere con la chain dell'RPC
 RPC_URL=… PRIVATE_KEY=… CONFIRM_CHAIN_ID=11155111 FEE_BPS=30 FEE_WALLET=… OWNER=… pnpm --filter @fondaco/contracts run deploy
 ```
 
-Lo script è idempotente: con un deploy già fatto e coerente non invia nulla e verifica soltanto; se una esecuzione si è
-interrotta dopo il deploy completa il passaggio di ownership; in ogni altro caso si rifiuta. Il Wrapper non viene mai deployato (escluso dalla v1).
-Controlli dopo il deploy: owner = Safe, `protocolFee` = `protocolFeeLight` = 30, `protocolFeeWallet`, `stakingToken` = 0,
-`bonusMax` = `bonusScale` = 0, `DOMAIN_SEPARATOR` atteso per chain e indirizzo, `ORDER_TYPEHASH`.
+Lo script è idempotente: con un deploy coerente già fatto verifica soltanto; se un'esecuzione si è interrotta dopo il deploy
+completa il passaggio di ownership; in ogni altro caso si rifiuta. Dopo il deploy, `post-deploy-check.mjs` controlla
+indirizzo al nonce 0, runtime, owner = Safe, fee 30/30, staking e bonus a 0, `DOMAIN_SEPARATOR` (C1–C6).
+
+## Documentazione
+
+| Documento | Contenuto |
+|---|---|
+| [`REPORT.md`](REPORT.md) | report finale: architettura, risultati per fase, deviazioni, rischi residui |
+| [`CHANGELOG.md`](CHANGELOG.md) | cosa è cambiato, fase per fase |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | decisioni prese (D-01 … D-60) e punti aperti |
+| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | asset, attori, rischi e mitigazioni con i test |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | far girare una bacheca: configurazione, backup, aggiornamenti, reorg |
+| [`docs/RELEASE.md`](docs/RELEASE.md) | testnet, IPFS, ENS, dominio: procedure e checklist |
+| [`docs/CONFIG.md`](docs/CONFIG.md) | riferimento completo della configurazione della bacheca |
+| [`docs/AUDIT-DIFF.md`](docs/AUDIT-DIFF.md) | differenze tra la v4.3 deployata e la v5.0.0 |
+| [`docs/PHASE6-RESULTS.md`](docs/PHASE6-RESULTS.md) | numeri dei test avanzati dell'app (prestazioni, accessibilità, layout) |
+
+## Stato del progetto
+
+- **Fasi 0–7 completate:** contratto verificato, bacheca, client, app, test avanzati, sicurezza e rilascio.
+- **In attesa:** deploy su Sepolia e Base Sepolia, pubblicazione su IPFS, contenthash ENS di `fondaco.eth`.
+- **Prossimi passi:**
+  - EIP-5792 per approvare e scambiare con una sola conferma;
+  - un wallet integrato opzionale;
+  - il Wrapper per l'ETH nativo;
+  - un parere legale prima della mainnet.
