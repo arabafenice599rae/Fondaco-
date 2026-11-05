@@ -953,7 +953,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     $('w-list-l').textContent = ws.length ? 'Wallet trovati nel browser' : 'Nessun wallet trovato nel browser'
     $('w-list').innerHTML = ws.length ? ws.map((w) => `<label><input type="radio" name="wsel" value="${esc(w.info.uuid)}"${sel?.info.uuid === w.info.uuid ? ' checked' : ''}><span><b>${esc(w.info.name)}</b><small>${sel?.info.uuid === w.info.uuid && me() ? esc(shortAddr(me())) : esc(w.info.rdns)}</small></span></label>`).join('')
       : '<p class="o-note">Installa un wallet compatibile (EIP-6963), poi ricarica la pagina.</p>'
-    $('w-net').innerHTML = B.chains().map((c) => `<label><input type="radio" name="wnet" value="${c.id}"${c.id === B.chainId() ? ' checked' : ''}><span><b>${esc(c.name)}</b><small>${[8453, 10, 42161].includes(c.id) ? 'sequencer L2' : 'mempool pubblica'}</small></span></label>`).join('')
+    $('w-net').innerHTML = B.chains().map((c) => `<label><input type="radio" name="wnet" value="${c.id}"${c.id === B.chainId() ? ' checked' : ''}><span><b>${esc(c.name)}</b><small>${[8453, 10, 42161, 84532].includes(c.id) ? 'sequencer L2' : 'mempool pubblica'}</small></span></label>`).join('')
     const ic = st.protected ? 'i-shield' : 'i-alert'
     let h = `<div class="wstat-h"><svg class="ic sm" aria-hidden="true"><use href="#${ic}"/></svg>${esc(st.title)}</div><p>${esc(st.detail)}</p>`
     if (st.level === 'guide') h += `<ol class="wsteps">${GUIDE_STEPS.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>`

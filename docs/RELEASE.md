@@ -1,4 +1,9 @@
-# Release procedures (prepared, NOT executed)
+# Release procedures
+
+**Status (2026-11-05):** section 1, the testnets, is **done**: SwapERC20 `0xf86E2c4789F45A8a7AAA2CA98379716070B80131` on Sepolia
+and Base Sepolia, C1–C6 and the test fill green, every hash in REPORT.md ("Testnet"). Sections 2–4 (IPFS, ENS, domain) are
+still prepared and not executed. Source verification on Etherscan and Basescan: `node packages/contracts/scripts/verify-etherscan.mjs all --confirm`
+with `ETHERSCAN_API_KEY` in `.env` (prepared, not run).
 
 Everything here costs money, is irreversible or publishes something: each step needs explicit approval first.
 
