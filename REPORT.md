@@ -233,6 +233,11 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
   explorer;
 - Base Sepolia è tra le reti a sequencer (`SEQUENCER_CHAINS`, stato MEV "L2");
 - la rete predefinita resta Ethereum, dove `swap` è `null`.
+- il build dell'app cambia di conseguenza. Al commit `cd11d87`: tree hash
+  `c0a051cc36fcfab45043f11c147f074b4dd9a0dba444297e38da6cc7f668e324`, CID
+  `bafybeiau7cgw5rfowzq723wxjol2mjfgujxlnwpt5z46gr2pfaecrzkqji`, contenthash
+  `0xe3010170122014f88d6ec4aeb661fd6ed74b97a624a6a26eb6d9f3ee79e3474f280828e5504a`. Il build è riproducibile tra due build
+  locali; il CI lo ricontrolla alla prossima run. Sostituisce il CID del commit `5b7b87a` per qualunque pubblicazione futura.
 
 ## Immagine della bacheca
 
