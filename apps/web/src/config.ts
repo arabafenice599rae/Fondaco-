@@ -10,6 +10,15 @@ export interface Settings { book?: string; chains?: Record<string, { rpc?: strin
 export interface Effective extends AppConfig { overridden: { book: boolean; rpc: Record<string, boolean>; swap: Record<string, boolean> } }
 
 export const SETTINGS_KEY = 'fondaco-settings'
+
+/**
+ * The network the app opens on: the first chain of config.json that has a contract (object order, i.e. ascending chain id
+ * for numeric keys); with none, `defaultChain` or the first chain. public/boot.js applies the same rule (web-model U40).
+ */
+export function pickDefaultChain(explicit: unknown, chains: Record<string, { swap?: unknown }>): number {
+  const withSwap = Object.keys(chains).find((id) => typeof chains[id]?.swap === 'string' && chains[id]?.swap !== '')
+  return Number(withSwap ?? explicit ?? Object.keys(chains)[0] ?? 1)
+}
 const isUrl = (s: string) => { try { const u = new URL(s); return u.protocol === 'https:' || u.protocol === 'http:' } catch { return false } }
 
 /** Validate and normalize raw config.json (throws with every problem listed). */
@@ -36,8 +45,8 @@ export function parseAppConfig(raw: unknown): AppConfig {
     }
     chains[id] = { name: String(c0.name ?? `Chain ${id}`), rpc, swap, ...(typeof c0.explorer === 'string' ? { explorer: c0.explorer } : {}), tokens }
   }
-  const defaultChain = Number(r.defaultChain ?? Object.keys(chains)[0] ?? 1)
-  if (!chains[String(defaultChain)]) errs.push(`defaultChain ${defaultChain} is not in chains`)
+  if (r.defaultChain != null && !chains[String(Number(r.defaultChain))]) errs.push(`defaultChain ${r.defaultChain} is not in chains`)
+  const defaultChain = pickDefaultChain(r.defaultChain, chains)
   const txTimeoutSec = r.txTimeoutSec == null ? 300 : Number(r.txTimeoutSec)
   if (!Number.isInteger(txTimeoutSec) || txTimeoutSec < 5 || txTimeoutSec > 3600) errs.push('txTimeoutSec: integer seconds between 5 and 3600')
   if (errs.length) throw new Error(`config.json non valido:\n- ${errs.join('\n- ')}`)

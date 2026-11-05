@@ -1,7 +1,6 @@
 {
-  "$comment": "Initial configuration shipped with the build (editable at deploy time). The user can override the book URL, the RPC and, with an explicit warning, the contract, from Impostazioni. Tokens: only those listed here AND on the book are shown (a book cannot add tokens). swap null = not deployed yet on that chain: trading disabled with an explicit notice.",
+  "$comment": "Initial configuration shipped with the build (editable at deploy time). The user can override the book URL, the RPC and, with an explicit warning, the contract, from Impostazioni. Tokens: only those listed here AND on the book are shown (a book cannot add tokens). swap null = not deployed yet on that chain: the network is listed but not selectable ('non ancora disponibile'). The app opens on the first chain listed here that has a contract (D-61).",
   "book": "",
-  "defaultChain": 1,
   "chains": {
     "1": {
       "name": "Ethereum",

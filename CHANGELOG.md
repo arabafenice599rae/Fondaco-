@@ -2,6 +2,24 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguono il piano di lavoro.
 
+## [Testnet] — 2026-11-05
+
+### Aggiunto
+- SwapERC20 v4.3 su Sepolia e Base Sepolia a `0xf86E2c4789F45A8a7AAA2CA98379716070B80131`:
+  - owner e fee wallet: un Safe 1/1 di test;
+  - C1–C6 e fill di prova verdi, exact match su Sourcify;
+  - hash in REPORT.md, sezione "Testnet".
+- `packages/contracts/scripts/verify-etherscan.mjs`: verifica su Etherscan e Basescan, preparata e non eseguita.
+- App (D-61):
+  - la rete predefinita è la prima con un contratto, oggi Base Sepolia;
+  - le reti senza contratto restano in elenco ma non sono selezionabili ("non ancora disponibile");
+  - indirizzo completo del contratto con link Sourcify, nel foglio di conferma e in Impostazioni per la rete attiva.
+
+### Corretto
+- D-55: su Sepolia il gas è più alto per la creazione di stato. La stima del nodo era giusta e il fork locale no.
+- Conferma: l'importo da 30 px sporgeva di circa 3 px nell'etichetta sopra (web-layout L1 a 1440×900). Ora tra etichetta e
+  importo ci sono 3 px.
+
 ## [Fase 7] — Sicurezza e rilascio — 2026-11-04
 
 ### Aggiunto

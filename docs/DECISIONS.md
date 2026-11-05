@@ -485,3 +485,16 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   del commit più nuovo.
 - **Prima:** gruppo `verify-<ref>` per tutti gli eventi e cancellazione sempre attiva. Una seconda run manuale sullo stesso
   branch cancellava la prima.
+
+### D-61 · Rete predefinita e contratto visibile — approvata
+- **Rete predefinita:** è la prima rete di `config.json` che ha un contratto. L'ordine è quello delle chiavi del JSON, cioè
+  chainId crescente per le chiavi numeriche. Oggi è Base Sepolia (84532).
+  - `defaultChain` non è più nel file distribuito: vale solo se nessuna rete ha un contratto.
+  - La regola sta in `pickDefaultChain()` (`config.ts`) e, identica, in `public/boot.js` per il prefetch; web-model U40
+    controlla che coincidano.
+- **Reti senza contratto:** restano in elenco nel foglio Wallet, ma non sono selezionabili (radio disabilitato, "non ancora
+  disponibile"). Se il wallet è già su una di quelle reti, l'app la segue e mostra l'avviso "Contratto non configurato";
+  quel comportamento non cambia (F8).
+- **Contratto visibile:** il foglio di conferma e Impostazioni (riga della rete attiva, "rete attiva") mostrano l'indirizzo
+  completo del contratto con il link alla sua pagina Sourcify (`repo.sourcify.dev/<chainId>/<indirizzo>`). Nella build demo
+  l'indirizzo è simulato, quindi il link non c'è. Controlli: web-e2e W3b e W3c.

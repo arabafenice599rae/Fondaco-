@@ -153,6 +153,13 @@ dopo C1–C6 e fill di prova verdi. Mainnet esclusa. Nessun tag, nessuna pubblic
 | Sourcify | [exact match](https://repo.sourcify.dev/11155111/0xf86E2c4789F45A8a7AAA2CA98379716070B80131) (creazione e runtime) | [exact match](https://repo.sourcify.dev/84532/0xf86E2c4789F45A8a7AAA2CA98379716070B80131) (creazione e runtime) |
 | Etherscan / Basescan | preparato, non eseguito (serve `ETHERSCAN_API_KEY`) | preparato, non eseguito |
 
+> [!IMPORTANT]
+> **Il deployer di test (`0xf0dA…8D5d`) è ora a nonce 2** su entrambe le reti: nonce 0 per il deploy, nonce 1 per
+> `transferOwnership`. Non può più produrre un indirizzo deterministico nuovo e non va riusato.
+> **Per la mainnet servirà un deployer nuovo, generato su una macchina del responsabile e non in questo container.** Questo
+> container è temporaneo, e le chiavi usa-e-getta in `.env` sono state viste da un processo automatico. Il deployer va
+> verificato a nonce 0 su tutte le reti di destinazione prima del primo invio (`docs/RELEASE.md`, checklist).
+
 **Account di test:** DEPLOYER `0xf0dA07f530B412d8FBc10AfDFa59b97772328D5d`, FUNDER `0x22b357Eae06aE0E8813eF03ae1F657D1281BD5F9`,
 SIGNER `0xEe07C06d7DD66aCf8d66dc9b338CB5307de51840`, TAKER `0x7f6Bfad4C79665F146c190d714Af499caE7929b2`. FUNDER esiste
 per lasciare il deployer al nonce 0: riceve i fondi, li distribuisce e crea i Safe.
@@ -232,7 +239,9 @@ set -a; . ../../.env; set +a; node scripts/verify-etherscan.mjs all --confirm
 - `apps/web/public/config.json` e `packages/contracts/src/addresses.ts` contengono le due testnet: contratto, WETH, USDC ed
   explorer;
 - Base Sepolia è tra le reti a sequencer (`SEQUENCER_CHAINS`, stato MEV "L2");
-- la rete predefinita resta Ethereum, dove `swap` è `null`.
+- la rete predefinita è la prima di `config.json` con un contratto, oggi Base Sepolia (D-61);
+- Ethereum e Base restano in elenco ma non sono selezionabili ("non ancora disponibile");
+- il foglio di conferma e Impostazioni (rete attiva) mostrano l'indirizzo completo del contratto e il link a Sourcify.
 - il build dell'app cambia di conseguenza. Al commit `cd11d87`: tree hash
   `c0a051cc36fcfab45043f11c147f074b4dd9a0dba444297e38da6cc7f668e324`, CID
   `bafybeiau7cgw5rfowzq723wxjol2mjfgujxlnwpt5z46gr2pfaecrzkqji`, contenthash

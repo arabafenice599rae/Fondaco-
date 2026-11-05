@@ -68,3 +68,12 @@ html.booting .app { visibility: hidden }
 :root { --cta-hi: #9C3F26 }
 /* text for screen readers only (the chips' accessible name = visible text + this) */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0 }
+
+/* D-61: full contract address with its Sourcify page; networks without a contract are listed but not selectable */
+.addr-full { overflow-wrap: anywhere; word-break: break-all }
+.src-link { color: var(--accent-ink); white-space: nowrap; font-family: var(--f-ui) }
+.s-active { font-weight: 500; color: var(--muted) }
+#w-net label.na { opacity: .55; cursor: not-allowed }
+/* the amounts use a 30 px font on a 36 px line: their text content area (1.3 em) reaches ~3 px above the line, into the label
+   right above it (web-layout L1, confirmation at 1440×900). 3 px between label and amount keep the two boxes apart. */
+.cf-row .cf-l { margin-bottom: 3px }

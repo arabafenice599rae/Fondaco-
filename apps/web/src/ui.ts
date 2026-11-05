@@ -3,6 +3,7 @@
 import { formatUnits, getAddress, type Address } from 'viem'
 import { GUIDE_STEPS, type ExecuteResult, type TakerEvent, type VerifiedQuote } from '@fondaco/client'
 import { fmt, fp, fq, fa, fusd, short$, esc, amtHTML, clean, ago, num, pdec, roundP, qdec, shortAddr, until } from './fmt.js'
+import { contractHTML } from './contract-link.js'
 import { coin, coins2, tokBtn, displayDecimals } from './tokens.js'
 import { levels, midOf, quoteSwap, ladderTerms, feeOf, guard, groupOffers, series, stats, toUnits, quoteState, legStatus, type LegStatus, type Level, type Market, type SwapQuote, type OfferView, type HistoryItem } from './model.js'
 import type { Backend, Notice } from './backend.js'
@@ -713,7 +714,7 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     if (!P.plan.legs.some((l) => l.order.senderWallet !== '0x0000000000000000000000000000000000000000')) $('c-title').textContent = 'Conferma lo scambio'
     $('c-pay-tok').innerHTML = coin(P.pay, 26) + esc(P.pay); $('c-recv-tok').innerHTML = coin(P.recv, 26) + esc(P.recv)
     { const q0 = quoteState(null, P.orders.length); $('c-qs').className = 'qs ' + q0.cls; $('c-qs').textContent = q0.label; $('c-qs-t').textContent = q0.text }
-    $('c-recip').textContent = shortAddr(me()); $('c-contract').textContent = 'SwapERC20 ' + shortAddr(B.swapAddress()); $('c-contract').title = B.swapAddress() ?? ''
+    $('c-recip').textContent = shortAddr(me()); $('c-contract').innerHTML = contractHTML(B.swapAddress(), B.chainId()); $('c-contract').title = B.swapAddress() ?? ''
     $('c-gas').textContent = '—'
     ;($('st1').querySelector('b') as HTMLElement).textContent = 'Autorizza ' + P.pay
     setStep('st0', 'busy', 'Firme, scadenze e fondi delle offerte…'); setStep('st1', 'idle', 'Una firma nel wallet'); setStep('st2', 'idle', 'In attesa')
@@ -953,7 +954,8 @@ export function startUI(B: Backend, opts: { openSettings: () => void }): UIHandl
     $('w-list-l').textContent = ws.length ? 'Wallet trovati nel browser' : 'Nessun wallet trovato nel browser'
     $('w-list').innerHTML = ws.length ? ws.map((w) => `<label><input type="radio" name="wsel" value="${esc(w.info.uuid)}"${sel?.info.uuid === w.info.uuid ? ' checked' : ''}><span><b>${esc(w.info.name)}</b><small>${sel?.info.uuid === w.info.uuid && me() ? esc(shortAddr(me())) : esc(w.info.rdns)}</small></span></label>`).join('')
       : '<p class="o-note">Installa un wallet compatibile (EIP-6963), poi ricarica la pagina.</p>'
-    $('w-net').innerHTML = B.chains().map((c) => `<label><input type="radio" name="wnet" value="${c.id}"${c.id === B.chainId() ? ' checked' : ''}><span><b>${esc(c.name)}</b><small>${[8453, 10, 42161, 84532].includes(c.id) ? 'sequencer L2' : 'mempool pubblica'}</small></span></label>`).join('')
+    // a network without a contract stays listed but cannot be selected (D-61); if the wallet is already there it shows as current
+    $('w-net').innerHTML = B.chains().map((c) => `<label${c.available ? '' : ' class="na"'}><input type="radio" name="wnet" value="${c.id}"${c.id === B.chainId() ? ' checked' : ''}${c.available ? '' : ' disabled'}><span><b>${esc(c.name)}</b><small>${c.available ? ([8453, 10, 42161, 84532].includes(c.id) ? 'sequencer L2' : 'mempool pubblica') : 'non ancora disponibile'}</small></span></label>`).join('')
     const ic = st.protected ? 'i-shield' : 'i-alert'
     let h = `<div class="wstat-h"><svg class="ic sm" aria-hidden="true"><use href="#${ic}"/></svg>${esc(st.title)}</div><p>${esc(st.detail)}</p>`
     if (st.level === 'guide') h += `<ol class="wsteps">${GUIDE_STEPS.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>`

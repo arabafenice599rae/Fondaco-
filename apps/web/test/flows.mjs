@@ -259,11 +259,14 @@ await flow('F8', async () => {
   await t.page.click('#wal-chip')
   const sheet = (await t.page.textContent('#w-stat')).replace(/\s+/g, ' ')
   const netChecked = await t.page.evaluate(() => document.querySelector('#w-net input[name="wnet"]:checked')?.value)
+  // D-61: a network without a contract is listed but not selectable (Base here: swap null in the test config)
+  const na = await t.page.evaluate(() => [...document.querySelectorAll('#w-net label')].map((l) => ({ id: l.querySelector('input').value, disabled: l.querySelector('input').disabled, text: l.textContent })))
   await t.page.click('#w-close')
   await t.page.click('[data-tab="swap"]').catch(() => {})
   const cta = await t.page.isDisabled('#review')
   check('F8a: wallet 1 → 8453: network label, MEV status (L2, sequencer), configuration (no contract on Base → banner, no markets, trading off) follow',
-    before.chain === 1 && before.mev !== 'l2' && after.chain === 8453 && after.mev === 'l2' && after.mk === 0 && after.swap === null && netChecked === '8453' && cta,
+    before.chain === 1 && before.mev !== 'l2' && after.chain === 8453 && after.mev === 'l2' && after.mk === 0 && after.swap === null && netChecked === '8453' && cta &&
+    na.find((x) => x.id === '8453')?.disabled === true && /non ancora disponibile/.test(na.find((x) => x.id === '8453')?.text ?? '') && na.find((x) => x.id === '1')?.disabled === false,
     `MEV ${before.mev} → ${after.mev}; markets ${before.mk} → ${after.mk}; sheet "${sheet.slice(0, 80)}"`)
   await t.wallet.setChain(1)
   const back = await H.until(async () => (await t.page.evaluate(() => window.__fondaco.backend.markets().length)) > 0, 15_000, 'back on 1').then(() => true).catch(() => false)

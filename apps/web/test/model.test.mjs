@@ -220,6 +220,25 @@ const askE = (price, base, signer = OTHER) => {
   check('U39: same terms, one public and one private → two offers; the private one carries privateFor', g.live.length === 2 && g.live.filter((o) => o.privateFor).length === 1 && g.live.find((o) => o.privateFor).privateFor.toLowerCase() === B2)
 }
 
+// ------------------------------------------------------------------ U40 default network (D-61)
+{
+  // the first chain with a contract, in config.json order; config.ts and public/boot.js agree
+  const tok = { '0x036CbD53842c5426634e7929541eC2318f3dCF7e': { symbol: 'USDC', decimals: 6 }, '0x4200000000000000000000000000000000000006': { symbol: 'WETH', decimals: 18 } }
+  const raw = { book: 'https://official.example', chains: { 1: { name: 'Ethereum', swap: null, tokens: {} }, 8453: { name: 'Base', swap: null, tokens: {} },
+    11155111: { name: 'Sepolia', swap: '0xf86E2c4789F45A8a7AAA2CA98379716070B80131', tokens: {} }, 84532: { name: 'Base Sepolia', swap: '0xf86E2c4789F45A8a7AAA2CA98379716070B80131', tokens: tok } } }
+  const app = M.parseAppConfig(raw).defaultChain
+  const none = M.parseAppConfig({ book: '', defaultChain: 8453, chains: { 1: { name: 'E', swap: null, tokens: {} }, 8453: { name: 'B', swap: null, tokens: {} } } }).defaultChain
+  const fetched = []
+  const win = { localStorage: { getItem: () => null } }
+  vm.runInNewContext(readFileSync(resolve(APP, 'public/boot.js'), 'utf8'), { window: win, localStorage: win.localStorage, fetch: (u) => { fetched.push(u); return Promise.resolve({ json: async () => raw }) }, Map, JSON, String, Number, Object })
+  await new Promise((r) => setTimeout(r, 20))
+  const shipped = JSON.parse(readFileSync(resolve(APP, 'public/config.json'), 'utf8'))
+  const shippedDefault = M.parseAppConfig(shipped).defaultChain
+  check('U40: default network = first chain with a contract (84532 here and in the shipped config.json), boot.js prefetches the same; no contract anywhere → defaultChain',
+    app === 84532 && fetched.some((u) => u.includes('/books?chainId=84532&')) && none === 8453 && shippedDefault === 84532 && shipped.defaultChain === undefined,
+    `app ${app}, boot ${fetched.find((u) => u.includes('/books')) ?? 'none'}, none ${none}, shipped ${shippedDefault}`)
+}
+
 const passed = results.filter(Boolean).length
 console.log(`\n${passed}/${results.length} checks passed`)
 process.exit(passed === results.length ? 0 : 1)
