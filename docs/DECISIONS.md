@@ -524,7 +524,7 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   soltanto. In locale (Docker 29, containerd) il meccanismo è stato verificato: digest del build, Id dopo il load e digest
   nel registry coincidono.
 
-### D-64 · Binari della CI: cache, fonte di riserva, il checksum decide — proposta
+### D-64 · Binari della CI: cache, fonte di riserva, il checksum decide — approvata
 - **Origine:** il 2026-11-05 il job `toolchain` della PR #9 è fallito perché il download di kubo da GitHub Releases ha
   risposto 504 a tutti i tentativi (run 42055978983).
 - **Un solo script**, `tools/ci/fetch-binary.mjs`, per kubo, foundry, solc e gitleaks. In `tools/ci/toolchain.json` ogni
@@ -561,3 +561,11 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   - F5: entrambe giù, fallisce;
   - F6: cache, nessuna richiesta;
   - F7: cache corrotta, riscaricata.
+- **Passo aperto: terza fonte su IPFS per tutti e quattro i binari.** Non è ancora fatto: serve il servizio di pin, lo stesso
+  dell'app, che resta bloccato fino all'approvazione.
+  - Quando sarà attivo si pinnano i quattro file così come sono: il tarball di foundry, solc, il tarball di kubo e il
+    tarball di gitleaks.
+  - In `toolchain.json` il CID di ciascun file diventa l'ultima fonte, letta da un gateway pubblico
+    (`https://<gateway>/ipfs/<cid>`).
+  - Anche questa fonte deve dare il checksum di `toolchain.json`: il CID dice quale file chiedere, l'hash decide se usarlo.
+  - Questa fonte è davvero indipendente da GitHub anche per foundry e gitleaks.
