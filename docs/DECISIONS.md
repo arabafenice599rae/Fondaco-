@@ -540,3 +540,57 @@ Lo smoke test resta lo stesso: S1–S6 con lo stub SigV4; S7–S8 `backup once/l
   i due tag punteranno a `https://<dominio>/social-preview.png`.
 - **Nuovi valori del build** (commit `6956bf5`): tree hash `e5d897cd…1bca`, CID
   `bafybeifgx5upgsioykpgfgf4nvlrlqs3ikqdfoqx4j74lxefgc6lctjxai`.
+
+### D-64 · Binari della CI: cache, fonte di riserva, il checksum decide — approvata
+- **Origine:** il 2026-11-05 il job `toolchain` della PR #9 è fallito perché il download di kubo da GitHub Releases ha
+  risposto 504 a tutti i tentativi (run 42055978983).
+- **Un solo script**, `tools/ci/fetch-binary.mjs`, per kubo, foundry, solc e gitleaks. In `tools/ci/toolchain.json` ogni
+  binario ha `file`, checksum (`sha256` o `sha512`) e `sources` in ordine.
+- **Cache di Actions** per binario, con chiave `bin-<nome>-<versione>-<checksum>`. Se il file è in cache e l'hash torna, non
+  si scarica nulla. Un file in cache con un hash diverso viene scartato e riscaricato.
+- **Fonte di riserva:** si usa solo dopo 3 tentativi falliti sulla primaria, con backoff di 2 s e poi 4 s.
+- **Il checksum è l'unica autorità:**
+  - qualunque fonte deve dare lo stesso hash di `toolchain.json`;
+  - una fonte che risponde con byte diversi fa fallire subito il job, senza provare altre fonti e senza tenere nulla.
+
+| Binario | Primaria | Riserva | Stessi byte |
+|---|---|---|---|
+| solc 0.8.23 | binaries.soliditylang.org | GitHub Releases `ethereum/solidity` (`solc-static-linux`) | sì, sha256 verificato in locale |
+| kubo 0.34.1 | GitHub Releases `ipfs/kubo` | stesso asset tramite l'API di GitHub | sì per costruzione: stesso asset |
+| foundry v1.5.1 | GitHub Releases (download) | stesso asset tramite l'API di GitHub (`api.github.com`) | sì per costruzione: stesso asset |
+| gitleaks 8.24.3 | GitHub Releases (download) | stesso asset tramite l'API di GitHub | sì per costruzione: stesso asset |
+
+- **kubo, fonti scartate:** dal runner non funzionano, quindi non le uso.
+  - dist.ipfs.tech: connessione scaduta, 3 tentativi su 3, nelle run 42058988550 e 42060974863.
+  - Il gateway dweb.link (`/ipns/dist.ipfs.tech/…`): risponde HTTP 429.
+  - Una riserva che non risponde fa solo diventare rossa la notte senza proteggere nulla. Per kubo resta l'asset via API,
+    come per foundry e gitleaks, finché non c'è la terza fonte IPFS con il CID del file.
+- **Limite:** foundry, gitleaks e, nei fatti, kubo hanno solo GitHub Releases.
+  - Le immagini ufficiali `ghcr.io/foundry-rs/foundry:v1.5.1` e `ghcr.io/gitleaks/gitleaks:v8.24.3` contengono binari con
+    hash diversi da quelli delle release (verificato), quindi non possono fare da riserva.
+  - La riserva via API passa per un altro ingresso, ma lo storage è quello di GitHub. Contro un guasto di quello storage
+    protegge soltanto la cache.
+  - Una copia davvero indipendente richiede un host scelto dal proprietario.
+- **Foundry** non usa più `foundry-toolchain`: il tarball viene estratto in `~/.foundry/bin`. La cache RPC
+  `~/.foundry/cache/rpc` resta, con una chiave per job.
+- **Controllo delle fonti:** nelle run notturne e manuali il job `toolchain-sources` lancia
+  `fetch-binary.mjs --check-sources`, che scarica ogni fonte di ogni binario, primaria e riserve, e ne verifica l'hash. Una
+  riserva rotta si vede prima che serva. È un job a parte: se fallisce, la run diventa rossa ma il job `toolchain` salva
+  comunque le cache (con il controllo dentro `toolchain`, un fallimento impediva il salvataggio). Nessun altro job dipende
+  da questo.
+- **Prova:** la suite `fetch-binary` usa un server HTTP locale, nessun host esterno. Copre sette casi:
+  - F1: primaria su, usata la primaria;
+  - F2: primaria 504, 3 tentativi, poi riserva con hash verificato;
+  - F3: riserva con byte diversi, fallisce;
+  - F4: primaria con byte diversi, fallisce subito;
+  - F5: entrambe giù, fallisce;
+  - F6: cache, nessuna richiesta;
+  - F7: cache corrotta, riscaricata.
+- **Passo aperto: terza fonte su IPFS per tutti e quattro i binari.** Non è ancora fatto: serve il servizio di pin, lo stesso
+  dell'app, che resta bloccato fino all'approvazione.
+  - Quando sarà attivo si pinnano i quattro file così come sono: il tarball di foundry, solc, il tarball di kubo e il
+    tarball di gitleaks.
+  - In `toolchain.json` il CID di ciascun file diventa l'ultima fonte, letta da un gateway pubblico
+    (`https://<gateway>/ipfs/<cid>`).
+  - Anche questa fonte deve dare il checksum di `toolchain.json`: il CID dice quale file chiedere, l'hash decide se usarlo.
+  - Questa fonte è davvero indipendente da GitHub anche per foundry e gitleaks.

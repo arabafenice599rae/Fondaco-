@@ -2,7 +2,9 @@ name: setup-toolchain
 description: >-
   FONDACO CI toolchain with pinned versions and caches (versions in tools/ci/toolchain.json): Node from .nvmrc, pnpm from
   package.json packageManager (pnpm install --frozen-lockfile), and optionally Foundry v1.5.1, solc 0.8.23 (checksum),
-  Playwright Chromium, Docker Buildx, kubo (CID only, no node), gitleaks. Ends by printing every version and failing on a mismatch.
+  Playwright Chromium, Docker Buildx, kubo (CID only, no node), gitleaks. The downloaded binaries come from
+  tools/ci/fetch-binary.mjs: Actions cache keyed name + version + checksum, primary then fallback source, the checksum is
+  the only authority (D-64). Ends by printing every version and failing on a mismatch.
 inputs:
   foundry: { description: install forge/anvil/cast, default: "false" }
   solc: { description: download solc 0.8.23 for tools/verify-source (checksum verified), default: "false" }
@@ -22,10 +24,30 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
-    - name: Foundry v1.5.1 (fixed release, not nightly; ~/.foundry cached by the action)
+    - name: cache keys of the pinned binaries (name + version + checksum)
+      id: bin
+      shell: bash
+      run: node tools/ci/fetch-binary.mjs --keys >> "$GITHUB_OUTPUT"
+
+    - name: Foundry cache
       if: inputs.foundry == 'true'
-      uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
-      with: { version: v1.5.1, cache: true }
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with: { path: .cache/bin/foundry, key: "${{ steps.bin.outputs.foundry }}" }
+    - name: Foundry v1.5.1 (fixed release, checksum verified; download only on a cache miss, fallback after the primary)
+      if: inputs.foundry == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        f=$(node tools/ci/fetch-binary.mjs foundry)
+        mkdir -p "$HOME/.foundry/bin"; tar xzf "$f" -C "$HOME/.foundry/bin"; echo "$HOME/.foundry/bin" >> "$GITHUB_PATH"
+      env: { GITHUB_TOKEN: "${{ github.token }}" }
+    - name: Foundry RPC cache (forked state, as foundry-toolchain kept it)
+      if: inputs.foundry == 'true'
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        path: ~/.foundry/cache/rpc
+        key: "foundry-rpc-${{ runner.os }}-${{ github.job }}-${{ github.sha }}"
+        restore-keys: "foundry-rpc-${{ runner.os }}-${{ github.job }}-"
 
     - name: solc cache
       if: inputs.solc == 'true'
@@ -33,15 +55,17 @@ runs:
       with:
         path: .cache/verify-source
         key: "verify-source-solc-0.8.23-${{ hashFiles('packages/contracts/compiler-settings.json') }}"
-    - name: solc 0.8.23 (checksum verified)
+    - name: solc binary cache
+      if: inputs.solc == 'true'
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with: { path: .cache/bin/solc, key: "${{ steps.bin.outputs.solc }}" }
+    - name: solc 0.8.23 (checksum verified; download only on a cache miss, fallback after the primary)
       if: inputs.solc == 'true'
       shell: bash
       run: |
         set -euo pipefail
-        build=$(node -p "require('./tools/ci/toolchain.json').solc.build"); want=$(node -p "require('./tools/ci/toolchain.json').solc.sha256")
-        mkdir -p .cache/verify-source; f=".cache/verify-source/$build"
-        [ -f "$f" ] || curl -fsSL --retry 3 -o "$f" "https://binaries.soliditylang.org/linux-amd64/$build"
-        echo "$want  $f" | sha256sum -c -; chmod +x "$f"
+        build=$(node -p "require('./tools/ci/toolchain.json').solc.build"); f=$(node tools/ci/fetch-binary.mjs solc)
+        mkdir -p .cache/verify-source; cp "$f" ".cache/verify-source/$build"; chmod +x ".cache/verify-source/$build"
 
     - name: Playwright browsers from the image (CHROME_PATH for Lighthouse)
       if: inputs.playwright == 'image'
@@ -64,22 +88,29 @@ runs:
       if: inputs.docker == 'true'
       uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
-    - name: kubo (ipfs CLI, checksum verified)
+    - name: kubo cache
+      if: inputs.kubo == 'true'
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with: { path: .cache/bin/kubo, key: "${{ steps.bin.outputs.kubo }}" }
+    - name: kubo (ipfs CLI, checksum verified; download only on a cache miss, fallback after the primary)
       if: inputs.kubo == 'true'
       shell: bash
       run: |
         set -euo pipefail
-        url=$(node -p "require('./tools/ci/toolchain.json').kubo.url"); want=$(node -p "require('./tools/ci/toolchain.json').kubo.sha512")
-        curl -fsSL --retry 3 -o /tmp/kubo.tgz "$url"; echo "$want  /tmp/kubo.tgz" | sha512sum -c -
-        mkdir -p "$HOME/.local/bin"; tar xzf /tmp/kubo.tgz -C /tmp; cp /tmp/kubo/ipfs "$HOME/.local/bin/ipfs"; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-    - name: gitleaks (checksum verified)
+        f=$(node tools/ci/fetch-binary.mjs kubo)
+        mkdir -p "$HOME/.local/bin"; tar xzf "$f" -C /tmp; cp /tmp/kubo/ipfs "$HOME/.local/bin/ipfs"; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    - name: gitleaks cache
+      if: inputs.gitleaks == 'true'
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with: { path: .cache/bin/gitleaks, key: "${{ steps.bin.outputs.gitleaks }}" }
+    - name: gitleaks (checksum verified; download only on a cache miss, fallback after the primary)
       if: inputs.gitleaks == 'true'
       shell: bash
       run: |
         set -euo pipefail
-        url=$(node -p "require('./tools/ci/toolchain.json').gitleaks.url"); want=$(node -p "require('./tools/ci/toolchain.json').gitleaks.sha256")
-        curl -fsSL --retry 3 -o /tmp/gitleaks.tgz "$url"; echo "$want  /tmp/gitleaks.tgz" | sha256sum -c -
-        mkdir -p "$HOME/.local/bin"; tar xzf /tmp/gitleaks.tgz -C "$HOME/.local/bin" gitleaks; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        f=$(node tools/ci/fetch-binary.mjs gitleaks)
+        mkdir -p "$HOME/.local/bin"; tar xzf "$f" -C "$HOME/.local/bin" gitleaks; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      env: { GITHUB_TOKEN: "${{ github.token }}" }
 
     - name: Versions (fail on mismatch)
       shell: bash

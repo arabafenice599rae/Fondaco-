@@ -5,6 +5,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/). Le fasi seguo
 ## [Testnet] — 2026-11-05
 
 ### Aggiunto
+- CI (D-64): binari scaricati (kubo, foundry, solc, gitleaks) con cache di Actions per nome, versione e checksum, una
+  fonte di riserva dopo i tentativi sulla primaria, il checksum come unica autorità; suite `fetch-binary` 7/7.
 - SwapERC20 v4.3 su Sepolia e Base Sepolia a `0xf86E2c4789F45A8a7AAA2CA98379716070B80131`:
   - owner e fee wallet: un Safe 1/1 di test;
   - C1–C6 e fill di prova verdi, exact match su Sourcify;

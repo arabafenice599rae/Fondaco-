@@ -16,6 +16,7 @@ import { ROOT, loadEnv } from './env.js'
 export const SUITES = [
   { name: 'lint', pkg: 'tools', file: 'lint.mjs', unit: true, group: 'tools' },
   { name: 'checksums', pkg: 'tools', file: 'checksums.mjs', unit: true, group: 'tools' },
+  { name: 'fetch-binary', pkg: 'tools', file: 'ci/fetch-binary.test.mjs', unit: true, group: 'tools' },
   { name: 'wallet', pkg: 'packages/client', file: 'test/wallet.test.js', unit: true, group: 'client' },
   { name: 'client-guards', pkg: 'packages/client', file: 'test/guards.test.js', unit: true, group: 'client' },
   { name: 'client-smoke', pkg: 'tools/client-smoke', file: 'smoke.mjs', unit: true, group: 'client' },
